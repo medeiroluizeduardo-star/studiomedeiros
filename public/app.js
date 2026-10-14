@@ -58,7 +58,8 @@ const I={
  shield:'M12 3l8 3v6c0 4.5-3.4 8.2-8 9-4.6-.8-8-4.5-8-9V6zM9 12l2 2 4-4',
  grid:'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z',chart:'M4 20V10M10 20V4M16 20v-7M22 20H2',
  list:'M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01',pen:'M3 21c3-1 5-3 7-6l7-7a2.1 2.1 0 0 0-3-3l-7 7c-3 2-5 4-6 7zM14 6l4 4',
- image:'M4 5h16v14H4zM4 15l5-5 4 4 3-3 4 4M15 9h.01',lock:'M6 11h12v10H6zM8.5 11V7.5a3.5 3.5 0 0 1 7 0V11'
+ image:'M4 5h16v14H4zM4 15l5-5 4 4 3-3 4 4M15 9h.01',lock:'M6 11h12v10H6zM8.5 11V7.5a3.5 3.5 0 0 1 7 0V11',
+ sun:'M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM12 1.5v2M12 20.5v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1.5 12h2M20.5 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4',moon:'M20.5 14.5A8.5 8.5 0 1 1 9.5 3.5a7 7 0 0 0 11 11z',auto:'M12 21a9 9 0 1 0 0-18v18z M12 3a9 9 0 0 1 0 18',receipt:'M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6M9 16h3',repeat:'M17 2l4 4-4 4M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4M21 13v2a3 3 0 0 1-3 3H3'
 };
 const ic=(n,cls='')=>`<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${I[n]}"/></svg>`;
 function braidMark(size=34,spin=false){
@@ -134,7 +135,7 @@ function save(col,id,data,{quiet}={}){
 }
 function del(col,id){S[col].delete(id);touch();deleteDoc(doc(FS,col,id)).catch(dbErr);return Promise.resolve()}
 async function pool(tasks,n=8){const q=[...tasks];const run=async()=>{while(q.length){const t=q.shift();try{await t()}catch(e){}}};await Promise.all([...Array(n)].map(run))}
-function dbErr(e){const c=e&&e.code;toast(c==='permission-denied'?'Seu perfil não tem permissão para esta alteração.':c==='resource-exhausted'?'Limite diário do plano gratuito atingido. Tente amanhã ou mude de plano.':'Não foi possível salvar. Verifique a internet e tente de novo.');console.error(e)}
+function dbErr(e){const c=e&&e.code;toast(c==='permission-denied'?'Seu perfil não tem permissão para esta alteração.':c==='resource-exhausted'?'Limite diário do plano gratuito atingido. Tente amanhã ou mude de plano.':'Não foi possível salvar. Verifique a internet e tente de novo.','erro');console.error(e)}
 function touch(){DATAV++;schedule()}
 
 function pararTudo(){unsubs.splice(0).forEach(u=>{try{u()}catch(e){}});loaded.clear();ALL_COLS.forEach(c=>S[c]=new Map());NEED=new Set()}
@@ -447,13 +448,13 @@ function shell(){
   const inTabs=tabs.some(t=>t[0]===UI.view);
   $('#tabbar').innerHTML=tabs.map(([k,n,i])=>`<button class="tab" data-act="go" data-v="${k}" ${UI.view===k?'aria-current="page"':''}>${ic(i)}<span>${k==='financeiro'?'Finanças':n}</span></button>`).join('')+`<button class="tab" data-act="mais" ${!inTabs?'aria-current="page"':''}>${ic('grid')}<span>Mais</span></button>`;
   const on=navigator.onLine!==false;$('#syncSide').innerHTML=`<i></i>${on?'Sincronizado':'Sem internet · salvando no aparelho'} · ${PAPEIS[ROLE]||''}`;$('#syncSide').classList.toggle('local',!on);
-  return `<div class="topbar"><div class="brand">${braidMark(30)}<div><div class="brand-name">Stéfany Medeiros</div><div class="brand-sub">Trancista</div></div></div><div class="row">${navigator.onLine===false?'<span class="sync local"><i></i>Sem internet</span>':''}<span class="role">${esc(PAPEIS[ROLE]||'')}</span></div></div>`;
+  return `<div class="topbar"><div class="brand">${braidMark(30)}<div><div class="brand-name">Stéfany Medeiros</div><div class="brand-sub">Trancista</div></div></div><div class="row">${navigator.onLine===false?'<span class="sync local"><i></i>Sem internet</span>':''}<span class="role">${esc(PAPEIS[ROLE]||'')}</span>${pode('base')?`<button class="icon-btn" data-act="busca" aria-label="Buscar (atalho /)" title="Buscar (atalho /)">${ic('search')}</button>`:''}<button class="icon-btn" data-act="tema" aria-label="Tema: ${{sistema:'automático',claro:'claro',escuro:'escuro'}[temaAtual()]}" title="Tema: ${{sistema:'automático',claro:'claro',escuro:'escuro'}[temaAtual()]}">${ic({sistema:'auto',claro:'sun',escuro:'moon'}[temaAtual()])}</button></div></div>`;
 }
 function render(){
   const main=$('#main');
   if(['config','login','primeiro','pendente','erro'].includes(ROLE)){$('#tabbar').innerHTML='';$('#navSide').innerHTML='';$('#syncSide').innerHTML='';if(!main.dataset.gate||main.dataset.gate!==ROLE){main.dataset.gate=ROLE;main.innerHTML=gate()}return}
   main.dataset.gate='';
-  if(ROLE==='carregando'||[...NEED].some(c=>!loaded.has(c))){if(!$('#loadMark')){main.innerHTML=`<div class="loading"><div id="loadMark">${braidMark(56,true)}</div><div>Abrindo seu ateliê…</div></div>`}return}
+  if(ROLE==='carregando'||[...NEED].some(c=>!loaded.has(c))){if(!$('#loadMark')){main.innerHTML=`<div class="sk-wrap" aria-busy="true" aria-label="Carregando"><div id="loadMark" class="row" style="gap:12px">${braidMark(40,true)}<div class="sk" style="width:180px;height:28px"></div></div><div class="sk" style="height:96px"></div><div class="kpis">${'<div class="sk" style="height:84px"></div>'.repeat(4)}</div><div class="grid g2"><div class="sk" style="height:220px"></div><div class="sk" style="height:220px"></div></div></div>`}return}
   if(!visiveis().some(v=>v[0]===UI.view))UI.view=visiveis()[0][0];
   const top=shell();
   const fn={inicio:vInicio,agenda:vAgenda,clientes:vClientes,financeiro:vFinanceiro,contratos:vContratos,pacotes:vPacotes,estoque:vEstoque,calendario:vCalendario,ajustes:vAjustes}[UI.view]||vInicio;
@@ -512,8 +513,12 @@ function vInicio(){
     <div class="kpi"><div class="l">Lucro do mês</div><div class="v" style="color:${rec-des>=0?'var(--good)':'var(--bad)'}">${cnt(rec-des)}</div><div class="d">Despesas ${BRL(des)}</div></div>
     <div class="kpi"><div class="l">Limite MEI ${ano}</div><div class="v">${pct(recAno/lim)}</div><div class="bar thin" style="margin-top:6px"><span style="width:${Math.min(100,recAno/lim*100)}%;background:${recAno/lim>.9?'var(--bad)':recAno/lim>.75?'var(--warn)':'var(--accent)'}"></span></div></div>
     <div class="kpi"><div class="l">A receber (30 dias)</div><div class="v">${cnt(soma(aReceber().filter(r=>r.data>=t&&r.data<=addDays(t,30)).map(r=>({valor:r.liquido}))))}</div><div class="d">cartões, já sem taxa</div></div></section>`}
+  const amanha=arr('agenda').filter(a=>a.data===addDays(t,1)&&a.status==='agendado').sort((a,b)=>a.hora<b.hora?-1:1);
+  if(amanha.length)out+=`<section class="card"><h3>Confirmar amanhã <small>${amanha.length} sem confirmação</small></h3><div class="list">${amanha.map(confirmarRow).join('')}</div></section>`;
+  const ret=retornos().slice(0,6);
+  if(ret.length)out+=`<section class="card"><h3>Hora da manutenção ou retirada <small>sem horário marcado</small></h3><div class="list">${ret.map(retornoRow).join('')}</div><p class="small muted" style="margin-bottom:0">Baseado no tempo máximo recomendado na política (${pol().campos.semanasMax} semanas).</p></section>`;
   out+=`<div class="grid g2">
-   <section class="card"><h3>Hoje <button class="btn sm soft" data-act="go" data-v="agenda">Agenda</button></h3>${hoje.length?`<div class="list">${hoje.map(apptRow).join('')}</div>`:`<div class="empty">Dia livre. Que tal divulgar os horários vagos?<br><button class="btn soft sm" style="margin-top:8px" data-act="divulgar">${ic('image')}Divulgar horários</button></div>`}</section>
+   <section class="card"><h3>Hoje <button class="btn sm soft" data-act="go" data-v="agenda">Agenda</button></h3>${linhaTempo(t)}${hoje.length?`<div class="list">${hoje.map(apptRow).join('')}</div>`:`<div class="empty">Dia livre. Que tal divulgar os horários vagos?<br><button class="btn soft sm" style="margin-top:8px" data-act="divulgar">${ic('image')}Divulgar horários</button></div>`}</section>
    <section class="card"><h3>Lista de espera <small>${esp.length} aguardando</small></h3>${esp.length?`<div class="list">${esp.slice(0,4).map(esperaRow).join('')}</div>`:`<div class="empty">Ninguém na lista de espera.</div>`}</section>
    <section class="card"><h3>Próximas datas <small>30 dias</small></h3>${prox.length?`<div class="stack" style="gap:8px">${prox.map(d=>`<div class="event"><span class="when">${dataCurta(d.data)} · faltam ${diffDays(t,d.data)} dias</span><b>${esc(d.nome)}</b><p>${esc(d.ideia)}</p></div>`).join('')}</div>`:`<div class="empty">Sem datas especiais nos próximos 30 dias.</div>`}</section>
    <section class="card"><h3>Aniversariantes <small>próximos 14 dias</small></h3>${aniv.length?`<div class="list">${aniv.map(a=>{const l=waLink(a.cli.telefone,`Feliz aniversário, ${primeiro(a.cli.nome)}! 🎉 Desejo um ano lindo pra você. Seu presente: ${pb.descAniv}% de desconto no próximo atendimento este mês. Beijos, ${primeiro(pb.responsavel)}`);
@@ -541,6 +546,7 @@ function vAgenda(){
    `<button class="icon-btn" data-act="agNav" data-n="-7" aria-label="Semana anterior">${ic('left')}</button><button class="btn sm soft" data-act="agHoje">Hoje</button><button class="icon-btn" data-act="agNav" data-n="7" aria-label="Próxima semana">${ic('right')}</button><button class="btn soft" data-act="divulgar">${ic('image')}Divulgar</button><button class="btn primary" data-act="novoAg">${ic('plus')}Agendar</button>`);
   out+=`<div class="week">${dias.map(x=>{const n=ag.filter(a=>a.data===x&&a.status!=='cancelado').length;const dd=parse(x);
     return `<button class="day ${x===t?'today':''}" data-act="agDia" data-d="${x}" aria-pressed="${x===d}"><span class="w">${SEM[dd.getDay()]}</span><span class="n">${dd.getDate()}</span><span class="c">${'<i></i>'.repeat(Math.min(n,4))}</span></button>`}).join('')}</div>`;
+  out+=`<section class="card" style="padding:14px 16px">${linhaTempo(d)}</section>`;
   out+=`<div class="grid g2"><section class="stack" style="gap:10px">${doDia.length?doDia.map(apptCard).join(''):`<div class="card empty">Nenhum atendimento neste dia.<br><button class="btn soft" style="margin-top:10px" data-act="novoAg" data-d="${d}">${ic('plus')}Marcar horário</button></div>`}</section>
   <section class="stack"><div class="card"><h3>Horários livres <small>${esc(pb.abre)}–${esc(pb.fecha)}</small></h3>${livres.length?`<div class="row">${livres.map(([a,b])=>`<button class="free" data-act="novoAg" data-d="${d}" data-h="${min2hm(a)}">${min2hm(a)} às ${min2hm(b)}</button>`).join('')}</div>`:`<div class="empty">Dia cheio.</div>`}</div>
   <div class="card"><h3>Lista de espera <button class="btn sm soft" data-act="novaEspera">${ic('plus')}Adicionar</button></h3>${esp.length?`<div class="list">${esp.map(esperaRow).join('')}</div><p class="small muted" style="margin-bottom:0">O botão Avisar já sugere o primeiro horário livre que comporta o serviço.</p>`:'<div class="empty">Ninguém aguardando. Quando a agenda lotar, anote aqui quem quer um encaixe.</div>'}</div>
@@ -556,7 +562,7 @@ function apptCard(a){
   return `<article class="appt" style="--st:${st.c}"><div><div class="time">${esc(a.hora)}</div><div class="small muted num">${fim}</div></div>
    <div style="min-width:0"><div class="row between"><b>${esc(nomeCli(a.clienteId))}</b><span class="badge">${st.n}</span></div><div class="small muted">${esc(nomeServ(a.servicoId))} · ${a.pacoteId?'sessão de pacote':BRL(a.valor)}${pago?` · recebido ${BRL(pago)}`:''}</div>
    <div class="row" style="gap:6px;margin-top:6px">${anTag}</div>${a.obs?`<div class="small" style="margin-top:4px">${esc(a.obs)}</div>`:''}</div>
-   <div class="actions">${aberto?`<button class="btn sm primary" data-act="concluir" data-id="${a.id}">${ic('check')}Concluir</button>`:''}${a.status==='agendado'?`<button class="btn sm soft" data-act="stAg" data-id="${a.id}" data-s="confirmado">Confirmada</button>`:''}${l&&aberto?`<a class="btn sm soft" href="${l}" target="_blank" rel="noopener">${ic('chat')}Lembrete</a>`:''}<button class="btn sm ghost" data-act="editAg" data-id="${a.id}">${ic('edit')}Editar</button></div></article>`;
+   <div class="actions">${aberto?`<button class="btn sm primary" data-act="concluir" data-id="${a.id}">${ic('check')}Concluir</button>`:''}${a.status==='agendado'?`<button class="btn sm soft" data-act="stAg" data-id="${a.id}" data-s="confirmado">Confirmada</button>`:''}${l&&aberto?`<a class="btn sm soft" href="${l}" target="_blank" rel="noopener">${ic('chat')}Lembrete</a>`:''}${a.status==='concluido'?`<button class="btn sm soft" data-act="recibo" data-id="${a.id}">${ic('receipt')}Recibo</button><button class="btn sm ghost" data-act="retorno" data-id="${a.id}">${ic('repeat')}Agendar retorno</button>`:''}<button class="btn sm ghost" data-act="editAg" data-id="${a.id}">${ic('edit')}Editar</button></div></article>`;
 }
 
 /* ================= CLIENTES ================= */
@@ -798,7 +804,7 @@ function vCalendario(){
 function ideiaCard(i){return `<div class="event" style="${i.feito?'opacity:.6':''}"><span class="when" style="color:var(--fg)">${i.data?dataCurta(i.data):'Sem data'} · ${esc(i.tipo||'Ideia')}</span><b style="${i.feito?'text-decoration:line-through':''}">${esc(i.titulo)}</b>${i.notas?`<p>${esc(i.notas)}</p>`:''}<div class="row"><button class="btn sm soft" data-act="ideiaFeita" data-id="${i.id}">${ic('check')}${i.feito?'Reabrir':'Feito'}</button><button class="btn sm ghost" data-act="editIdeia" data-id="${i.id}">${ic('edit')}Editar</button></div></div>`}
 
 /* ================= AJUSTES ================= */
-function contaCard(){return `<section class="card"><h3>Sua conta</h3><p style="margin:0">${esc(EMAIL)} · <b>${esc(PAPEIS[ROLE]||'')}</b></p><div class="row" style="margin-top:10px"><button class="btn soft" data-act="trocarSenha">${ic('lock')}Trocar senha</button><button class="btn ghost" data-act="sair">Sair</button></div></section>`}
+function contaCard(){return `<section class="card"><h3>Sua conta</h3><p style="margin:0">${esc(EMAIL)} · <b>${esc(PAPEIS[ROLE]||'')}</b></p><div class="row" style="margin-top:10px"><button class="btn soft" data-act="trocarSenha">${ic('lock')}Trocar senha</button><button class="btn ghost" data-act="sair">Sair</button></div><div class="row" style="margin-top:12px"><span class="small muted">Aparência</span>${seg('temaSet',temaAtual(),[['sistema','Automática'],['claro','Clara'],['escuro','Escura']])}</div></section>`}
 function vAjustes(){
   const own=isOwner();
   if(!own)return head('Ajustes','Sua <em>conta</em>')+contaCard()+`<section class="card"><h3>O que você acessa</h3><p class="small muted" style="margin:0">${ROLE==='parceira'?'Agenda, clientes, fichas de anamnese, estoque, pacotes, contratos e datas. Finanças e a política da empresa ficam só com a proprietária.':ROLE==='recepcao'?'Agenda, cadastro de clientes, pacotes, contratos de serviço e datas. Fichas de saúde, estoque e finanças ficam restritos.':'Finanças, contas, relatórios e obrigações do MEI, somente leitura. Clientes e fichas de saúde não ficam visíveis.'}</p></section>`+
@@ -839,7 +845,7 @@ function sheet(title,html){
 function closeSheet(now){const b=$('.sheet-back');if(!b)return;document.body.style.overflow='';
   if(now){$('#sheetRoot').innerHTML='';return}
   b.classList.add('closing');$('.sheet',b).classList.add('closing');setTimeout(()=>{if(b.isConnected)b.remove()},240)}
-function toast(m){const t=document.createElement('div');t.className='toast';t.textContent=m;$('#toastRoot').appendChild(t);setTimeout(()=>t.remove(),2900)}
+function toast(m,tipo){const erro=tipo==='erro'||/^N[ãa]o |permiss|Limite di/.test(m);const t=document.createElement('div');t.className='toast'+(erro?' erro':'');t.innerHTML=ic(erro?'alert':'check');const sp=document.createElement('span');sp.textContent=m;t.appendChild(sp);$('#toastRoot').appendChild(t);setTimeout(()=>t.remove(),erro?4200:2900)}
 function confirmar(msg,ok){sheet('Confirmar',`<p>${msg}</p><div class="form-actions"><button class="btn ghost" data-act="close">Cancelar</button><button class="btn primary" id="okBtn">Confirmar</button></div>`);$('#okBtn').onclick=async()=>{$('#okBtn').disabled=true;await ok();closeSheet()}}
 async function baixar(nome,conteudo){try{return salvarArquivo(nome,conteudo)}catch(e){toast('Não foi possível baixar');return false}}
 async function copiar(txt,ok='Copiado'){try{await navigator.clipboard.writeText(txt);toast(ok)}catch(e){toast('Não foi possível copiar')}}
@@ -945,7 +951,7 @@ function htmlDocStandalone(title,body,extra=''){return `<!doctype html><html lan
 
 /* ---------- agenda ---------- */
 function formAgenda(id,pre={}){
-  const a=id?S.agenda.get(id):{data:pre.d||UI.agDia,hora:pre.h||'09:00',status:'agendado',clienteId:pre.c||''};
+  const a=id?S.agenda.get(id):{data:pre.d||UI.agDia,hora:pre.h||'09:00',status:'agendado',clienteId:pre.c||'',servicoId:pre.s||'',obs:pre.obs||''};
   const P=pol();const sinalPago=soma((a.pagamentos||[]).filter(p=>p.tipo==='sinal'));
   sheet(id?'Editar atendimento':'Novo atendimento',`<form class="form" id="fAg">
    <label class="fld">Cliente<select id="aCli">${optCli(a.clienteId,'<option value="__nova">+ Nova cliente</option>')}</select></label>
@@ -970,7 +976,7 @@ function formAgenda(id,pre={}){
   const checkConf=()=>{const d=$('#aData').value,h=hm2min($('#aHora').value),du=+$('#aDur').value||120;
     const c=arr('agenda').filter(x=>x.id!==id&&x.data===d&&x.status!=='cancelado'&&x.status!=='faltou'&&hm2min(x.hora)<h+du&&h<hm2min(x.hora)+(+x.duracao||120));
     $('#aConf').innerHTML=c.length?`<div class="alert warn">${ic('alert')}<div>Conflita com ${c.map(x=>`${esc(nomeCli(x.clienteId))} (${x.hora})`).join(', ')}.</div></div>`:''};
-  ['aData','aHora','aDur'].forEach(i=>$('#'+i).addEventListener('change',checkConf));checkConf();
+  ['aData','aHora','aDur'].forEach(i=>$('#'+i).addEventListener('change',checkConf));checkConf();if(!id&&pre.s)srv.onchange();
   $('#fAg').onsubmit=async e=>{e.preventDefault();let cid=sel.value;
     if(cid==='__nova'){const n=$('#aNovaNome').value.trim();if(!n){toast('Informe o nome da nova cliente');return}cid=await save('clientes',null,{nome:n,telefone:$('#aNovaTel').value.trim(),criadoEm:today()})}
     if(!cid){toast('Escolha a cliente');return}
@@ -1009,7 +1015,7 @@ function concluir(id){
       if(v>0)d.pagamentos.push({id:uid(),tipo:'servico',data:dataPg,valor:v,forma:$('#kForma').value,parcelas:$('#kForma').value==='Cartão de crédito'?+$('#kParc').value:1,nf:$('#kNf').checked})}
     if(pode('estoque')){const usos=$$('#consList .cons').map(r=>({itemId:$('.cItem',r).value,qtd:+$('.cQtd',r).value||0})).filter(u=>u.itemId&&u.qtd>0);d.consumo=usos;
       for(const u of usos){const it=S.estoque.get(u.itemId);if(it)await save('estoque',it.id,{...it,qtd:Math.round(((+it.qtd||0)-u.qtd)*100)/100,mov:[{em:today(),qtd:-u.qtd,motivo:`${nomeServ(a.servicoId)} · ${primeiro(nomeCli(a.clienteId))}`},...(it.mov||[])].slice(0,40)})}}
-    await save('agenda',id,d);closeSheet();toast('Atendimento concluído');
+    await save('agenda',id,d);closeSheet();toast('Atendimento concluído');setTimeout(()=>sugerirRetorno(id,true),500);
     const bx=(d.consumo||[]).map(u=>S.estoque.get(u.itemId)).filter(it=>it&&baixo(it));if(bx.length)setTimeout(()=>toast(`Repor: ${bx.map(i=>i.nome).join(', ')}`),1200)};
 }
 function formEspera(id){
@@ -1231,6 +1237,107 @@ async function seed(ex){
 async function limparEx(){const ops=[];ALL_COLS.forEach(c=>arr(c).filter(r=>r.exemplo).forEach(r=>ops.push([c,r.id])));
   await pool(ops.map(([c,id])=>()=>del(c,id)),8);await save('privado','config',{...priv(),dasPagos:{}});toast('Exemplos apagados')}
 
+
+/* ================= v4: busca, retornos, recibo, tema, linha do tempo ================= */
+const TEMA_KEY='smt-tema';
+function temaAtual(){try{return localStorage.getItem(TEMA_KEY)||'sistema'}catch(e){return 'sistema'}}
+function aplicaTema(t){const r=document.documentElement;if(t==='claro')r.setAttribute('data-theme','light');else if(t==='escuro')r.setAttribute('data-theme','dark');else r.removeAttribute('data-theme');try{localStorage.setItem(TEMA_KEY,t)}catch(e){}}
+aplicaTema(temaAtual());
+
+function busca(){
+  sheet('Buscar',`<div class="form"><label class="searchbox">${ic('search')}<input id="gBusca" type="search" placeholder="Nome, telefone ou código de vale" autocomplete="off" enterkeyhint="search"></label><div id="gRes"></div></div>`);
+  const i=$('#gBusca');const up=()=>{$('#gRes').innerHTML=resultadosBusca(i.value)};i.oninput=up;up();setTimeout(()=>i.focus(),60);
+  i.onkeydown=e=>{if(e.key==='Enter'){const f=$('#gRes [data-act="buscaIr"]');if(f){e.preventDefault();f.click()}}};
+}
+function resultadosBusca(q){
+  q=(q||'').trim().toLowerCase();if(q.length<2)return '<div class="empty">Digite pelo menos 2 letras. Atalho no computador: tecla <b>/</b>.</div>';
+  const dq=digits(q);const norm=x=>String(x||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');const nq=norm(q);
+  const cl=arr('clientes').filter(c=>norm(c.nome).includes(nq)||(dq.length>=3&&digits(c.telefone).includes(dq))).sort((a,b)=>a.nome.localeCompare(b.nome)).slice(0,6);
+  const cids=new Set(cl.map(c=>c.id));
+  const ag=arr('agenda').filter(a=>cids.has(a.clienteId)&&a.status!=='cancelado').sort((a,b)=>(b.data+b.hora)>(a.data+a.hora)?1:-1).slice(0,5);
+  const vl=arr('vales').filter(v=>norm(v.codigo).includes(nq)||norm(v.presenteada).includes(nq)||norm(v.compradora).includes(nq)).slice(0,4);
+  const pk=arr('pacotes').filter(p=>cids.has(p.clienteId)||norm(p.nome).includes(nq)).slice(0,4);
+  const grupo=(t,rows)=>rows.length?`<div class="eyebrow" style="margin:12px 0 4px">${t}</div><div class="list">${rows.join('')}</div>`:'';
+  const item=(k,id,icone,tit,sub)=>`<button class="item" data-act="buscaIr" data-k="${k}" data-id="${id}"><div class="avatar" style="--lv:var(--rose)">${icone}</div><div class="grow"><div class="t">${tit}</div><div class="s">${sub}</div></div>${ic('right')}</button>`;
+  const html=grupo('Clientes',cl.map(c=>{const f=fidelidade(c);return item('cli',c.id,iniciais(c.nome),esc(c.nome),`${NIVEIS[f.nivel].n}${c.telefone?' · '+esc(c.telefone):''}`)}))+
+    grupo('Atendimentos',ag.map(a=>item('ag',a.id,ic('cal'),`${esc(nomeCli(a.clienteId))} · ${dataBR(a.data)} ${esc(a.hora)}`,`${esc(nomeServ(a.servicoId))} · ${STATUS[a.status]?.n||''}`)))+
+    grupo('Vales-presente',vl.map(v=>item('vale',v.id,ic('gift'),`<span class="code">${esc(v.codigo)}</span> · ${esc(v.presenteada||'—')}`,`saldo ${BRL(valeSaldo(v))}`)))+
+    grupo('Pacotes',pk.map(p=>item('pac',p.id,ic('ticket'),`${esc(nomeCli(p.clienteId))} · ${esc(p.nome)}`,`${pacoteSaldo(p)} sessão(ões) disponível(is)`)));
+  return html||'<div class="empty">Nada encontrado.</div>';
+}
+function buscaIr(k,id){closeSheet(true);
+  if(k==='cli'){abrirCliente(id)}else if(k==='ag'){const a=S.agenda.get(id);if(a){UI.agDia=a.data;go('agenda')}}
+  else if(k==='vale'){UI.pkTab='vales';go('pacotes');formVale(id)}else if(k==='pac'){UI.pkTab='pacotes';go('pacotes');formPacote(id)}}
+
+/* clientes que precisam de manutenção ou retirada */
+function retornos(){return memo('ret',()=>{const t=today();const max=+pol().campos.semanasMax||8;const out=[];
+  const futuras=new Set(arr('agenda').filter(a=>a.data>=t&&(a.status==='agendado'||a.status==='confirmado')).map(a=>a.clienteId));
+  arr('clientes').forEach(c=>{if(futuras.has(c.id))return;
+    const ult=arr('agenda').filter(a=>a.clienteId===c.id&&a.status==='concluido'&&a.data<=t).sort((a,b)=>a.data<b.data?1:-1)[0];
+    if(!ult||/retirada/i.test(nomeServ(ult.servicoId)))return;
+    const sem=Math.floor(diffDays(ult.data,t)/7);if(sem<Math.max(3,max-3)||sem>max+6)return;
+    out.push({c,ult,sem,retirar:sem>=max-1})});
+  return out.sort((a,b)=>b.sem-a.sem)})}
+function retornoRow(r){const max=pol().campos.semanasMax;const pb=pub();
+  const msg=r.retirar?`Oi, ${primeiro(r.c.nome)}! Suas tranças já estão com ${r.sem} semanas 💕 Para cuidar da saúde dos seus fios, o ideal é retirar até ${max} semanas. Vamos marcar a retirada (e, se quiser, já a próxima trança)?`
+    :`Oi, ${primeiro(r.c.nome)}! Suas tranças completam ${r.sem} semanas 💕 É uma ótima hora para uma manutenção e deixar tudo alinhado de novo. Quer que eu reserve um horário?`;
+  const w=waLink(r.c.telefone,msg+` Beijos, ${primeiro(pb.responsavel)}`);
+  const sv=arr('servicos').find(s=>r.retirar?/retirada/i.test(s.nome):/manuten/i.test(s.nome));
+  return `<div class="item"><div class="avatar" style="--lv:${r.retirar?'var(--lv-bronze)':'var(--lv-ouro)'}">${iniciais(r.c.nome)}</div><div class="grow"><div class="t">${esc(r.c.nome)}</div><div class="s">${esc(nomeServ(r.ult.servicoId))} há ${r.sem} semanas</div></div><span class="badge ${r.retirar?'bad':'warn'}">${r.retirar?'retirar':'manutenção'}</span>${w?`<a class="btn sm soft" href="${w}" target="_blank" rel="noopener">${ic('chat')}Avisar</a>`:''}<button class="icon-btn" data-act="retornoAg" data-c="${r.c.id}" data-s="${sv?.id||''}" data-d="${today()}" aria-label="Agendar">${ic('cal')}</button></div>`}
+function confirmarRow(a){const cli=S.clientes.get(a.clienteId);const pb=pub();
+  const w=cli?waLink(cli.telefone,`Oi, ${primeiro(cli.nome)}! 💕 Passando para confirmar seu horário amanhã, ${dataLonga(a.data)}, às ${a.hora}, para ${nomeServ(a.servicoId)}. Lembre de vir ${pol().campos.preparo}. Posso confirmar? Beijos, ${primeiro(pb.responsavel)}`):null;
+  return `<div class="item"><span class="time">${esc(a.hora)}</span><div class="grow"><div class="t">${esc(nomeCli(a.clienteId))}</div><div class="s">${esc(nomeServ(a.servicoId))}</div></div>${w?`<a class="btn sm soft" href="${w}" target="_blank" rel="noopener">${ic('chat')}Pedir confirmação</a>`:''}<button class="btn sm primary" data-act="stAg" data-id="${a.id}" data-s="confirmado">${ic('check')}Confirmada</button></div>`}
+
+/* sugerir retorno após concluir */
+function sugerirRetorno(agId,auto){const a=S.agenda.get(agId);if(!a||!a.clienteId)return;
+  if(auto&&arr('agenda').some(x=>x.clienteId===a.clienteId&&x.id!==a.id&&x.data>=today()&&(x.status==='agendado'||x.status==='confirmado')))return;
+  const max=+pol().campos.semanasMax||8;const nome=nomeServ(a.servicoId);const ehRet=/retirada/i.test(nome);
+  const man=arr('servicos').find(s=>/manuten/i.test(s.nome)),ret=arr('servicos').find(s=>/retirada/i.test(s.nome));
+  const op=[];
+  if(!ehRet&&man)op.push(['Manutenção',man.id,4]);
+  if(!ehRet&&ret)op.push(['Retirada',ret.id,max]);
+  op.push([ehRet?'Nova trança':`Repetir ${nome}`,ehRet?'':a.servicoId,ehRet?0:max]);
+  const cli=S.clientes.get(a.clienteId);
+  sheet('Agendar o retorno?',`<p class="muted small" style="margin-top:0">${esc(primeiro(cli?.nome))} sai daqui com o próximo horário garantido. Escolha uma sugestão; a data pode ser ajustada.</p>
+   <div class="stack" style="gap:8px">${op.map(([n,sid,sem])=>{const d=addDays(a.data,sem*7);return `<button class="item" style="border:1px solid var(--line);border-radius:14px;padding:12px" data-act="retornoAg" data-c="${a.clienteId}" data-s="${sid}" data-d="${d<today()?today():d}" data-obs="Retorno de ${esc(nome)} (${dataCurta(a.data)})"><div class="avatar" style="--lv:var(--lv-perola)">${ic('repeat')}</div><div class="grow"><div class="t">${esc(n)}</div><div class="s">${sem?`em ${sem} semanas · ${dataLonga(d<today()?today():d)}`:'escolher data'}</div></div>${ic('right')}</button>`}).join('')}</div>
+   <div class="form-actions"><button class="btn ghost" data-act="close">Agora não</button></div>`)}
+
+/* recibo */
+function reciboHtml(a){const pb=pub();const cli=S.clientes.get(a.clienteId);const pg=(a.pagamentos||[]);const total=+a.valor||0;
+  const num='R-'+a.data.replace(/-/g,'')+'-'+String(a.id).slice(-4).toUpperCase();
+  const linhas=pg.map(p=>`<tr><td>${dataBR(p.data)}</td><td>${p.tipo==='sinal'?'Sinal':'Pagamento'}</td><td>${esc(p.forma)}${+p.parcelas>1?` em ${p.parcelas}x`:''}</td><td style="text-align:right">${BRL(p.valor)}</td></tr>`).join('')+(a.valeUsado?`<tr><td></td><td>Vale-presente</td><td class="code">${esc(a.valeUsado.codigo)}</td><td style="text-align:right">${BRL(a.valeUsado.valor)}</td></tr>`:'');
+  const pago=soma(pg)+(+a.valeUsado?.valor||0);
+  return `<article class="doc"><h1>Recibo</h1><div class="sub">Nº ${num}</div>
+   <p>Recebi de <b>${linha(cli?.nome)}</b>${cli?.cpf?`, CPF ${esc(cli.cpf)}`:''}, a importância de <b>${BRL(a.pacoteId?0:pago)}</b>, referente ao serviço de <b>${esc(nomeServ(a.servicoId))}</b> realizado em ${dataExt(a.data)}${a.pacoteId?', coberto por pacote adquirido anteriormente':''}.</p>
+   ${linhas?`<table><tr><td><b>Data</b></td><td><b>Tipo</b></td><td><b>Forma</b></td><td style="text-align:right"><b>Valor</b></td></tr>${linhas}<tr><td colspan="3"><b>Total do serviço</b></td><td style="text-align:right"><b>${BRL(a.pacoteId?0:total)}</b></td></tr></table>`:''}
+   <p style="margin-top:14px">${esc(pb.nome)} · CNPJ ${linha(pb.cnpj)}${pb.endereco?` · ${esc(pb.endereco)}`:''}</p>
+   <p>${esc(pb.municipio)}, ${dataExt(today())}.</p>
+   <div class="ass"><div>${esc(pb.responsavel||pb.nome)}</div></div></article>`}
+function recibo(id){const a=S.agenda.get(id);if(!a)return;const cli=S.clientes.get(a.clienteId);const pb=pub();
+  const txt=`Recibo · ${pb.nome}\nCliente: ${cli?.nome||''}\nServiço: ${nomeServ(a.servicoId)} em ${dataBR(a.data)}\nValor: ${BRL(a.pacoteId?0:soma(a.pagamentos||[])+(+a.valeUsado?.valor||0))}\n${(a.pagamentos||[]).map(p=>`${dataBR(p.data)} · ${p.forma}${+p.parcelas>1?` ${p.parcelas}x`:''} · ${BRL(p.valor)}`).join('\n')}\nObrigada pela confiança! 💕`;
+  const w=cli?waLink(cli.telefone,txt):null;
+  sheet('Recibo',`<div class="stack"><div id="reciboBox">${reciboHtml(a)}</div><div class="row"><button class="btn primary" data-act="imprimirArea">${ic('file')}Imprimir ou salvar PDF</button>${w?`<a class="btn soft" href="${w}" target="_blank" rel="noopener">${ic('chat')}Enviar no WhatsApp</a>`:''}<button class="btn ghost" id="rcCopy">${ic('copy')}Copiar</button></div></div>`);
+  $('#rcCopy').onclick=()=>copiar(txt,'Recibo copiado')}
+function imprimirArea(){const src=$('#reciboBox');if(!src)return;let pa=$('#printArea');if(!pa){pa=document.createElement('div');pa.id='printArea';document.body.appendChild(pa)}
+  pa.innerHTML=src.innerHTML;document.body.classList.add('imprimindo');const fim=()=>{document.body.classList.remove('imprimindo');pa.innerHTML='';window.removeEventListener('afterprint',fim)};window.addEventListener('afterprint',fim);window.print();setTimeout(fim,1500)}
+
+/* linha do tempo do dia */
+function linhaTempo(d){const pb=pub();const ini=hm2min(pb.abre),fim=Math.max(ini+60,hm2min(pb.fecha));const tot=fim-ini;
+  const ags=arr('agenda').filter(a=>a.data===d&&a.status!=='cancelado');
+  const pos=m=>Math.max(0,Math.min(100,(m-ini)/tot*100));
+  const horas=[];for(let h=Math.ceil(ini/60);h*60<=fim;h+=2)horas.push(h);
+  const agora=new Date();const nm=agora.getHours()*60+agora.getMinutes();const mostraAgora=d===today()&&nm>=ini&&nm<=fim;
+  const blocos=ags.map(a=>{const s=hm2min(a.hora),e=s+(+a.duracao||120);const st=STATUS[a.status]||STATUS.agendado;
+    return `<button class="tl-b" data-act="agDia" data-d="${a.data}" style="left:${pos(s)}%;width:${Math.max(2,pos(e)-pos(s))}%;--st:${st.c}" title="${esc(a.hora)} · ${esc(nomeCli(a.clienteId))} · ${esc(nomeServ(a.servicoId))}"><span>${esc(primeiro(nomeCli(a.clienteId)))}</span></button>`}).join('');
+  return `<div class="tl" role="img" aria-label="Linha do tempo de ${esc(dataLonga(d))}"><div class="tl-track">${blocos}${mostraAgora?`<i class="tl-now" style="left:${pos(nm)}%"><b>agora</b></i>`:''}</div><div class="tl-h">${horas.map(h=>`<span style="left:${pos(h*60)}%">${pad(h)}h</span>`).join('')}</div></div>`}
+
+/* fechar folha arrastando para baixo (celular) */
+(function(){let y0=null,dy=0,el=null;
+  document.addEventListener('touchstart',e=>{const sh=e.target.closest&&e.target.closest('.sheet');if(!sh||sh.scrollTop>0||e.target.closest('input,textarea,select,canvas'))return;el=sh;y0=e.touches[0].clientY;dy=0},{passive:true});
+  document.addEventListener('touchmove',e=>{if(y0==null||!el)return;dy=e.touches[0].clientY-y0;if(dy>0){el.style.transform=`translateY(${dy}px)`;el.style.transition='none'}},{passive:true});
+  document.addEventListener('touchend',()=>{if(!el)return;el.style.transition='';if(dy>110){closeSheet()}else{el.style.transform=''}y0=null;el=null;dy=0});
+})();
+
 /* ================= ações ================= */
 const ACT={
  go:t=>go(t.dataset.v),mais:()=>mais(),close:()=>closeSheet(),
@@ -1239,6 +1346,12 @@ const ACT={
  agDia:t=>{UI.agDia=t.dataset.d;if(UI.view!=='agenda')go('agenda');else render()},agNav:t=>{UI.agDia=addDays(UI.agDia,+t.dataset.n);render()},agHoje:()=>{UI.agDia=today();render()},
  stAg:async t=>{const a=S.agenda.get(t.dataset.id);await save('agenda',a.id,{...a,status:t.dataset.s});toast('Atendimento confirmado')},
  concluir:t=>concluir(t.dataset.id),divulgar:()=>divulgar(),
+ busca:()=>busca(),buscaIr:t=>buscaIr(t.dataset.k,t.dataset.id),
+ tema:()=>{const o=['sistema','claro','escuro'];const n=o[(o.indexOf(temaAtual())+1)%3];aplicaTema(n);toast('Tema '+{sistema:'automático (segue o aparelho)',claro:'claro',escuro:'escuro'}[n]);render()},
+ temaSet:t=>{aplicaTema(t.dataset.t);render()},
+ recibo:t=>recibo(t.dataset.id),retorno:t=>sugerirRetorno(t.dataset.id,false),
+ retornoAg:t=>formAgenda(null,{c:t.dataset.c,s:t.dataset.s,d:t.dataset.d,obs:t.dataset.obs}),
+ imprimirArea:()=>imprimirArea(),
  delAg:t=>confirmar('Excluir este atendimento? Os pagamentos registrados nele também saem do financeiro.',()=>del('agenda',t.dataset.id)),
  novaEspera:()=>formEspera(),editEspera:t=>formEspera(t.dataset.id),delEspera:t=>confirmar('Remover da lista de espera?',()=>del('espera',t.dataset.id)),
  avisada:t=>{const e=S.espera.get(t.dataset.id);if(e)save('espera',e.id,{...e,status:'avisada'})},
@@ -1289,7 +1402,7 @@ const ACT={
 document.addEventListener('click',e=>{const t=e.target.closest('[data-act]');if(!t)return;
   if(t.dataset.act==='closeBack'){if(e.target===t)closeSheet();return}
   const f=ACT[t.dataset.act];if(!f)return;if(t.tagName!=='A')e.preventDefault();if(t.disabled)return;f(t,e)});
-document.addEventListener('keydown',e=>{if(e.key==='Escape')closeSheet()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeSheet();const tag=(e.target.tagName||'').toLowerCase();const digitando=tag==='input'||tag==='textarea'||tag==='select'||e.target.isContentEditable;if(!digitando&&pode('base')&&!$('.sheet-back')&&(e.key==='/'||((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'))){e.preventDefault();busca()}});
 let buscaT;document.addEventListener('input',e=>{if(e.target.id==='cliBusca'){UI.cliBusca=e.target.value;clearTimeout(buscaT);buscaT=setTimeout(()=>{const pos=e.target.selectionStart;render();const i=$('#cliBusca');if(i){i.focus();try{i.setSelectionRange(pos,pos)}catch(_){}}},200)}});
 document.addEventListener('change',e=>{const id=e.target.id;
   if(id==='ctTipo'){UI.ctTipo=e.target.value;render()}else if(id==='ctCli'){UI.ctCli=e.target.value;UI.ctAg='';render()}else if(id==='ctAg'){UI.ctAg=e.target.value;render()}
