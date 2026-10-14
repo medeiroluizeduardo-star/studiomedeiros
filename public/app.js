@@ -1,0 +1,1311 @@
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, onSnapshot, setDoc, deleteDoc, getDoc, query, where } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { firebaseConfig } from './firebase-config.js';
+/* Stéfany Medeiros Trancista · sistema de gestão (Firebase) */
+/* ================= utilidades ================= */
+const $=(s,el=document)=>el.querySelector(s);
+const $$=(s,el=document)=>[...el.querySelectorAll(s)];
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pad=n=>String(n).padStart(2,'0');
+const ymd=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const parse=s=>{const[y,m,d]=String(s).split('-').map(Number);return new Date(y,(m||1)-1,d||1)};
+const today=()=>ymd(new Date());
+const addDays=(s,n)=>{const d=parse(s);d.setDate(d.getDate()+n);return ymd(d)};
+const addMonths=(k,n)=>{const d=parse(k+'-01');d.setMonth(d.getMonth()+n);return ymd(d).slice(0,7)};
+const diffDays=(a,b)=>Math.round((parse(b)-parse(a))/864e5);
+const ym=s=>String(s||'').slice(0,7);
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+const BRL=v=>(+v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+const pct=v=>(isFinite(v)?v:0).toLocaleString('pt-BR',{style:'percent',maximumFractionDigits:0});
+const MESES=['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+const MES3=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+const SEM=['dom','seg','ter','qua','qui','sex','sáb'];
+const SEMX=['domingo','segunda','terça','quarta','quinta','sexta','sábado'];
+const cap=s=>String(s).replace(/^./,c=>c.toUpperCase());
+const dataLonga=s=>{const d=parse(s);return `${SEMX[d.getDay()]}, ${d.getDate()} de ${MESES[d.getMonth()]}`};
+const dataExt=s=>{const d=parse(s);return `${d.getDate()} de ${MESES[d.getMonth()]} de ${d.getFullYear()}`};
+const dataCurta=s=>{const d=parse(s);return `${pad(d.getDate())}/${pad(d.getMonth()+1)}`};
+const dataBR=s=>s?`${dataCurta(s)}/${String(s).slice(0,4)}`:'';
+const mesNome=k=>{const[y,m]=k.split('-');return `${MESES[+m-1]} de ${y}`};
+const hm2min=h=>{const[a,b]=String(h||'0:0').split(':').map(Number);return a*60+(b||0)};
+const min2hm=m=>`${pad(Math.floor(m/60))}:${pad(m%60)}`;
+const durTxt=m=>{m=+m||0;return `${Math.floor(m/60)}h${m%60?pad(m%60):''}`};
+const iniciais=n=>String(n||'?').trim().split(/\s+/).slice(0,2).map(p=>p[0]).join('').toUpperCase();
+const primeiro=n=>String(n||'').trim().split(/\s+/)[0]||'';
+const digits=s=>String(s||'').replace(/\D/g,'');
+const waLink=(tel,msg)=>{let d=digits(tel);if(!d)return null;if(d.length<=11)d='55'+d;return `https://wa.me/${d}?text=${encodeURIComponent(msg)}`};
+const soma=a=>a.reduce((s,l)=>s+(+l.valor||0),0);
+const nowIso=()=>new Date().toISOString();
+
+const I={
+ home:'M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z',
+ cal:'M7 3v3M17 3v3M3.5 9h17M5 5h14a1.5 1.5 0 0 1 1.5 1.5v12A1.5 1.5 0 0 1 19 20H5a1.5 1.5 0 0 1-1.5-1.5v-12A1.5 1.5 0 0 1 5 5z',
+ users:'M16 19v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1M9.5 10a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM21 19v-1a4 4 0 0 0-3-3.87M15.5 3.13a3.5 3.5 0 0 1 0 6.75',
+ wallet:'M3 7.5A2.5 2.5 0 0 1 5.5 5H18v3M3 7.5V17a2 2 0 0 0 2 2h15V8H5.5A2.5 2.5 0 0 1 3 5.5M16.5 13.5h.01',
+ spark:'M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z',
+ gear:'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z',
+ plus:'M12 5v14M5 12h14',chat:'M21 11.5a8.4 8.4 0 0 1-12.3 7.5L3 21l2-5.6A8.5 8.5 0 1 1 21 11.5z',
+ check:'M5 12.5l4.5 4.5L19 7.5',x:'M6 6l12 12M18 6 6 18',left:'M15 18l-6-6 6-6',right:'M9 6l6 6-6 6',
+ search:'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-4-4',edit:'M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4',
+ trash:'M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3',clock:'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 2',
+ down:'M12 4v11M7 10l5 5 5-5M5 20h14',gift:'M4 11h16v9H4zM3 7h18v4H3zM12 7v13M12 7c-1.5-3-5-3.5-5-1s3 1 5 1zM12 7c1.5-3 5-3.5 5-1s-3 1-5 1z',
+ alert:'M12 9v4M12 17h.01M10.3 3.9 2 18a2 2 0 0 0 1.7 3h16.6a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z',
+ copy:'M9 9h11v11H9zM5 15H4V4h11v1',up:'M12 20V9M7 14l5-5 5 5M5 4h14',info:'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 11v6M12 7.5h.01',
+ file:'M14 3H6.5A1.5 1.5 0 0 0 5 4.5v15A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V8zM14 3v5h5M8.5 13h7M8.5 16.5h5',
+ box:'M3.5 7.5 12 3l8.5 4.5v9L12 21l-8.5-4.5zM3.5 7.5 12 12l8.5-4.5M12 12v9',
+ ticket:'M3 8a2 2 0 0 0 0 4v0a2 2 0 0 1 0 4v1a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1v-1a2 2 0 0 1 0-4 2 2 0 0 0 0-4V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1zM14 6v2M14 11v2M14 16v2',
+ shield:'M12 3l8 3v6c0 4.5-3.4 8.2-8 9-4.6-.8-8-4.5-8-9V6zM9 12l2 2 4-4',
+ grid:'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z',chart:'M4 20V10M10 20V4M16 20v-7M22 20H2',
+ list:'M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01',pen:'M3 21c3-1 5-3 7-6l7-7a2.1 2.1 0 0 0-3-3l-7 7c-3 2-5 4-6 7zM14 6l4 4',
+ image:'M4 5h16v14H4zM4 15l5-5 4 4 3-3 4 4M15 9h.01',lock:'M6 11h12v10H6zM8.5 11V7.5a3.5 3.5 0 0 1 7 0V11'
+};
+const ic=(n,cls='')=>`<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${I[n]}"/></svg>`;
+function braidMark(size=34,spin=false){
+  const cols=['var(--accent)','var(--accent-ink)','var(--lv-perola)'];let paths='';
+  for(let k=0;k<3;k++){let d='';for(let i=0;i<=28;i++){const y=3+i*(34/28);const x=14+7*Math.sin(i/28*Math.PI*3+k*2*Math.PI/3);d+=(i?'L':'M')+x.toFixed(2)+' '+y.toFixed(2)}
+    paths+=`<path d="${d}" stroke="${cols[k]}" stroke-width="3.2" fill="none" stroke-linecap="round"/>`}
+  return `<svg class="${spin?'braid-spin':''}" width="${size*.7}" height="${size}" viewBox="0 0 28 40" aria-hidden="true">${paths}</svg>`;
+}
+
+/* ================= constantes ================= */
+const CAT_REC=['Serviço de trança','Manutenção','Retirada','Sinal','Pacotes','Vale-presente','Venda de produto','Outras receitas'];
+const CAT_DES=['Cabelo / fibra','Materiais (pomada, linha, elástico)','DAS-MEI','Aluguel / espaço','Transporte','Marketing e redes','Equipamentos','Cursos','Taxas de maquininha','Retirada pró-labore','Outras despesas'];
+const FORMAS=['Pix','Dinheiro','Cartão de débito','Cartão de crédito','Transferência'];
+const CAT_EST=['Cabelo / fibra','Pomadas e finalizadores','Linhas e elásticos','Miçangas e acessórios','Higiene e descartáveis','Outros'];
+const ORIGENS=['Instagram','Indicação','TikTok','WhatsApp','Google','Passou no ateliê','Outro'];
+const STATUS={agendado:{n:'Agendado',c:'var(--accent)'},confirmado:{n:'Confirmado',c:'var(--good)'},concluido:{n:'Concluído',c:'var(--lv-perola)'},cancelado:{n:'Cancelado',c:'var(--muted)'},faltou:{n:'Faltou',c:'var(--bad)'}};
+const NIVEIS={
+ perola:{n:'Pérola',c:'var(--lv-perola)',min:75,b:'10% em todos os serviços, prioridade na agenda e mimo de aniversário.'},
+ ouro:{n:'Ouro Rosé',c:'var(--lv-ouro)',min:50,b:'5% de desconto e manutenção com valor especial.'},
+ prata:{n:'Prata',c:'var(--lv-prata)',min:25,b:'Brinde (finalizador ou acessório) a cada 3 atendimentos.'},
+ bronze:{n:'Bronze',c:'var(--lv-bronze)',min:0,b:'Cupom de retorno válido por 60 dias para trazer de volta.'},
+ nova:{n:'Nova',c:'var(--lv-nova)',min:-1,b:'Boas-vindas: 5% na segunda visita.'}
+};
+const PAPEIS={owner:'Proprietária',parceira:'Trancista parceira',recepcao:'Recepção',contador:'Contador(a)'};
+const DEF_PUB={nome:'Stéfany Medeiros Trancista',responsavel:'Stéfany Medeiros',cnpj:'',municipio:'Serra - ES',endereco:'',whatsapp:'',abre:'08:00',fecha:'20:00',descAniv:10,started:false};
+const DEF_PRIV={das:86.05,limite:81000,inicioMei:'',meta:4000,dasPagos:{},taxaDebito:1.99,taxaCredito:4.98,taxaParcelado:9.9};
+const ANAM_Q=[
+ ['couro','Sente sensibilidade ou dor no couro cabeludo?'],
+ ['dermatite','Tem dermatite, psoríase, caspa intensa ou feridas no couro cabeludo?'],
+ ['queda','Tem queda acentuada, falhas ou alopecia (inclusive por tração)?'],
+ ['quimica','Fez química nos últimos 30 dias (alisamento, relaxamento, coloração, descoloração)?'],
+ ['alergia','Tem alergia a produtos, fibras sintéticas, pomadas ou fragrâncias?'],
+ ['gestante','Está gestante ou amamentando?'],
+ ['medic','Usa medicamento contínuo ou faz tratamento dermatológico?'],
+ ['cirurgia','Fez cirurgia, procedimento ou tem pontos recentes na cabeça?'],
+ ['cefaleia','Tem enxaqueca ou dor de cabeça frequente?']
+];
+
+/* ================= armazenamento (Firestore) e perfis ================= */
+const ALL_COLS=['clientes','servicos','agenda','estoque','pacotes','vales','espera','anamneses','aceites','ideias','publico','equipe','pedidos','lancamentos','contas','privado'];
+const COLS_POR_PAPEL={
+  owner:ALL_COLS,
+  parceira:['clientes','servicos','agenda','estoque','pacotes','vales','espera','anamneses','aceites','ideias','publico'],
+  recepcao:['clientes','servicos','agenda','pacotes','vales','espera','aceites','ideias','publico'],
+  contador:['servicos','agenda','pacotes','vales','publico','lancamentos','contas','privado']
+};
+const S={};ALL_COLS.forEach(c=>S[c]=new Map());
+let MODE='db',ROLE='carregando',ME=null,EMAIL='',APP=null,AUTH=null,FS=null;
+let NEED=new Set();const loaded=new Set();const unsubs=[];
+let DATAV=0;const MEMO=new Map();
+const memo=(k,fn)=>{const m=MEMO.get(k);if(m&&m.v===DATAV)return m.r;const r=fn();MEMO.set(k,{v:DATAV,r});return r};
+const arr=c=>[...S[c].values()];
+const isOwner=()=>ROLE==='owner';
+function pode(f){const own=isOwner(),r=ROLE;
+  switch(f){
+    case 'fin':return own||r==='contador';
+    case 'finEdit':case 'custos':case 'equipe':case 'politicaEdit':case 'precos':case 'seed':return own;
+    case 'anamnese':case 'estoque':return own||r==='parceira';
+    case 'contratos':case 'base':return own||r==='parceira'||r==='recepcao';
+    default:return own;
+  }}
+const pub=()=>({...DEF_PUB,...(S.publico.get('config')||{})});
+const priv=()=>({...DEF_PRIV,...(S.privado.get('config')||{})});
+
+function limpaUndef(o){return JSON.parse(JSON.stringify(o))}
+function save(col,id,data,{quiet}={}){
+  id=id||uid();const rec=limpaUndef({...data});delete rec.id;
+  rec.atualizadoEm=nowIso();rec.atualizadoPor=ME||'';
+  S[col].set(id,{id,...rec});touch();
+  // Não esperamos a confirmação do servidor: sem internet, o Firestore guarda e envia depois.
+  setDoc(doc(FS,col,id),rec).catch(e=>{if(!quiet)dbErr(e)});
+  return Promise.resolve(id);
+}
+function del(col,id){S[col].delete(id);touch();deleteDoc(doc(FS,col,id)).catch(dbErr);return Promise.resolve()}
+async function pool(tasks,n=8){const q=[...tasks];const run=async()=>{while(q.length){const t=q.shift();try{await t()}catch(e){}}};await Promise.all([...Array(n)].map(run))}
+function dbErr(e){const c=e&&e.code;toast(c==='permission-denied'?'Seu perfil não tem permissão para esta alteração.':c==='resource-exhausted'?'Limite diário do plano gratuito atingido. Tente amanhã ou mude de plano.':'Não foi possível salvar. Verifique a internet e tente de novo.');console.error(e)}
+function touch(){DATAV++;schedule()}
+
+function pararTudo(){unsubs.splice(0).forEach(u=>{try{u()}catch(e){}});loaded.clear();ALL_COLS.forEach(c=>S[c]=new Map());NEED=new Set()}
+function subscribe(cols){
+  NEED=new Set(cols);
+  cols.forEach(c=>{
+    let q=collection(FS,c);
+    if(c==='aceites'&&ROLE==='recepcao')q=query(q,where('tipo','in',['servico','politica']));
+    const u=onSnapshot(q,snap=>{const m=new Map();snap.docs.forEach(d=>m.set(d.id,{id:d.id,...d.data()}));S[c]=m;loaded.add(c);touch()},
+      err=>{console.error(c,err);loaded.add(c);touch();if(err.code==='permission-denied')toast('Seu acesso mudou. Entre novamente.')});
+    unsubs.push(u);
+  });
+}
+const configPendente=()=>!firebaseConfig||!firebaseConfig.apiKey||/COLE|SUA_/i.test(firebaseConfig.apiKey);
+
+async function boot(){
+  $('#loadMark').innerHTML=braidMark(56,true);
+  if(configPendente()){ROLE='config';render();return}
+  APP=initializeApp(firebaseConfig);AUTH=getAuth(APP);
+  try{FS=initializeFirestore(APP,{ignoreUndefinedProperties:true,localCache:persistentLocalCache({tabManager:persistentMultipleTabManager()})})}
+  catch(e){FS=initializeFirestore(APP,{ignoreUndefinedProperties:true})}
+  window.addEventListener('online',schedule);window.addEventListener('offline',schedule);
+  onAuthStateChanged(AUTH,async user=>{
+    pararTudo();
+    if(!user){ME=null;EMAIL='';ROLE='login';render();return}
+    ME=user.uid;EMAIL=user.email||'';ROLE='carregando';render();
+    let acesso=null;
+    try{const s=await getDoc(doc(FS,'sistema','acesso'));acesso=s.exists()?s.data():null}catch(e){ROLE='erro';render();return}
+    if(!acesso){ROLE='primeiro';render();return}
+    if((acesso.donas||[]).includes(ME)){ROLE='owner';subscribe(COLS_POR_PAPEL.owner);return}
+    const u=onSnapshot(doc(FS,'equipe',ME),s=>{
+      const d=s.exists()?s.data():null;const papel=d&&d.ativo!==false&&COLS_POR_PAPEL[d.papel]&&d.papel!=='owner'?d.papel:null;
+      if(papel&&ROLE!==papel){const keep=unsubs.splice(0,1);pararTudo();unsubs.push(...keep);ROLE=papel;UI.view=visiveis()[0][0];subscribe(COLS_POR_PAPEL[papel])}
+      else if(!papel&&ROLE!=='pendente'){const keep=unsubs.splice(0,1);pararTudo();unsubs.push(...keep);ROLE='pendente';
+        setDoc(doc(FS,'pedidos',ME),{email:EMAIL,nome:user.displayName||'',pedidoEm:nowIso()}).catch(()=>{});render()}
+    },()=>{ROLE='pendente';render()});
+    unsubs.unshift(u);
+  });
+}
+async function virarDona(){try{await setDoc(doc(FS,'sistema','acesso'),{donas:[ME],criadoEm:nowIso()});ROLE='owner';subscribe(COLS_POR_PAPEL.owner);toast('Pronto! Esta conta é a proprietária.')}
+  catch(e){toast('Não foi possível. Outra conta já é a proprietária.');console.error(e)}}
+
+/* nomes da equipe */
+function nomePessoa(id){if(!id)return '';if(id===ME)return isOwner()?'Você':'Você';
+  const e=S.equipe.get(id);if(e&&(e.apelido||e.email))return e.apelido||e.email;const p=S.pedidos.get(id);if(p)return p.nome||p.email;
+  return isOwner()?'Proprietária ou equipe':'Pessoa da equipe'}
+
+/* download e impressão (fora do Claude, o navegador baixa normalmente) */
+function salvarArquivo(nome,conteudo){const blob=conteudo instanceof Blob?conteudo:new Blob([conteudo],{type:/\.csv$/.test(nome)?'text/csv;charset=utf-8':/\.html$/.test(nome)?'text/html;charset=utf-8':/\.json$/.test(nome)?'application/json':/\.xlsx$/.test(nome)?'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':'application/octet-stream'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=nome;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1500);toast('Arquivo baixado');return true}
+
+/* ================= regras de negócio ================= */
+const nomeCli=id=>S.clientes.get(id)?.nome||'Cliente avulsa';
+const nomeServ=id=>S.servicos.get(id)?.nome||'Serviço';
+function catServ(sid){const n=nomeServ(sid);return /manuten/i.test(n)?'Manutenção':/retirada/i.test(n)?'Retirada':'Serviço de trança'}
+const ehComercio=l=>l.categoria==='Venda de produto';
+
+function fidelidade(cli,ref=today()){
+  const umAno=addDays(ref,-365);
+  const ag=arr('agenda').filter(a=>a.clienteId===cli.id);
+  const concl=ag.filter(a=>a.status==='concluido'&&a.data<=ref).sort((a,b)=>a.data<b.data?1:-1);
+  const conc12=concl.filter(a=>a.data>=umAno);
+  const faltas=ag.filter(a=>a.status==='faltou'&&a.data>=umAno).length;
+  const gasto=conc12.reduce((s,a)=>s+(+a.valor||0),0);
+  const ult=concl[0]?.data||null;const dias=ult?diffDays(ult,ref):null;
+  const ind=arr('clientes').filter(c=>c.indicadaPor===cli.id).length;
+  const p={freq:Math.min(35,conc12.length*7),valor:Math.min(30,Math.round(gasto/1500*30)),rec:dias==null?0:dias<=45?20:dias<=90?12:dias<=180?5:0,ind:Math.min(15,ind*5),pen:faltas*10};
+  const score=Math.max(0,Math.min(100,p.freq+p.valor+p.rec+p.ind-p.pen));
+  const nivel=concl.length===0?'nova':score>=75?'perola':score>=50?'ouro':score>=25?'prata':'bronze';
+  const total=concl.reduce((s,a)=>s+(+a.valor||0),0);
+  return {score,nivel,p,visitas12:conc12.length,visitas:concl.length,gasto,total,ult,dias,ind,faltas,risco:concl.length>=2&&dias>90,ticket:concl.length?total/concl.length:0};
+}
+
+/* receitas derivadas de pagamentos registrados na agenda, pacotes e vales */
+function pagVirtuais(){return memo('pv',()=>{const out=[];
+  const v=(col,doc,p,cat,desc,cli)=>out.push({id:`${col}:${doc.id}:${p.id}`,virtual:true,origem:col,origemId:doc.id,tipo:'receita',data:p.data,valor:+p.valor||0,categoria:cat,descricao:desc,forma:p.forma,parcelas:+p.parcelas||1,nf:!!p.nf,clienteId:cli,exemplo:doc.exemplo});
+  arr('agenda').forEach(a=>(a.pagamentos||[]).forEach(p=>{if(+p.valor>0)v('agenda',a,p,p.tipo==='sinal'?'Sinal':catServ(a.servicoId),`${p.tipo==='sinal'?'Sinal · ':''}${nomeServ(a.servicoId)} · ${nomeCli(a.clienteId)}`,a.clienteId)}));
+  arr('pacotes').forEach(k=>(k.pagamentos||[]).forEach(p=>v('pacotes',k,p,'Pacotes',`Pacote ${k.nome} · ${nomeCli(k.clienteId)}`,k.clienteId)));
+  arr('vales').forEach(x=>(x.pagamentos||[]).forEach(p=>v('vales',x,p,'Vale-presente',`Vale-presente ${x.codigo} · ${x.compradora||''}`)));
+  return out})}
+function taxaDe(l){const c=priv();if(l.forma==='Cartão de débito')return (+c.taxaDebito||0)/100;if(l.forma==='Cartão de crédito')return ((+l.parcelas||1)>1?+c.taxaParcelado:+c.taxaCredito)/100||0;return 0}
+function todasReceitas(){return memo('rec',()=>[...arr('lancamentos').filter(l=>l.tipo==='receita'),...pagVirtuais()])}
+function taxasVirtuais(){return memo('tx',()=>todasReceitas().filter(l=>taxaDe(l)>0).map(l=>({id:'taxa:'+l.id,virtual:true,origem:'taxa',tipo:'despesa',data:l.data,valor:Math.round(l.valor*taxaDe(l)*100)/100,categoria:'Taxas de maquininha',descricao:`Taxa ${l.forma.toLowerCase()}${l.parcelas>1?` ${l.parcelas}x`:''} · ${l.descricao}`,forma:l.forma,exemplo:l.exemplo})))}
+function todasDespesas(){return memo('des',()=>[...arr('lancamentos').filter(l=>l.tipo==='despesa'),...taxasVirtuais()])}
+const receitas=f=>f?todasReceitas().filter(f):todasReceitas();
+const despesas=f=>f?todasDespesas().filter(f):todasDespesas();
+
+function limiteAno(ano){const c=priv();const lim=+c.limite||81000;
+  if(c.inicioMei&&c.inicioMei.slice(0,4)===String(ano)){const m=+c.inicioMei.slice(5,7);return lim/12*(12-m+1)}return lim}
+
+/* contas a receber (cartões) */
+function aReceber(){return memo('arec',()=>{const out=[];const c=priv();
+  todasReceitas().forEach(l=>{const t=taxaDe(l);
+    if(l.forma==='Cartão de crédito'){const n=Math.max(1,+l.parcelas||1);for(let i=1;i<=n;i++)out.push({data:addDays(l.data,30*i),bruto:l.valor/n,liquido:l.valor/n*(1-t),desc:l.descricao,parc:`${i}/${n}`,forma:l.forma})}
+    else if(l.forma==='Cartão de débito')out.push({data:addDays(l.data,1),bruto:l.valor,liquido:l.valor*(1-t),desc:l.descricao,parc:'',forma:l.forma})});
+  return out.sort((a,b)=>a.data<b.data?-1:1)})}
+/* contas a pagar */
+function ocorrencias(ate){const out=[];const t=today();
+  arr('contas').forEach(ct=>{const ini=ct.vencimento;if(!ini)return;const dia=+ini.slice(8,10);
+    const keys=ct.recorrente==='mensal'?(()=>{const ks=[];let k=ym(ini);while(k<=ym(ate)){ks.push(k);k=addMonths(k,1)}return ks})():[ym(ini)];
+    keys.forEach(k=>{if(ct.ate&&k>ym(ct.ate))return;const last=new Date(+k.slice(0,4),+k.slice(5,7),0).getDate();const venc=`${k}-${pad(Math.min(dia,last))}`;
+      const paga=(ct.pagas||{})[k];out.push({conta:ct,k,venc,paga:!!paga,vencida:!paga&&venc<t})})});
+  return out.sort((a,b)=>a.venc<b.venc?-1:1)}
+
+/* estoque, pacotes, vales */
+const baixo=it=>(+it.qtd||0)<=(+it.minimo||0);
+function pacoteUso(p){const ag=arr('agenda').filter(a=>a.pacoteId===p.id);return {usadas:ag.filter(a=>a.status==='concluido').length,reservadas:ag.filter(a=>a.status==='agendado'||a.status==='confirmado').length}}
+function pacoteSaldo(p){const u=pacoteUso(p);return (+p.sessoes||0)-u.usadas-u.reservadas}
+const pacoteAtivo=p=>p.status!=='encerrado'&&(!p.validade||p.validade>=today())&&pacoteSaldo(p)>0;
+const valeSaldo=v=>(+v.valor||0)-(v.usos||[]).reduce((s,u)=>s+(+u.valor||0),0);
+const valeAtivo=v=>valeSaldo(v)>0&&(!v.validade||v.validade>=today())&&(v.pagamentos||[]).length>0;
+function novoCodigo(){const a='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';let s='SM-';for(let i=0;i<5;i++)s+=a[Math.floor(Math.random()*a.length)];return s}
+
+/* horários livres */
+function livresDia(d,minDur=60){const c=pub();let cur=hm2min(c.abre);const fim=hm2min(c.fecha);const out=[];
+  if(d===today()){const n=new Date();cur=Math.max(cur,Math.ceil((n.getHours()*60+n.getMinutes())/30)*30)}
+  arr('agenda').filter(a=>a.data===d&&a.status!=='cancelado'&&a.status!=='faltou').sort((a,b)=>a.hora<b.hora?-1:1)
+   .forEach(a=>{const s=hm2min(a.hora);if(s-cur>=minDur)out.push([cur,s]);cur=Math.max(cur,s+(+a.duracao||120))});
+  if(fim-cur>=minDur)out.push([cur,fim]);return out}
+
+/* anamnese */
+const anamDe=cid=>S.anamneses.get(cid);
+function anamAlertas(an){if(!an)return [];return ANAM_Q.filter(([k])=>an.respostas?.[k]?.sim).map(([k,q])=>({k,q,det:an.respostas[k].det||''}))}
+const anamVencida=an=>!an||!an.atualizadaEm||diffDays(an.atualizadaEm.slice(0,10),today())>365;
+
+/* datas comemorativas */
+function pascoa(y){const a=y%19,b=Math.floor(y/100),c=y%100,d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3),h=(19*a+b-d-g+15)%30,i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7,m=Math.floor((a+11*h+22*l)/451),mo=Math.floor((h+l-7*m+114)/31),da=((h+l-7*m+114)%31)+1;return new Date(y,mo-1,da)}
+function nth(y,mo,wd,n){const d=new Date(y,mo,1);let c=0;while(true){if(d.getDay()===wd){c++;if(c===n)return new Date(d)}d.setDate(d.getDate()+1)}}
+const DATAS_CACHE={};
+function datasAno(y){
+  if(DATAS_CACHE[y])return DATAS_CACHE[y];
+  const L=[];const add=(d,nome,ideia,tipo='com')=>L.push({data:typeof d==='string'?d:ymd(d),nome,ideia,tipo});
+  const p=pascoa(y);const carn=new Date(p);carn.setDate(p.getDate()-47);const preCarn=new Date(carn);preCarn.setDate(carn.getDate()-14);
+  const bf=nth(y,10,4,4);bf.setDate(bf.getDate()+1);
+  add(`${y}-01-01`,'Ano Novo','Abra a agenda de janeiro com pacote "Tranças para o verão": modelos leves para praia e piscina.');
+  add(`${y}-01-20`,'Férias de verão','Promoção de tranças infantis nas férias. Leve duas crianças da mesma família com desconto.');
+  add(`${y}-02-01`,'Volta às aulas','Pacote escola: tranças práticas que duram semanas. Divulgue fotos de antes e depois das pequenas.');
+  add(preCarn,'Agenda de Carnaval','Duas semanas antes: abra horários extras e ofereça tranças coloridas, fios com brilho e acessórios.');
+  add(carn,'Carnaval','Stories com looks de tranças para bloquinho. Venda de anéis e cordões para tranças.');
+  add(`${y}-03-08`,'Dia Internacional da Mulher','Homenageie suas clientes nas redes (com autorização) e ofereça mimo para quem agendar na semana.');
+  add(`${y}-03-15`,'Dia do Consumidor','Condição especial de 1 dia: manutenção com valor reduzido para clientes da casa.');
+  add(`${y}-03-21`,'Dia Internacional contra a Discriminação Racial','Conteúdo educativo sobre a história das tranças e seu valor cultural.');
+  add(p,'Páscoa','Sorteio entre clientes que agendarem na semana; brinde de chocolate no atendimento.');
+  add(`${y}-05-13`,'Abolição da escravatura','Post de reflexão sobre ancestralidade e resistência ligada às tranças.');
+  add(nth(y,4,0,2),'Dia das Mães','Vale-presente de tranças: filhas presenteiam as mães. Pacote mãe e filha com desconto.');
+  add(`${y}-05-25`,'Dia da África','Série de posts sobre a origem dos estilos (nagô, fulani, box braids) e seus significados.');
+  add(`${y}-06-12`,'Dia dos Namorados','Penteado especial para encontro e sorteio de um atendimento entre quem marcar a pessoa amada.');
+  add(`${y}-06-24`,'São João','Tranças com laços e flores para festas juninas; parceria com escolas e quadrilhas.');
+  add(`${y}-07-15`,'Férias de julho','Agenda infantil reforçada e pacote de tranças duradouras para viagem.');
+  add(`${y}-07-25`,'Dia da Mulher Negra Latino-Americana e Caribenha','Data de Tereza de Benguela. Destaque histórias de clientes e mulheres negras inspiradoras.');
+  add(`${y}-07-26`,'Dia do Orgulho Crespo','Campanha de valorização do cabelo crespo com ensaio de fotos das clientes.');
+  add(nth(y,7,0,2),'Dia dos Pais','Tranças masculinas e infantis: pacote pai e filho(a).');
+  add(`${y}-09-15`,'Dia da Cliente','Agradeça às clientes Pérola e Ouro Rosé com um mimo ou desconto exclusivo.');
+  add(`${y}-10-12`,'Dia das Crianças','Tranças infantis com miçangas coloridas e um pequeno presente para cada criança.');
+  add(`${y}-11-01`,'Mês da Consciência Negra','Programação do mês: conteúdos diários, parceria com outras empreendedoras negras.');
+  add(`${y}-11-20`,'Dia da Consciência Negra','Feriado nacional. Ação especial com fotos e depoimentos das clientes.');
+  add(bf,'Black Friday','Venda antecipada de horários e vales-presente de dezembro com desconto no Pix.');
+  add(`${y}-12-01`,'Temporada de fim de ano','Abra a agenda de dezembro cedo, cobre sinal para garantir horário e use a lista de espera.');
+  add(`${y}-12-25`,'Natal','Vale-presente de tranças para quem quer presentear alguém.');
+  add(`${y}-12-31`,'Réveillon','Tranças com fios dourados ou brancos para a virada.');
+  for(let m=0;m<12;m++)add(`${y}-${pad(m+1)}-20`,'Vencimento do DAS-MEI',`Pague o DAS de ${MESES[(m+11)%12]} e preencha o relatório mensal de receitas.`,'fiscal');
+  add(`${y}-05-31`,'Prazo da DASN-SIMEI','Declaração anual do MEI referente ao ano anterior.','fiscal');
+  L.sort((a,b)=>a.data<b.data?-1:1);return DATAS_CACHE[y]=L;
+}
+function datasEntre(a,b){const out=[];for(let y=+a.slice(0,4);y<=+b.slice(0,4);y++)out.push(...datasAno(y).filter(d=>d.data>=a&&d.data<=b&&(d.tipo!=='fiscal'||pode('fin'))));return out}
+function aniversariosEntre(a,b){const out=[];arr('clientes').forEach(c=>{if(!c.aniversario)return;const md=c.aniversario.slice(5);
+  for(let y=+a.slice(0,4);y<=+b.slice(0,4);y++){const d=`${y}-${md}`;if(d>=a&&d<=b)out.push({data:d,cli:c})}});return out.sort((x,y)=>x.data<y.data?-1:1)}
+
+/* ================= política da empresa e contratos ================= */
+const POL_CAMPOS=[
+ {k:'sinalPct',g:'Agendamento e sinal',r:'Sinal para reservar o horário',t:'num',p:30,suf:'% do valor do serviço'},
+ {k:'sinalCancel',g:'Agendamento e sinal',r:'Sinal quando a cliente cancela dentro do prazo',t:'sel',o:['será convertido em crédito válido por 60 (sessenta) dias para remarcação ou, se a CONTRATANTE preferir, devolvido integralmente','será devolvido integralmente','será convertido em crédito válido por 60 (sessenta) dias para remarcação']},
+ {k:'prazoCancel',g:'Agendamento e sinal',r:'Antecedência mínima para cancelar ou remarcar',t:'num',p:48,suf:'horas'},
+ {k:'remarcacoes',g:'Agendamento e sinal',r:'Remarcações sem custo por agendamento',t:'num',p:1,suf:'vez(es)'},
+ {k:'tolerancia',g:'Atrasos e faltas',r:'Tolerância de atraso',t:'num',p:20,suf:'minutos'},
+ {k:'atrasoRegra',g:'Atrasos e faltas',r:'Atraso acima da tolerância',t:'sel',o:['o serviço poderá ser adaptado ao tempo restante, sem redução de valor, ou remarcado uma única vez, a critério da CONTRATADA, mantendo-se o sinal','o atendimento será remarcado e o sinal mantido como crédito para a nova data','o atendimento será considerado não comparecimento, aplicando-se a regra de falta']},
+ {k:'falta',g:'Atrasos e faltas',r:'Falta sem aviso ou cancelamento fora do prazo',t:'sel',o:['o sinal será retido a título de arras, como compensação pelo horário reservado, sem nenhuma outra multa','o sinal será retido a título de arras e um novo agendamento exigirá pagamento antecipado de 50% (cinquenta por cento) do valor']},
+ {k:'cabelo',g:'Serviço',r:'Cabelo sintético e materiais',t:'sel',o:['não estão incluídos no preço; a CONTRATADA informará previamente quantidade, tipo e cor e poderá fornecê-los mediante acréscimo informado no orçamento','estão incluídos no preço do serviço','serão fornecidos pela CONTRATANTE, conforme orientação prévia da CONTRATADA quanto a quantidade, tipo e cor']},
+ {k:'preparo',g:'Serviço',r:'Como a cliente deve chegar',t:'txt',p:'com o cabelo lavado, seco e desembaraçado, sem óleos ou cremes pesados'},
+ {k:'semanasMax',g:'Serviço',r:'Tempo máximo recomendado com as tranças',t:'num',p:8,suf:'semanas'},
+ {k:'garantiaDias',g:'Garantia',r:'Prazo para retoque gratuito',t:'num',p:7,suf:'dias'},
+ {k:'garantiaCobre',g:'Garantia',r:'O que a garantia cobre',t:'txt',p:'tranças que se soltarem ou se desfizerem por falha na execução'},
+ {k:'garantiaExclui',g:'Garantia',r:'O que a garantia não cobre',t:'txt',p:'desgaste natural, crescimento do cabelo, aplicação de química, falta dos cuidados orientados, manipulação ou retirada parcial por terceiros'},
+ {k:'parcelas',g:'Pagamento',r:'Parcelamento máximo no cartão de crédito',t:'num',p:3,suf:'vezes'},
+ {k:'parcelaMin',g:'Pagamento',r:'Valor mínimo do serviço para parcelar',t:'num',p:200,suf:'reais'},
+ {k:'jurosParc',g:'Pagamento',r:'Taxa do parcelamento',t:'sel',o:['sem acréscimo para a CONTRATANTE','com repasse da taxa da operadora, informada antes do pagamento']},
+ {k:'domicilio',g:'Pagamento',r:'Atendimento a domicílio',t:'txt',p:'mediante taxa de deslocamento informada no orçamento, conforme a distância'},
+ {k:'menores',g:'Pessoas e imagem',r:'Atendimento de menores de 18 anos',t:'sel',o:['somente com autorização por escrito e presença de responsável legal durante todo o atendimento','somente com autorização por escrito do responsável legal, que deverá acompanhar ao menos o início e o fim do atendimento']},
+ {k:'acompanhantes',g:'Pessoas e imagem',r:'Acompanhantes',t:'txt',p:'é permitido 1 (um) acompanhante, salvo combinação prévia'},
+ {k:'imagem',g:'Pessoas e imagem',r:'Fotos e vídeos das clientes',t:'sel',o:['somente com autorização expressa em termo próprio, que pode ser revogada a qualquer tempo, sem custo','não são feitos registros de imagem das clientes']},
+ {k:'foro',g:'Disposições finais',r:'Foro',t:'sel',o:['o do domicílio da CONTRATANTE, conforme o art. 101, I, do Código de Defesa do Consumidor','o da comarca de {municipio}, ressalvado o direito da CONTRATANTE de demandar em seu domicílio (art. 101, I, do Código de Defesa do Consumidor)']},
+ {k:'adicionais',g:'Disposições finais',r:'Cláusulas adicionais da empresa',t:'area',p:''}
+];
+function pol(){const d=S.publico.get('politica')||{};const campos={};
+  POL_CAMPOS.forEach(f=>{const v=d.campos?.[f.k];campos[f.k]=v!=null&&v!==''?v:(f.t==='sel'?f.o[0]:f.p)});
+  const rev=d.revisados||{};const pend=POL_CAMPOS.filter(f=>f.t!=='area'&&!rev[f.k]).length;
+  return {campos,rev,versao:d.versao||0,atualizadaEm:d.atualizadaEm||'',pend}}
+function polV(P,k,pb){let v=String(P.campos[k]??'');if(pb)v=v.replace('{municipio}',pb.municipio||'____');const t=esc(v);return P.rev[k]?t:`<span class="rev" title="Item ainda não revisado">${t}</span>`}
+const linha=v=>v?esc(v):'______________________';
+
+function docServico(cli,ag){
+  const P=pol(),pb=pub(),V=k=>polV(P,k,pb);const s=ag?S.servicos.get(ag.servicoId):null;
+  const valor=ag?+ag.valor||0:0;const sinal=valor*(+P.campos.sinalPct||0)/100;
+  return `<article class="doc"><h1>Contrato de Prestação de Serviços de Tranças</h1><div class="sub">Política versão ${P.versao||'—'}${P.atualizadaEm?` · atualizada em ${dataBR(P.atualizadaEm.slice(0,10))}`:''}</div>
+  <h2>Partes</h2>
+  <p><b>CONTRATADA:</b> ${esc(pb.responsavel||pb.nome)}, microempreendedora individual, nome empresarial ${esc(pb.nome)}, CNPJ ${linha(pb.cnpj)}, com endereço em ${linha(pb.endereco||pb.municipio)}, WhatsApp ${linha(pb.whatsapp)}.</p>
+  <p><b>CONTRATANTE:</b> ${linha(cli?.nome)}, CPF ${linha(cli?.cpf)}, telefone ${linha(cli?.telefone)}.</p>
+  <h2>Cláusula 1 – Objeto</h2>
+  <p>Prestação do serviço de <b>${linha(s?.nome)}</b>, na data ${ag?`<b>${dataExt(ag.data)}</b>, às <b>${esc(ag.hora)}</b>`:'______________'}, com duração estimada de ${s?durTxt(ag.duracao||s.duracao):'____'}, ${pb.endereco?`no endereço ${esc(pb.endereco)}`:'no local combinado entre as partes'}.</p>
+  <h2>Cláusula 2 – Preço e pagamento</h2>
+  <p>2.1. O valor total do serviço é de <b>${ag?BRL(valor):'R$ ________'}</b>. Para reservar o horário, a CONTRATANTE paga sinal de ${V('sinalPct')}% (${ag?BRL(sinal):'R$ ______'}), que será abatido do valor final.</p>
+  <p>2.2. Formas aceitas: Pix, dinheiro e cartões de débito e crédito. O parcelamento no cartão de crédito é possível em até ${V('parcelas')} vezes para serviços a partir de R$ ${V('parcelaMin')}, ${V('jurosParc')}.</p>
+  <p>2.3. Cabelo sintético e materiais ${V('cabelo')}.</p>
+  <p>2.4. Atendimento a domicílio: ${V('domicilio')}.</p>
+  <h2>Cláusula 3 – Cancelamento e remarcação</h2>
+  <p>3.1. A CONTRATANTE pode cancelar ou remarcar com no mínimo ${V('prazoCancel')} horas de antecedência. Nesse caso, o sinal ${V('sinalCancel')}. São permitidas ${V('remarcacoes')} remarcação(ões) sem custo por agendamento.</p>
+  <p>3.2. Em caso de não comparecimento sem aviso, ou de cancelamento com antecedência menor que a prevista no item 3.1, ${V('falta')}, nos termos dos arts. 417 a 420 do Código Civil.</p>
+  <p>3.3. Se a CONTRATADA precisar cancelar ou remarcar por motivo próprio, avisará com a maior antecedência possível e a CONTRATANTE poderá escolher entre nova data ou devolução integral do sinal.</p>
+  <h2>Cláusula 4 – Atrasos</h2>
+  <p>A tolerância de atraso é de ${V('tolerancia')} minutos. Acima disso, ${V('atrasoRegra')}.</p>
+  <h2>Cláusula 5 – Deveres da CONTRATANTE</h2>
+  <ol><li>Comparecer ${V('preparo')}.</li><li>Preencher com veracidade a ficha de anamnese, informando alergias, sensibilidade, uso de química e condições do couro cabeludo.</li><li>Seguir os cuidados de manutenção orientados pela CONTRATADA.</li><li>Acompanhantes: ${V('acompanhantes')}.</li></ol>
+  <h2>Cláusula 6 – Deveres da CONTRATADA</h2>
+  <ol><li>Executar o serviço com técnica adequada, respeitando a saúde do couro cabeludo e evitando tensão excessiva.</li><li>Utilizar materiais em boas condições e manter higiene dos instrumentos e do ambiente.</li><li>Informar de forma clara os cuidados, a durabilidade e os riscos do procedimento, conforme o art. 6º, III, do Código de Defesa do Consumidor.</li><li>Interromper ou recusar o procedimento se identificar condição que coloque em risco a saúde da CONTRATANTE.</li></ol>
+  <h2>Cláusula 7 – Durabilidade e cuidados</h2>
+  <p>Recomenda-se não permanecer com as tranças por mais de ${V('semanasMax')} semanas, para evitar danos aos fios e alopecia por tração. Dor intensa, vermelhidão persistente, coceira forte ou feridas devem ser comunicadas imediatamente à CONTRATADA, e, se necessário, a CONTRATANTE deve procurar um(a) dermatologista.</p>
+  <h2>Cláusula 8 – Garantia</h2>
+  <p>8.1. A CONTRATADA oferece retoque gratuito em até ${V('garantiaDias')} dias após o atendimento para ${V('garantiaCobre')}.</p>
+  <p>8.2. A garantia não cobre ${V('garantiaExclui')}.</p>
+  <p>8.3. Esta garantia não substitui os direitos da CONTRATANTE previstos no Código de Defesa do Consumidor, inclusive o prazo de reclamação por vício do serviço (art. 26).</p>
+  <h2>Cláusula 9 – Imagem</h2>
+  <p>Fotos e vídeos da CONTRATANTE: ${V('imagem')}.</p>
+  <h2>Cláusula 10 – Dados pessoais</h2>
+  <p>Os dados pessoais da CONTRATANTE são tratados conforme a Lei nº 13.709/2018 (LGPD), apenas para agendamento, execução do serviço, comunicação e cumprimento de obrigações legais e fiscais. Dados de saúde da ficha de anamnese são tratados mediante consentimento específico. A CONTRATANTE pode solicitar acesso, correção ou eliminação dos seus dados pelo WhatsApp ${linha(pb.whatsapp)}, respeitados os prazos legais de guarda.</p>
+  <h2>Cláusula 11 – Menores de idade</h2>
+  <p>O atendimento de menores de 18 anos é realizado ${V('menores')}. O responsável assina este contrato e o termo de anamnese em nome da pessoa menor.</p>
+  ${P.campos.adicionais?`<h2>Cláusula 12 – Disposições adicionais</h2><p>${V('adicionais').replace(/\n/g,'<br>')}</p>`:''}
+  <h2>Cláusula ${P.campos.adicionais?13:12} – Foro</h2>
+  <p>Fica eleito ${V('foro')}, para resolver eventuais questões deste contrato.</p>
+  <p style="margin-top:16px">${esc(pb.municipio)}, ${dataExt(today())}.</p>
+  <div class="ass"><div>CONTRATADA<br>${esc(pb.responsavel||pb.nome)}</div><div>CONTRATANTE<br>${linha(cli?.nome)}</div></div></article>`;
+}
+
+function docAnamnese(cli,an){
+  const P=pol(),pb=pub();const r=an?.respostas||{};const resp=an?.responsavel||{};
+  return `<article class="doc"><h1>Ficha de Anamnese e Termo de Consentimento</h1><div class="sub">${esc(pb.nome)} · CNPJ ${linha(pb.cnpj)}</div>
+  <h2>Identificação</h2><p><b>Cliente:</b> ${linha(cli?.nome)} · <b>CPF:</b> ${linha(cli?.cpf)} · <b>Nascimento/aniversário:</b> ${cli?.aniversario?dataBR(cli.aniversario):'________'} · <b>Telefone:</b> ${linha(cli?.telefone)}</p>
+  ${an?.menor?`<p><b>Responsável legal:</b> ${linha(resp.nome)} · CPF ${linha(resp.cpf)} · ${linha(resp.parentesco)}</p>`:''}
+  <p><b>Cabelo:</b> ${linha(cli?.cabelo)}</p>
+  <h2>Questionário de saúde</h2>
+  <table>${ANAM_Q.map(([k,q])=>`<tr><td>${esc(q)}</td><td style="white-space:nowrap"><b>${r[k]?.sim?'Sim':an?'Não':'( ) Sim ( ) Não'}</b>${r[k]?.det?` – ${esc(r[k].det)}`:''}</td></tr>`).join('')}</table>
+  ${an?.obs?`<p style="margin-top:8px"><b>Observações da profissional:</b> ${esc(an.obs)}</p>`:''}
+  <h2>Declaração</h2>
+  <p>Declaro que as informações acima são verdadeiras e completas, e que fui informada sobre os cuidados, a durabilidade recomendada (até ${polV(P,'semanasMax')} semanas) e os riscos do procedimento, como sensibilidade, desconforto nas primeiras horas e queda de fios por tração quando os cuidados não são seguidos. Comprometo-me a comunicar qualquer alteração no meu estado de saúde antes de novos atendimentos.</p>
+  <h2>Consentimento para dados de saúde (LGPD)</h2>
+  <p>Autorizo, de forma livre, informada e específica, que ${esc(pb.nome)} trate os dados de saúde informados nesta ficha (dados pessoais sensíveis, art. 11, I, da Lei nº 13.709/2018) exclusivamente para avaliar a segurança e executar os serviços de tranças. Esses dados não serão compartilhados com terceiros, ficam acessíveis apenas às profissionais que me atendem e serão eliminados a meu pedido ou ao fim da finalidade, ressalvadas obrigações legais. Posso revogar este consentimento a qualquer momento.</p>
+  ${an?.menor?`<p>Por se tratar de pessoa menor de idade, este consentimento é dado pelo responsável legal identificado acima (art. 14 da LGPD).</p>`:''}
+  <h2>Uso de imagem</h2>
+  <p>${an?(an.imagem?'<b>( X ) Autorizo</b> ( ) Não autorizo':'( ) Autorizo <b>( X ) Não autorizo</b>'):'( ) Autorizo ( ) Não autorizo'} o uso de fotos e vídeos das minhas tranças, com ou sem meu rosto, nas redes sociais e materiais de divulgação de ${esc(pb.nome)}, sem remuneração e por prazo indeterminado, podendo revogar esta autorização a qualquer momento pelo WhatsApp, sem custo (art. 20 do Código Civil).</p>
+  <p style="margin-top:16px">${esc(pb.municipio)}, ${dataExt(today())}.</p>
+  <div class="ass"><div>${an?.menor?'RESPONSÁVEL LEGAL':'CLIENTE'}<br>${linha(an?.menor?resp.nome:cli?.nome)}</div><div>PROFISSIONAL<br>${esc(pb.responsavel||pb.nome)}</div></div></article>`;
+}
+
+function docPolitica(){
+  const P=pol(),pb=pub(),V=k=>polV(P,k,pb);
+  return `<article class="doc"><h1>Política do Ateliê</h1><div class="sub">${esc(pb.nome)} · versão ${P.versao||'—'}</div>
+  <h2>Para as clientes</h2>
+  <ol>
+   <li><b>Agendamento:</b> o horário é confirmado com sinal de ${V('sinalPct')}% do valor, abatido no dia do atendimento.</li>
+   <li><b>Cancelamento:</b> avise com pelo menos ${V('prazoCancel')} horas; nesse caso o sinal ${V('sinalCancel')}. Permitimos ${V('remarcacoes')} remarcação(ões) sem custo.</li>
+   <li><b>Falta ou aviso em cima da hora:</b> ${V('falta')}.</li>
+   <li><b>Atraso:</b> tolerância de ${V('tolerancia')} minutos. Depois disso, ${V('atrasoRegra')}.</li>
+   <li><b>Como chegar:</b> ${V('preparo')}.</li>
+   <li><b>Cabelo e materiais:</b> ${V('cabelo')}.</li>
+   <li><b>Pagamento:</b> Pix, dinheiro e cartões. Parcelamento em até ${V('parcelas')}x a partir de R$ ${V('parcelaMin')}, ${V('jurosParc')}.</li>
+   <li><b>Garantia:</b> retoque gratuito em até ${V('garantiaDias')} dias para ${V('garantiaCobre')}. Não cobre ${V('garantiaExclui')}.</li>
+   <li><b>Cuidados:</b> recomendamos ficar no máximo ${V('semanasMax')} semanas com as tranças.</li>
+   <li><b>Menores de 18 anos:</b> atendidos ${V('menores')}.</li>
+   <li><b>Acompanhantes:</b> ${V('acompanhantes')}.</li>
+   <li><b>Fotos:</b> ${V('imagem')}.</li>
+   <li><b>Privacidade:</b> seus dados são usados só para o atendimento e obrigações legais, conforme a LGPD.</li>
+  </ol>
+  <h2>Para a equipe</h2>
+  <ol>
+   <li><b>Sigilo:</b> dados de clientes, especialmente a ficha de anamnese, são confidenciais. Não fotografe telas, não repasse contatos e não comente informações de saúde.</li>
+   <li><b>Acesso ao sistema:</b> cada pessoa usa a própria conta. Nunca compartilhe login. O acesso é encerrado ao fim da parceria.</li>
+   <li><b>Anamnese:</b> confira a ficha antes de todo atendimento. Diante de ferida, inflamação ou dor intensa, não realize o procedimento e chame a proprietária.</li>
+   <li><b>Biossegurança:</b> higienize pentes, presilhas e bancada entre atendimentos; use materiais descartáveis quando indicado.</li>
+   <li><b>Valores e descontos:</b> siga a tabela de preços; descontos fora dos níveis de fidelidade só com autorização da proprietária.</li>
+   <li><b>Registros:</b> todo pagamento recebido e todo material usado deve ser lançado no sistema no mesmo dia.</li>
+   <li><b>Imagem:</b> fotos de clientes só com autorização registrada na ficha.</li>
+  </ol>
+  ${P.campos.adicionais?`<h2>Disposições adicionais</h2><p>${V('adicionais').replace(/\n/g,'<br>')}</p>`:''}
+  </article>`;
+}
+async function hashTexto(t){try{const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(t));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('').slice(0,16)}catch(e){return ''}}
+
+/* ================= interface: casca ================= */
+const UI={view:'inicio',agDia:today(),calMes:ym(today()),calDia:today(),finTab:'visao',finMes:ym(today()),lanTipo:'todos',cliBusca:'',cliNivel:'todos',cliOrd:'score',ctTab:'emitir',ctTipo:'servico',ctCli:'',ctAg:'',acFiltro:'todos',pkTab:'pacotes',relPer:6,lastView:null};
+const VIEWS=[['inicio','Início','home',()=>pode('base')],['agenda','Agenda','cal',()=>pode('base')],['clientes','Clientes','users',()=>pode('base')],['financeiro','Finanças','wallet',()=>pode('fin')],['contratos','Contratos','file',()=>pode('contratos')],['pacotes','Pacotes e vales','ticket',()=>pode('base')],['estoque','Estoque','box',()=>pode('estoque')],['calendario','Datas e ideias','spark',()=>pode('base')],['ajustes','Ajustes','gear',()=>true]];
+const visiveis=()=>VIEWS.filter(v=>v[3]());
+let rq=0;function schedule(){if(rq)return;rq=requestAnimationFrame(()=>{rq=0;render()})}
+function go(v){if(!visiveis().some(x=>x[0]===v))v=visiveis()[0][0];UI.view=v;try{history.replaceState(null,'','#'+v)}catch(e){}window.scrollTo({top:0,behavior:'smooth'});closeSheet(true);render()}
+
+function shell(){
+  const vs=visiveis();
+  $('#brandSide').innerHTML=`${braidMark(36)}<div><div class="brand-name">Stéfany Medeiros</div><div class="brand-sub">Trancista</div></div>`;
+  $('#navSide').innerHTML=vs.map(([k,n,i])=>`<button class="nav" data-act="go" data-v="${k}" ${UI.view===k?'aria-current="page"':''}>${ic(i)}${n}</button>`).join('');
+  const tabs=vs.filter(v=>['inicio','agenda','clientes'].includes(v[0]));tabs.push(vs.find(v=>v[0]==='financeiro')||vs.find(v=>v[0]==='contratos')||vs.find(v=>v[0]==='pacotes'));
+  const inTabs=tabs.some(t=>t[0]===UI.view);
+  $('#tabbar').innerHTML=tabs.map(([k,n,i])=>`<button class="tab" data-act="go" data-v="${k}" ${UI.view===k?'aria-current="page"':''}>${ic(i)}<span>${k==='financeiro'?'Finanças':n}</span></button>`).join('')+`<button class="tab" data-act="mais" ${!inTabs?'aria-current="page"':''}>${ic('grid')}<span>Mais</span></button>`;
+  const on=navigator.onLine!==false;$('#syncSide').innerHTML=`<i></i>${on?'Sincronizado':'Sem internet · salvando no aparelho'} · ${PAPEIS[ROLE]||''}`;$('#syncSide').classList.toggle('local',!on);
+  return `<div class="topbar"><div class="brand">${braidMark(30)}<div><div class="brand-name">Stéfany Medeiros</div><div class="brand-sub">Trancista</div></div></div><div class="row">${navigator.onLine===false?'<span class="sync local"><i></i>Sem internet</span>':''}<span class="role">${esc(PAPEIS[ROLE]||'')}</span></div></div>`;
+}
+function render(){
+  const main=$('#main');
+  if(['config','login','primeiro','pendente','erro'].includes(ROLE)){$('#tabbar').innerHTML='';$('#navSide').innerHTML='';$('#syncSide').innerHTML='';if(!main.dataset.gate||main.dataset.gate!==ROLE){main.dataset.gate=ROLE;main.innerHTML=gate()}return}
+  main.dataset.gate='';
+  if(ROLE==='carregando'||[...NEED].some(c=>!loaded.has(c))){if(!$('#loadMark')){main.innerHTML=`<div class="loading"><div id="loadMark">${braidMark(56,true)}</div><div>Abrindo seu ateliê…</div></div>`}return}
+  if(!visiveis().some(v=>v[0]===UI.view))UI.view=visiveis()[0][0];
+  const top=shell();
+  const fn={inicio:vInicio,agenda:vAgenda,clientes:vClientes,financeiro:vFinanceiro,contratos:vContratos,pacotes:vPacotes,estoque:vEstoque,calendario:vCalendario,ajustes:vAjustes}[UI.view]||vInicio;
+  const changed=UI.lastView!==UI.view;UI.lastView=UI.view;const y=window.scrollY;
+  const ae=document.activeElement;const aid=ae&&main.contains(ae)?ae.id:null;
+  main.innerHTML=top+`<div class="stack ${changed?'enter':''}" id="view">${fn()}</div>`;
+  if(changed)countUps();else window.scrollTo(0,y);
+  if(aid){const el=document.getElementById(aid);if(el&&el.focus)el.focus()}
+  afterRender();
+}
+function afterRender(){const c=$('#sigPad');if(c&&!c.dataset.on)sigInit(c)}
+function gate(){
+  const card=(t,body)=>`<div class="gate"><div class="card stack" style="align-items:center;max-width:420px;width:100%">${braidMark(56)}<div><div class="brand-name" style="font-size:1.5rem">Stéfany Medeiros</div><div class="brand-sub">Trancista</div></div><h2 class="page-title" style="font-size:1.4rem">${t}</h2>${body}</div></div>`;
+  if(ROLE==='config')return card('Falta configurar o Firebase',`<p class="muted" style="margin:0">Abra o arquivo <b>public/firebase-config.js</b> e cole os dados do seu projeto, como explicado no guia (LEIA-ME.md). Depois publique de novo.</p>`);
+  if(ROLE==='erro')return card('Não foi possível conectar',`<p class="muted" style="margin:0">Confira se o Firestore foi criado no console do Firebase e se as regras foram publicadas. Depois recarregue a página.</p><button class="btn soft" data-act="sair">Sair</button>`);
+  if(ROLE==='login')return card('Entrar',`<form class="form" id="fLogin" style="width:100%;text-align:left"><label class="fld">E-mail<input id="lgEmail" type="email" autocomplete="username" required></label><label class="fld">Senha<input id="lgSenha" type="password" autocomplete="current-password" required></label><div id="lgMsg" class="small" style="color:var(--bad)"></div><button class="btn primary" style="justify-content:center">Entrar</button><button type="button" class="btn ghost" data-act="esqueci" style="justify-content:center">Esqueci minha senha</button></form><p class="small muted" style="margin:0">Não tem acesso? Peça para a proprietária criar seu usuário.</p>`);
+  if(ROLE==='primeiro')return card('Primeiro acesso',`<p class="muted" style="margin:0">Nenhuma proprietária foi definida ainda. Se esta é a conta da <b>Stéfany</b> (${esc(EMAIL)}), confirme para torná-la a dona do sistema. Isso só pode ser feito uma vez.</p><button class="btn primary" data-act="virarDona">${ic('shield')}Esta é a conta da proprietária</button><button class="btn ghost" data-act="sair">Sair</button>`);
+  return card('Acesso aguardando liberação',`<p class="muted" style="margin:0">Você entrou como ${esc(EMAIL)}. A proprietária precisa definir seu perfil; assim que ela fizer isso, o sistema abre aqui automaticamente.</p><button class="btn ghost" data-act="sair">Sair</button>`);
+}
+function countUps(){if(matchMedia('(prefers-reduced-motion: reduce)').matches)return;$$('[data-count]').forEach(el=>{const to=+el.dataset.count;const f=el.dataset.fmt;const t0=performance.now();
+  const step=t=>{const k=Math.min(1,(t-t0)/900);const v=to*(1-Math.pow(1-k,3));el.textContent=f==='brl'?BRL(v):Math.round(v);if(k<1)requestAnimationFrame(step)};requestAnimationFrame(step)})}
+const cnt=(v,f='brl')=>`<span data-count="${v}" data-fmt="${f}">${f==='brl'?BRL(v):Math.round(v)}</span>`;
+const head=(eb,title,lede,actions='')=>`<div class="section-head"><div><div class="eyebrow">${eb}</div><h1 class="page-title">${title}</h1>${lede?`<p class="lede">${lede}</p>`:''}</div><div class="row">${actions}</div></div>`;
+const seg=(act,cur,opts,attr='t')=>`<div class="seg" role="tablist">${opts.map(([k,n])=>`<button data-act="${act}" data-${attr}="${k}" aria-pressed="${cur===k}">${n}</button>`).join('')}</div>`;
+const bars=(rows,max,color)=>rows.map(([k,v,txt])=>`<div style="margin-bottom:10px"><div class="row between small"><span>${esc(k)}</span><b class="num">${txt??BRL(v)}</b></div><div class="bar thin"><span style="width:${max?v/max*100:0}%;${color?`background:${color}`:''}"></span></div></div>`).join('');
+
+/* ================= INÍCIO ================= */
+function vInicio(){
+  const pb=pub();const t=today();const h=new Date().getHours();const own=isOwner();
+  const saud=h<12?'Bom dia':h<18?'Boa tarde':'Boa noite';
+  const nomeMe=own?primeiro(pb.responsavel)||'Stéfany':primeiro(nomePessoa(ME))||'';
+  const vazio=own&&!pb.started&&S.clientes.size===0&&S.agenda.size===0;
+  const hoje=arr('agenda').filter(a=>a.data===t&&a.status!=='cancelado').sort((a,b)=>a.hora<b.hora?-1:1);
+  const prox=datasEntre(t,addDays(t,30)).filter(d=>d.tipo==='com').slice(0,3);
+  const aniv=aniversariosEntre(t,addDays(t,14));
+  const risco=arr('clientes').map(cl=>({cl,f:fidelidade(cl)})).filter(x=>x.f.risco).sort((a,b)=>b.f.total-a.f.total).slice(0,4);
+  const esp=arr('espera').filter(e=>e.status==='aguardando');
+  const est=pode('estoque')?arr('estoque').filter(baixo):[];
+  let out=`<section class="hero"><div style="flex:1;min-width:220px"><div class="eyebrow">${esc(dataLonga(t))}</div><h1 class="hello">${saud}${nomeMe?`, <em>${esc(nomeMe)}</em>`:''}</h1>
+    <p class="lede">${hoje.length?`${hoje.length} atendimento${hoje.length>1?'s':''} hoje.`:'Nenhum atendimento marcado para hoje.'}</p></div>`;
+  if(own){const c=priv();const mes=ym(t);const rec=soma(receitas(l=>ym(l.data)===mes));const pm=+c.meta?Math.min(1,rec/c.meta):0;const C=2*Math.PI*40;
+    out+=`<svg class="ring" viewBox="0 0 96 96" role="img" aria-label="Meta do mês: ${pct(pm)}"><circle class="bg" cx="48" cy="48" r="40"/><circle class="fg" cx="48" cy="48" r="40" stroke-dasharray="${C}" stroke-dashoffset="${C*(1-pm)}"/><text x="48" y="54" text-anchor="middle">${Math.round(pm*100)}%</text></svg>`}
+  out+=`</section>`;
+  if(vazio)out+=`<section class="card"><h3>Bem-vinda ao seu sistema</h3><p class="muted small" style="margin-top:0">Comece com serviços e estoque sugeridos. Para ver tudo funcionando antes, carregue dados de exemplo: eles ficam marcados e podem ser apagados em Ajustes.</p>
+    <div class="row"><button class="btn primary" data-act="seed" data-ex="1">${ic('spark')}Ver com dados de exemplo</button><button class="btn soft" data-act="seed" data-ex="0">Começar do zero</button></div></section>`;
+  out+=`<section class="quick"><button data-act="novoAg">${ic('cal')}Agendar</button><button data-act="novaCli">${ic('users')}Nova cliente</button>${own?`<button data-act="novoLan">${ic('wallet')}Lançar valor</button>`:`<button data-act="novaEspera">${ic('list')}Lista de espera</button>`}</section>`;
+  if(own){const c=priv();const dasMes=ym(addDays(t.slice(0,8)+'01',-1));const diasDas=diffDays(t,t.slice(0,8)+'20');
+    if(!(c.dasPagos||{})[dasMes]&&(S.agenda.size||S.lancamentos.size))out+=`<div class="alert ${diasDas<0?'bad':'warn'}">${ic('alert')}<div><b>DAS de ${MESES[+dasMes.slice(5)-1]}</b> ${diasDas<0?'venceu dia 20 e não está marcado como pago.':diasDas===0?'vence hoje.':`vence em ${diasDas} dia${diasDas>1?'s':''} (dia 20).`} <button class="btn sm ghost" data-act="finTab" data-t="mei">Ver obrigações</button></div></div>`;
+    const venc=ocorrencias(addDays(t,7)).filter(o=>!o.paga&&o.venc<=addDays(t,7));
+    if(venc.length)out+=`<div class="alert warn">${ic('clock')}<div><b>${venc.length} conta${venc.length>1?'s':''} a pagar</b> até ${dataCurta(addDays(t,7))}: ${venc.slice(0,3).map(o=>`${esc(o.conta.descricao)} (${dataCurta(o.venc)})`).join(', ')}. <button class="btn sm ghost" data-act="finTab" data-t="contas">Abrir contas</button></div></div>`;
+    if(pol().pend)out+=`<div class="alert info">${ic('shield')}<div><b>Política da empresa:</b> ${pol().pend} itens dos contratos ainda não foram revisados. <button class="btn sm ghost" data-act="ctTab" data-t="politica">Revisar</button></div></div>`;
+    const ped=arr('pedidos');if(ped.length)out+=`<div class="alert info">${ic('lock')}<div><b>${ped.length} pedido${ped.length>1?'s':''} de acesso</b> aguardando você definir o perfil. <button class="btn sm ghost" data-act="go" data-v="ajustes">Ver equipe</button></div></div>`;}
+  if(est.length)out+=`<div class="alert warn">${ic('box')}<div><b>Estoque baixo:</b> ${est.slice(0,4).map(i=>`${esc(i.nome)} (${i.qtd} ${esc(i.unidade||'')})`).join(', ')}${est.length>4?'…':''} <button class="btn sm ghost" data-act="go" data-v="estoque">Ver estoque</button></div></div>`;
+  if(own){const c=priv();const mes=ym(t);const rec=soma(receitas(l=>ym(l.data)===mes));const des=soma(despesas(l=>ym(l.data)===mes));const ano=t.slice(0,4);const recAno=soma(receitas(l=>l.data.slice(0,4)===ano));const lim=limiteAno(ano);
+    out+=`<section class="kpis"><div class="kpi"><div class="l">Receita em ${MESES[+mes.slice(5)-1]}</div><div class="v">${cnt(rec)}</div><div class="d">Meta ${BRL(c.meta)}</div></div>
+    <div class="kpi"><div class="l">Lucro do mês</div><div class="v" style="color:${rec-des>=0?'var(--good)':'var(--bad)'}">${cnt(rec-des)}</div><div class="d">Despesas ${BRL(des)}</div></div>
+    <div class="kpi"><div class="l">Limite MEI ${ano}</div><div class="v">${pct(recAno/lim)}</div><div class="bar thin" style="margin-top:6px"><span style="width:${Math.min(100,recAno/lim*100)}%;background:${recAno/lim>.9?'var(--bad)':recAno/lim>.75?'var(--warn)':'var(--accent)'}"></span></div></div>
+    <div class="kpi"><div class="l">A receber (30 dias)</div><div class="v">${cnt(soma(aReceber().filter(r=>r.data>=t&&r.data<=addDays(t,30)).map(r=>({valor:r.liquido}))))}</div><div class="d">cartões, já sem taxa</div></div></section>`}
+  out+=`<div class="grid g2">
+   <section class="card"><h3>Hoje <button class="btn sm soft" data-act="go" data-v="agenda">Agenda</button></h3>${hoje.length?`<div class="list">${hoje.map(apptRow).join('')}</div>`:`<div class="empty">Dia livre. Que tal divulgar os horários vagos?<br><button class="btn soft sm" style="margin-top:8px" data-act="divulgar">${ic('image')}Divulgar horários</button></div>`}</section>
+   <section class="card"><h3>Lista de espera <small>${esp.length} aguardando</small></h3>${esp.length?`<div class="list">${esp.slice(0,4).map(esperaRow).join('')}</div>`:`<div class="empty">Ninguém na lista de espera.</div>`}</section>
+   <section class="card"><h3>Próximas datas <small>30 dias</small></h3>${prox.length?`<div class="stack" style="gap:8px">${prox.map(d=>`<div class="event"><span class="when">${dataCurta(d.data)} · faltam ${diffDays(t,d.data)} dias</span><b>${esc(d.nome)}</b><p>${esc(d.ideia)}</p></div>`).join('')}</div>`:`<div class="empty">Sem datas especiais nos próximos 30 dias.</div>`}</section>
+   <section class="card"><h3>Aniversariantes <small>próximos 14 dias</small></h3>${aniv.length?`<div class="list">${aniv.map(a=>{const l=waLink(a.cli.telefone,`Feliz aniversário, ${primeiro(a.cli.nome)}! 🎉 Desejo um ano lindo pra você. Seu presente: ${pb.descAniv}% de desconto no próximo atendimento este mês. Beijos, ${primeiro(pb.responsavel)}`);
+     return `<div class="item"><div class="avatar" style="--lv:var(--gold)">${ic('gift')}</div><div class="grow"><div class="t">${esc(a.cli.nome)}</div><div class="s">${a.data===t?'Hoje!':dataLonga(a.data)}</div></div>${l?`<a class="btn sm soft" href="${l}" target="_blank" rel="noopener">${ic('chat')}Parabéns</a>`:''}</div>`}).join('')}</div>`:`<div class="empty">Nenhum aniversário nas próximas duas semanas.</div>`}</section>
+   <section class="card"><h3>Para reconquistar <small>sem voltar há 90+ dias</small></h3>${risco.length?`<div class="list">${risco.map(({cl,f})=>{const l=waLink(cl.telefone,`Oi, ${primeiro(cl.nome)}! Tudo bem? Estou com saudade de cuidar das suas tranças 💕 Separei uma condição especial para você voltar este mês. Quer ver um horário?`);
+     return `<div class="item"><div class="avatar" style="--lv:${NIVEIS[f.nivel].c}">${iniciais(cl.nome)}</div><div class="grow"><div class="t">${esc(cl.nome)}</div><div class="s">Última visita há ${f.dias} dias · ${f.visitas} atendimentos</div></div>${l?`<a class="btn sm soft" href="${l}" target="_blank" rel="noopener">${ic('chat')}Chamar</a>`:''}</div>`}).join('')}</div>`:`<div class="empty">Todas as clientes frequentes voltaram recentemente.</div>`}</section>
+  </div>`;
+  return out;
+}
+
+/* ================= AGENDA ================= */
+function apptRow(a){const st=STATUS[a.status]||STATUS.agendado;
+  return `<button class="item" data-act="agDia" data-d="${a.data}"><span class="time">${esc(a.hora||'--:--')}</span><span class="dot" style="background:${st.c}"></span><div class="grow"><div class="t">${esc(nomeCli(a.clienteId))}</div><div class="s">${esc(nomeServ(a.servicoId))} · ${a.pacoteId?'pacote':BRL(a.valor)}</div></div><span class="badge">${st.n}</span></button>`}
+function esperaRow(e){const cli=S.clientes.get(e.clienteId);const nome=cli?.nome||e.nome;const tel=cli?.telefone||e.telefone;
+  const s=S.servicos.get(e.servicoId);let sug=null;for(let i=0;i<14&&!sug;i++){const d=addDays(today(),i);const l=livresDia(d,+s?.duracao||120);if(l.length)sug={d,h:min2hm(l[0][0])}}
+  const w=sug?waLink(tel,`Oi, ${primeiro(nome)}! Abriu um horário para ${s?.nome||'suas tranças'}: ${dataLonga(sug.d)} às ${sug.h}. Quer que eu reserve para você?`):null;
+  return `<div class="item"><div class="avatar" style="--lv:var(--lv-perola)">${iniciais(nome)}</div><div class="grow"><div class="t">${esc(nome)}</div><div class="s">${esc(s?.nome||'Qualquer serviço')} · ${esc(e.preferencia||'qualquer horário')} · desde ${dataCurta(e.desde)}</div></div>${w?`<a class="btn sm soft" href="${w}" target="_blank" rel="noopener" title="Sugere ${dataCurta(sug.d)} às ${sug.h}">${ic('chat')}Avisar</a>`:''}<button class="icon-btn" data-act="editEspera" data-id="${e.id}" aria-label="Editar">${ic('edit')}</button></div>`}
+function vAgenda(){
+  const d=UI.agDia;const base=parse(d);const ini=addDays(d,-base.getDay());const t=today();const pb=pub();
+  const ag=arr('agenda');const dias=[...Array(7)].map((_,i)=>addDays(ini,i));
+  const doDia=ag.filter(a=>a.data===d).sort((a,b)=>a.hora<b.hora?-1:1);
+  const ativos=doDia.filter(a=>a.status!=='cancelado'&&a.status!=='faltou');
+  const livres=livresDia(d,60);const esp=arr('espera').filter(e=>e.status==='aguardando').sort((a,b)=>a.desde<b.desde?-1:1);
+  let out=head('Agenda',esc(cap(dataLonga(d))),`${ativos.length} atendimento${ativos.length===1?'':'s'} · previsto ${BRL(soma(ativos))}`,
+   `<button class="icon-btn" data-act="agNav" data-n="-7" aria-label="Semana anterior">${ic('left')}</button><button class="btn sm soft" data-act="agHoje">Hoje</button><button class="icon-btn" data-act="agNav" data-n="7" aria-label="Próxima semana">${ic('right')}</button><button class="btn soft" data-act="divulgar">${ic('image')}Divulgar</button><button class="btn primary" data-act="novoAg">${ic('plus')}Agendar</button>`);
+  out+=`<div class="week">${dias.map(x=>{const n=ag.filter(a=>a.data===x&&a.status!=='cancelado').length;const dd=parse(x);
+    return `<button class="day ${x===t?'today':''}" data-act="agDia" data-d="${x}" aria-pressed="${x===d}"><span class="w">${SEM[dd.getDay()]}</span><span class="n">${dd.getDate()}</span><span class="c">${'<i></i>'.repeat(Math.min(n,4))}</span></button>`}).join('')}</div>`;
+  out+=`<div class="grid g2"><section class="stack" style="gap:10px">${doDia.length?doDia.map(apptCard).join(''):`<div class="card empty">Nenhum atendimento neste dia.<br><button class="btn soft" style="margin-top:10px" data-act="novoAg" data-d="${d}">${ic('plus')}Marcar horário</button></div>`}</section>
+  <section class="stack"><div class="card"><h3>Horários livres <small>${esc(pb.abre)}–${esc(pb.fecha)}</small></h3>${livres.length?`<div class="row">${livres.map(([a,b])=>`<button class="free" data-act="novoAg" data-d="${d}" data-h="${min2hm(a)}">${min2hm(a)} às ${min2hm(b)}</button>`).join('')}</div>`:`<div class="empty">Dia cheio.</div>`}</div>
+  <div class="card"><h3>Lista de espera <button class="btn sm soft" data-act="novaEspera">${ic('plus')}Adicionar</button></h3>${esp.length?`<div class="list">${esp.map(esperaRow).join('')}</div><p class="small muted" style="margin-bottom:0">O botão Avisar já sugere o primeiro horário livre que comporta o serviço.</p>`:'<div class="empty">Ninguém aguardando. Quando a agenda lotar, anote aqui quem quer um encaixe.</div>'}</div>
+  <div class="card"><h3>Próximos 7 dias</h3><div class="list">${ag.filter(a=>a.data>d&&a.data<=addDays(d,7)&&a.status!=='cancelado').sort((a,b)=>(a.data+a.hora)<(b.data+b.hora)?-1:1).slice(0,6).map(a=>`<button class="item" data-act="agDia" data-d="${a.data}"><span class="time">${dataCurta(a.data)}</span><div class="grow"><div class="t">${esc(nomeCli(a.clienteId))}</div><div class="s">${esc(a.hora)} · ${esc(nomeServ(a.servicoId))}</div></div></button>`).join('')||'<div class="empty">Nada marcado.</div>'}</div></div></section></div>`;
+  return out;
+}
+function apptCard(a){
+  const st=STATUS[a.status]||STATUS.agendado;const cli=S.clientes.get(a.clienteId);const fim=min2hm(hm2min(a.hora)+(+a.duracao||0));const pb=pub();
+  const pago=soma(a.pagamentos||[]);const msg=`Oi, ${primeiro(cli?.nome)}! 💕 Confirmando seu horário de ${nomeServ(a.servicoId)} ${dataLonga(a.data)} às ${a.hora}. Lembre de vir ${pol().campos.preparo}. Qualquer imprevisto, me avise com ${pol().campos.prazoCancel}h de antecedência. Beijos, ${primeiro(pb.responsavel)}`;
+  const l=cli?waLink(cli.telefone,msg):null;const aberto=a.status==='agendado'||a.status==='confirmado';
+  const an=pode('anamnese')?anamDe(a.clienteId):null;const al=anamAlertas(an);
+  const anTag=pode('anamnese')?(!an?`<span class="badge warn">sem anamnese</span>`:anamVencida(an)?`<span class="badge warn">anamnese vencida</span>`:al.length?`<span class="badge bad" title="${esc(al.map(x=>x.q+(x.det?': '+x.det:'')).join(' | '))}">atenção: ${esc(al.map(x=>x.k==='alergia'?'alergia':x.k==='quimica'?'química recente':x.k==='couro'?'sensibilidade':x.k).join(', '))}</span>`:`<span class="badge good">anamnese ok</span>`):'';
+  return `<article class="appt" style="--st:${st.c}"><div><div class="time">${esc(a.hora)}</div><div class="small muted num">${fim}</div></div>
+   <div style="min-width:0"><div class="row between"><b>${esc(nomeCli(a.clienteId))}</b><span class="badge">${st.n}</span></div><div class="small muted">${esc(nomeServ(a.servicoId))} · ${a.pacoteId?'sessão de pacote':BRL(a.valor)}${pago?` · recebido ${BRL(pago)}`:''}</div>
+   <div class="row" style="gap:6px;margin-top:6px">${anTag}</div>${a.obs?`<div class="small" style="margin-top:4px">${esc(a.obs)}</div>`:''}</div>
+   <div class="actions">${aberto?`<button class="btn sm primary" data-act="concluir" data-id="${a.id}">${ic('check')}Concluir</button>`:''}${a.status==='agendado'?`<button class="btn sm soft" data-act="stAg" data-id="${a.id}" data-s="confirmado">Confirmada</button>`:''}${l&&aberto?`<a class="btn sm soft" href="${l}" target="_blank" rel="noopener">${ic('chat')}Lembrete</a>`:''}<button class="btn sm ghost" data-act="editAg" data-id="${a.id}">${ic('edit')}Editar</button></div></article>`;
+}
+
+/* ================= CLIENTES ================= */
+function vClientes(){
+  const lista=arr('clientes').map(c=>({c,f:fidelidade(c)}));const cont={};lista.forEach(x=>cont[x.f.nivel]=(cont[x.f.nivel]||0)+1);
+  const q=UI.cliBusca.toLowerCase();
+  const fl=lista.filter(x=>(UI.cliNivel==='todos'||x.f.nivel===UI.cliNivel||(UI.cliNivel==='risco'&&x.f.risco))&&(!q||x.c.nome.toLowerCase().includes(q)||(digits(q)&&digits(x.c.telefone).includes(digits(q)))));
+  fl.sort({score:(a,b)=>b.f.score-a.f.score,nome:(a,b)=>a.c.nome.localeCompare(b.c.nome),gasto:(a,b)=>b.f.total-a.f.total,recente:(a,b)=>(b.f.ult||'')>(a.f.ult||'')?1:-1}[UI.cliOrd]);
+  const ch=[['todos','Todas',lista.length],...Object.entries(NIVEIS).map(([k,v])=>[k,v.n,cont[k]||0]),['risco','Em risco',lista.filter(x=>x.f.risco).length]];
+  return head('Clientes','Suas <em>clientes</em>','Fidelidade calculada pelos últimos 12 meses.',`<button class="btn primary" data-act="novaCli">${ic('plus')}Nova cliente</button>`)+
+  `<div class="row"><label class="searchbox">${ic('search')}<input id="cliBusca" type="search" placeholder="Buscar por nome ou telefone" value="${esc(UI.cliBusca)}" aria-label="Buscar cliente"></label>${seg('cliOrd',UI.cliOrd,[['score','Fidelidade'],['gasto','Mais gastou'],['recente','Recentes'],['nome','A–Z']],'o')}</div>
+  <div class="chips">${ch.map(([k,n,q])=>`<button class="chip" data-act="cliNivel" data-n="${k}" aria-pressed="${UI.cliNivel===k}">${n} · ${q}</button>`).join('')}</div>
+  <section class="card" style="padding:8px 14px">${fl.length?`<div class="list">${fl.map(({c,f})=>`<button class="item" data-act="verCli" data-id="${c.id}"><div class="avatar" style="--lv:${NIVEIS[f.nivel].c}">${iniciais(c.nome)}</div><div class="grow"><div class="t">${esc(c.nome)}${c.exemplo?' <span class="badge">exemplo</span>':''}</div><div class="s">${f.ult?`Última visita ${dataCurta(f.ult)} · `:''}${f.visitas} atendimento${f.visitas===1?'':'s'}${pode('fin')?` · ${BRL(f.total)}`:''}</div></div>${f.risco?'<span class="badge warn">em risco</span>':''}<span class="badge lv" style="--lv:${NIVEIS[f.nivel].c}">${NIVEIS[f.nivel].n} · ${f.score}</span></button>`).join('')}</div>`:`<div class="empty">Nenhuma cliente encontrada.</div>`}</section>
+  <details class="how card"><summary>Como funciona a pontuação de fidelidade</summary>
+  <p>Cada cliente recebe de 0 a 100 pontos, recalculados automaticamente com base nos últimos 12 meses:</p>
+  <table><tr><td><b>Frequência</b></td><td>7 pontos por atendimento concluído, até 35.</td></tr><tr><td><b>Valor</b></td><td>R$ 1.500 gastos no ano valem 30 pontos (máximo), proporcional.</td></tr>
+  <tr><td><b>Recência</b></td><td>Última visita até 45 dias: 20 · até 90: 12 · até 180: 5 · mais: 0.</td></tr><tr><td><b>Indicações</b></td><td>5 pontos por cliente indicada, até 15.</td></tr><tr><td><b>Faltas</b></td><td>−10 pontos por falta sem aviso.</td></tr></table>
+  <p>${Object.entries(NIVEIS).filter(([k])=>k!=='nova').map(([k,v])=>`<b>${v.n}</b> ${v.min}+ pontos: ${v.b}`).join('<br>')}<br><b>Nova</b>: ainda sem atendimento concluído. ${NIVEIS.nova.b}<br><b>Em risco</b>: 2+ atendimentos e sem voltar há mais de 90 dias.</p></details>`;
+}
+
+/* ================= FINANÇAS ================= */
+function vFinanceiro(){
+  const tabs=[['visao','Visão geral'],['lanc','Lançamentos'],['contas','Contas'],['mei','MEI e impostos'],['rel','Relatórios'],['serv','Serviços e preços']];
+  const comMes=['visao','lanc','mei'].includes(UI.finTab);
+  return head('Finanças','Controle <em>financeiro</em>',comMes?esc(cap(mesNome(UI.finMes))):'',
+    `${comMes?`<button class="icon-btn" data-act="finMes" data-n="-1" aria-label="Mês anterior">${ic('left')}</button><button class="icon-btn" data-act="finMes" data-n="1" aria-label="Próximo mês">${ic('right')}</button>`:''}${!pode('finEdit')?'<span class="badge">somente leitura</span>':UI.finTab==='serv'?`<button class="btn primary" data-act="novoServ">${ic('plus')}Serviço</button>`:UI.finTab==='contas'?`<button class="btn primary" data-act="novaConta">${ic('plus')}Conta a pagar</button>`:`<button class="btn primary" data-act="novoLan">${ic('plus')}Lançar</button>`}`)+
+  `<div style="overflow-x:auto">${seg('finTab',UI.finTab,tabs)}</div>`+({visao:finVisao,lanc:finLanc,contas:finContas,mei:finMei,rel:finRel,serv:finServ}[UI.finTab]||finVisao)();
+}
+function finVisao(){
+  const m=UI.finMes;const R=receitas(l=>ym(l.data)===m),D=despesas(l=>ym(l.data)===m);const r=soma(R),d=soma(D);
+  const atend=arr('agenda').filter(a=>ym(a.data)===m&&a.status==='concluido');const rp=soma(receitas(l=>ym(l.data)===addMonths(m,-1)));const varr=rp?(r-rp)/rp:null;
+  const meses=[...Array(12)].map((_,i)=>addMonths(m,i-11));const serie=meses.map(k=>({k,r:soma(receitas(l=>ym(l.data)===k)),d:soma(despesas(l=>ym(l.data)===k))}));
+  const agg=(L,key)=>{const o={};L.forEach(l=>o[l[key]||'Outro']=(o[l[key]||'Outro']||0)+(+l.valor||0));return Object.entries(o).sort((a,b)=>b[1]-a[1])};
+  const sd=agg(D,'categoria'),sr=agg(R,'forma'),sc=agg(R,'categoria');const pro=soma(D.filter(l=>l.categoria==='Retirada pró-labore'));
+  const comAtend=atend.filter(a=>!a.pacoteId);
+  return `<section class="kpis"><div class="kpi"><div class="l">Receita bruta</div><div class="v">${cnt(r)}</div><div class="d">${varr==null?'sem mês anterior':`${varr>=0?'+':''}${pct(varr)} vs. mês anterior`}</div></div>
+   <div class="kpi"><div class="l">Despesas</div><div class="v">${cnt(d)}</div><div class="d">${pro?`inclui ${BRL(pro)} de pró-labore`:'sem retiradas'}</div></div>
+   <div class="kpi"><div class="l">Lucro</div><div class="v" style="color:${r-d>=0?'var(--good)':'var(--bad)'}">${cnt(r-d)}</div><div class="d">Margem ${r?pct((r-d)/r):'—'}</div></div>
+   <div class="kpi"><div class="l">Atendimentos</div><div class="v">${cnt(atend.length,'n')}</div><div class="d">Ticket médio ${BRL(comAtend.length?soma(comAtend)/comAtend.length:0)}</div></div></section>
+  <section class="card"><h3>Últimos 12 meses <small><span class="dot" style="background:var(--accent)"></span> receita &nbsp;<span class="dot" style="background:var(--lv-prata)"></span> despesa</small></h3>${grafico(serie,m)}</section>
+  <div class="grid g3"><section class="card"><h3>Receitas por tipo</h3>${sc.length?bars(sc,sc[0][1]):'<div class="empty">Sem receitas.</div>'}</section>
+  <section class="card"><h3>Despesas por categoria</h3>${sd.length?bars(sd,sd[0][1],'var(--lv-prata)'):'<div class="empty">Sem despesas.</div>'}</section>
+  <section class="card"><h3>Recebimentos por forma</h3>${sr.length?bars(sr.map(([k,v])=>[k,v,`${BRL(v)} · ${pct(v/r)}`]),sr[0][1]):'<div class="empty">Sem receitas.</div>'}</section></div>
+  <div class="alert info">${ic('info')}<div>Os pagamentos registrados na agenda, nos pacotes e nos vales entram aqui automaticamente, e as taxas de cartão viram despesa sozinhas. O que vai para você entra como <b>Retirada pró-labore</b>.</div></div>`;
+}
+function grafico(s,cur,{key2=true,fmt}={}){
+  const W=Math.max(560,s.length*56),H=220,pl=56,pb=26,pt=10;const mx=Math.max(key2?100:1,...s.map(x=>Math.max(x.r,key2?x.d:0)));
+  const step=Math.pow(10,Math.floor(Math.log10(mx)));const nice=[1,2,2.5,5,10].map(k=>k*step).find(v=>mx/v<=5)||step*10;const top=Math.ceil(mx/nice)*nice;
+  const y=v=>pt+(H-pt-pb)*(1-v/top);const bw=(W-pl)/s.length;const b=Math.min(key2?16:26,bw/(key2?3.2:2));
+  let g='';for(let v=0;v<=top+.001;v+=nice)g+=`<line class="grid-l" x1="${pl}" x2="${W}" y1="${y(v)}" y2="${y(v)}"/><text x="${pl-8}" y="${y(v)+4}" text-anchor="end">${fmt?fmt(v):v>=1000?(v/1000).toLocaleString('pt-BR')+' mil':v}</text>`;
+  s.forEach((x,i)=>{const cx=pl+bw*i+bw/2;const isC=x.k===cur;
+    g+=`<rect class="bar-a ${isC?'cur':'rec'}" x="${key2?cx-b-1:cx-b/2}" y="${y(x.r)}" width="${b}" height="${H-pb-y(x.r)}" rx="3" style="animation-delay:${i*30}ms"><title>${esc(x.lab||x.k)}: ${fmt?fmt(x.r):BRL(x.r)}</title></rect>`;
+    if(key2)g+=`<rect class="bar-a des" x="${cx+1}" y="${y(x.d)}" width="${b}" height="${H-pb-y(x.d)}" rx="3" style="animation-delay:${i*30+60}ms"><title>${esc(x.k)}: despesa ${BRL(x.d)}</title></rect>`;
+    g+=`<text x="${cx}" y="${H-8}" text-anchor="middle" style="${isC?'fill:var(--fg);font-weight:700':''}">${esc(x.lab||MES3[+x.k.slice(5)-1])}</text>`});
+  return `<div class="chart-wrap"><svg class="chart" viewBox="0 0 ${W} ${H}" width="100%" style="min-width:${Math.min(W,560)}px" role="img">${g}</svg></div>`;
+}
+function finLanc(){
+  const m=UI.finMes;let L=[...receitas(),...despesas()].filter(l=>ym(l.data)===m);if(UI.lanTipo!=='todos')L=L.filter(l=>l.tipo===UI.lanTipo);
+  L.sort((a,b)=>a.data<b.data?1:a.data>b.data?-1:0);const grp={};L.forEach(l=>(grp[l.data]=grp[l.data]||[]).push(l));
+  const orig={agenda:'via agenda',pacotes:'via pacote',vales:'via vale-presente',taxa:'automático'};
+  return `<div class="row between"><div class="chips">${[['todos','Todos'],['receita','Receitas'],['despesa','Despesas']].map(([k,n])=>`<button class="chip" data-act="lanTipo" data-t="${k}" aria-pressed="${UI.lanTipo===k}">${n}</button>`).join('')}</div><button class="btn sm soft" data-act="csvLanc">${ic('down')}Exportar CSV</button></div>
+  <section class="card" style="padding:8px 14px">${L.length?Object.entries(grp).map(([d,ls])=>`<div class="eyebrow" style="padding:12px 4px 2px">${esc(dataLonga(d))}</div><div class="list">${ls.map(l=>`<button class="item" data-act="${l.virtual?'abrirOrigem':'editLan'}" data-id="${esc(l.id)}" data-o="${l.origem||''}" data-oid="${l.origemId||''}"><span class="dot" style="background:${l.tipo==='receita'?'var(--good)':'var(--bad)'}"></span><div class="grow"><div class="t">${esc(l.descricao||l.categoria)}</div><div class="s">${esc(l.categoria)} · ${esc(l.forma||'')}${l.parcelas>1?` ${l.parcelas}x`:''}${l.nf?' · com NF':''}${l.virtual?` · ${orig[l.origem]}`:''}${l.exemplo?' · exemplo':''}</div></div><b class="num" style="color:${l.tipo==='receita'?'var(--good)':'var(--bad)'}">${l.tipo==='receita'?'+':'−'} ${BRL(l.valor)}</b></button>`).join('')}</div>`).join(''):'<div class="empty">Nenhum lançamento neste mês.</div>'}</section>`;
+}
+function finContas(){
+  const t=today();const oc=ocorrencias(addDays(t,60));const pend=oc.filter(o=>!o.paga);const venc=pend.filter(o=>o.vencida);
+  const prox=pend.filter(o=>!o.vencida&&o.venc<=addDays(t,60));const pagas=oc.filter(o=>o.paga&&o.k>=addMonths(ym(t),-2)).reverse().slice(0,8);
+  const rec=aReceber().filter(r=>r.data>=t);const rec30=rec.filter(r=>r.data<=addDays(t,30));
+  const futAg=arr('agenda').filter(a=>a.data>=t&&a.data<=addDays(t,30)&&(a.status==='agendado'||a.status==='confirmado')&&!a.pacoteId);
+  const prevAg=futAg.reduce((s,a)=>s+Math.max(0,(+a.valor||0)-soma(a.pagamentos||[])),0);
+  const sai30=soma(pend.filter(o=>o.venc<=addDays(t,30)).map(o=>({valor:o.conta.valor})));
+  const row=o=>`<div class="item"><span class="time">${dataCurta(o.venc)}</span><div class="grow"><div class="t">${esc(o.conta.descricao)}</div><div class="s">${esc(o.conta.categoria)}${o.conta.recorrente==='mensal'?' · mensal':''}</div></div><b class="num">${BRL(o.conta.valor)}</b>${!pode('finEdit')?`<span class="badge ${o.paga?'good':o.vencida?'bad':''}">${o.paga?'paga':o.vencida?'vencida':'a vencer'}</span>`:o.paga?`<button class="btn sm ghost" data-act="pagarConta" data-id="${o.conta.id}" data-k="${o.k}">Desfazer</button>`:`<button class="btn sm ${o.vencida?'primary':'soft'}" data-act="pagarConta" data-id="${o.conta.id}" data-k="${o.k}">${ic('check')}Paguei</button>`}${pode('finEdit')?`<button class="icon-btn" data-act="editConta" data-id="${o.conta.id}" aria-label="Editar conta">${ic('edit')}</button>`:''}</div>`;
+  return `<section class="kpis"><div class="kpi"><div class="l">Entradas previstas (30 dias)</div><div class="v">${cnt(soma(rec30.map(r=>({valor:r.liquido})))+prevAg)}</div><div class="d">cartões ${BRL(soma(rec30.map(r=>({valor:r.liquido}))))} + agenda ${BRL(prevAg)}</div></div>
+   <div class="kpi"><div class="l">Saídas previstas (30 dias)</div><div class="v">${cnt(sai30)}</div><div class="d">${pend.filter(o=>o.venc<=addDays(t,30)).length} contas</div></div>
+   <div class="kpi"><div class="l">Saldo previsto</div><div class="v" style="color:${soma(rec30.map(r=>({valor:r.liquido})))+prevAg-sai30>=0?'var(--good)':'var(--bad)'}">${cnt(soma(rec30.map(r=>({valor:r.liquido})))+prevAg-sai30)}</div><div class="d">sem contar o saldo atual em conta</div></div>
+   <div class="kpi"><div class="l">Contas vencidas</div><div class="v" style="color:${venc.length?'var(--bad)':'inherit'}">${cnt(venc.length,'n')}</div><div class="d">${BRL(soma(venc.map(o=>({valor:o.conta.valor}))))}</div></div></section>
+  <div class="grid g2"><section class="card"><h3>A pagar</h3>${venc.length||prox.length?`<div class="list">${[...venc,...prox].map(row).join('')}</div>`:'<div class="empty">Nenhuma conta nos próximos 60 dias. Cadastre aluguel, internet, fornecedores e parcelas.</div>'}
+   ${pagas.length?`<div class="eyebrow" style="margin-top:14px">Pagas recentemente</div><div class="list">${pagas.map(row).join('')}</div>`:''}</section>
+  <section class="card"><h3>A receber dos cartões <small>valor líquido</small></h3>${rec.length?`<div class="list">${rec.slice(0,12).map(r=>`<div class="item"><span class="time">${dataCurta(r.data)}</span><div class="grow"><div class="t">${esc(r.desc)}</div><div class="s">${esc(r.forma)}${r.parc?` · parcela ${r.parc}`:''} · bruto ${BRL(r.bruto)}</div></div><b class="num">${BRL(r.liquido)}</b></div>`).join('')}</div>`:'<div class="empty">Nada a receber de cartões.</div>'}
+   <p class="small muted" style="margin-bottom:0">Prazos usados: débito em 1 dia; crédito em 30 dias por parcela. Taxas em Ajustes: débito ${String(priv().taxaDebito).replace('.',',')}%, crédito ${String(priv().taxaCredito).replace('.',',')}%, parcelado ${String(priv().taxaParcelado).replace('.',',')}%.</p></section></div>`;
+}
+function finMei(){
+  const c=priv(),pb=pub();const m=UI.finMes;const ano=m.slice(0,4);const t=today();
+  const recAno=soma(receitas(l=>l.data.slice(0,4)===ano));const lim=limiteAno(ano);const p=recAno/lim;
+  const mp=ano===t.slice(0,4)?+t.slice(5,7):12;const proj=recAno/Math.max(1,mp)*12;
+  const R=receitas(l=>ym(l.data)===m);const v=f=>soma(R.filter(f));
+  const servCom=v(l=>!ehComercio(l)&&l.nf),servSem=v(l=>!ehComercio(l)&&!l.nf),comCom=v(l=>ehComercio(l)&&l.nf),comSem=v(l=>ehComercio(l)&&!l.nf);
+  const pagos=c.dasPagos||{};
+  const das=[...Array(12)].map((_,i)=>{const k=`${ano}-${pad(i+1)}`;const venc=ymd(new Date(+ano,i+1,20));const pago=!!pagos[k];return {k,venc,pago,atras:!pago&&venc<t,fut:k>ym(t)}});
+  let alertaLim='';
+  if(recAno>lim*1.2)alertaLim=`<div class="alert bad">${ic('alert')}<div>O faturamento passou 20% do limite. Isso leva ao desenquadramento retroativo a janeiro: procure um contador agora.</div></div>`;
+  else if(recAno>lim)alertaLim=`<div class="alert bad">${ic('alert')}<div>Limite ultrapassado em até 20%: você segue MEI até dezembro, paga DAS complementar sobre o excesso e passa a microempresa no ano seguinte. Converse com um contador.</div></div>`;
+  else if(proj>lim)alertaLim=`<div class="alert warn">${ic('alert')}<div>No ritmo atual, o ano fecha em cerca de ${BRL(proj)}, acima do limite de ${BRL(lim)}. Planeje com antecedência.</div></div>`;
+  return `<div class="grid g2"><section class="card"><h3>Limite anual do MEI <small>${ano}</small></h3>
+   <div class="row between"><span class="num" style="font-size:1.5rem;font-weight:700">${BRL(recAno)}</span><span class="badge ${p>=1?'bad':p>=.8?'warn':'good'}">${pct(p)} usado</span></div>
+   <div class="bar" style="margin:10px 0 6px"><span style="width:${Math.min(100,p*100)}%;background:${p>=1?'var(--bad)':p>=.8?'var(--warn)':'var(--accent)'}"></span></div>
+   <div class="small muted">Limite ${c.inicioMei&&c.inicioMei.startsWith(ano)?'proporcional ':''}${BRL(lim)} · resta ${BRL(Math.max(0,lim-recAno))} · projeção para dezembro <b class="num">${BRL(proj)}</b></div>${alertaLim}</section>
+  <section class="card"><h3>DAS-MEI ${ano} <small>${BRL(c.das)}/mês · vence dia 20</small></h3>
+   <div class="das">${das.map(x=>`<button class="${x.pago?'pago':x.atras?'atras':''}" data-act="das" data-k="${x.k}" aria-pressed="${x.pago}" ${x.fut||!pode('finEdit')?'disabled':''} style="${x.fut?'opacity:.45':''}"><span>${MES3[+x.k.slice(5)-1]}</span><b>${x.pago?'Pago':x.atras?'Atrasado':x.fut?'—':'Em aberto'}</b><span class="muted num">vence ${dataCurta(x.venc)}</span></button>`).join('')}</div>
+   <p class="small muted" style="margin-bottom:0">Toque no mês para marcar como pago; a despesa é lançada automaticamente. Emita a guia no Portal do Empreendedor ou no App MEI.</p></section></div>
+  <section class="card"><h3>Relatório mensal de receitas brutas <small>${esc(mesNome(m))}</small></h3>
+   <div class="scroll-x"><table class="rep"><tbody><tr><td colspan="2"><b>CNPJ:</b> ${esc(pb.cnpj||'não informado')} &nbsp; <b>Empreendedora:</b> ${esc(pb.responsavel)}</td></tr>
+   <tr class="sec"><td colspan="2">Revenda de mercadorias (comércio)</td></tr><tr><td>I – Com dispensa de emissão de documento fiscal</td><td class="v">${BRL(comSem)}</td></tr><tr><td>II – Com documento fiscal emitido</td><td class="v">${BRL(comCom)}</td></tr><tr class="tot"><td>III – Total (I + II)</td><td class="v">${BRL(comSem+comCom)}</td></tr>
+   <tr class="sec"><td colspan="2">Venda de produtos industrializados (indústria)</td></tr><tr><td>IV – Com dispensa de documento fiscal</td><td class="v">${BRL(0)}</td></tr><tr><td>V – Com documento fiscal emitido</td><td class="v">${BRL(0)}</td></tr><tr class="tot"><td>VI – Total (IV + V)</td><td class="v">${BRL(0)}</td></tr>
+   <tr class="sec"><td colspan="2">Prestação de serviços</td></tr><tr><td>VII – Com dispensa de emissão de documento fiscal</td><td class="v">${BRL(servSem)}</td></tr><tr><td>VIII – Com documento fiscal emitido</td><td class="v">${BRL(servCom)}</td></tr><tr class="tot"><td>IX – Total (VII + VIII)</td><td class="v">${BRL(servSem+servCom)}</td></tr>
+   <tr class="tot"><td>X – Total geral das receitas brutas no mês (III + VI + IX)</td><td class="v">${BRL(comSem+comCom+servSem+servCom)}</td></tr><tr><td colspan="2" class="muted">${esc(pb.municipio)}, ____/____/______ · Assinatura: ______________________</td></tr></tbody></table></div>
+   <div class="row" style="margin-top:12px"><button class="btn soft sm" data-act="csvRel">${ic('down')}Baixar relatório (CSV)</button><button class="btn ghost sm" data-act="copyRel">${ic('copy')}Copiar texto</button></div>
+   <p class="small muted" style="margin-bottom:0">Preencha até o dia 20 do mês seguinte e guarde junto com as notas fiscais. Vendas de produto exigem atividade de comércio no seu CNPJ.</p></section>
+  <section class="card"><h3>Pacote do contador</h3><p class="small muted" style="margin-top:0">Planilha com tudo o que a contabilidade precisa. O(a) contador(a) com login próprio também pode gerar.</p>
+   <div class="row"><label class="fld" style="max-width:140px">Ano<select id="ctdAno">${[0,1,2].map(i=>`<option>${+t.slice(0,4)-i}</option>`).join('')}</select></label><button class="btn primary" data-act="pacoteContador">${ic('down')}Gerar planilha Excel</button></div>
+   <p class="small muted" style="margin-bottom:0">Inclui: lançamentos do ano, relatório mensal de receitas brutas dos 12 meses, resumo para a DASN-SIMEI, DAS pagos e contas pagas.</p></section>
+  <section class="card"><h3>Obrigações do MEI</h3><div class="list">
+   ${[['clock','DAS mensal','Até o dia 20 de cada mês, referente ao mês anterior. Garante INSS e benefícios.'],['wallet','Relatório mensal de receitas brutas','Até o dia 20 do mês seguinte. Este sistema gera automaticamente.'],['cal','DASN-SIMEI (declaração anual)',`Até 31 de maio, com o faturamento de ${+ano-1}: ${BRL(soma(receitas(l=>l.data.slice(0,4)===String(+ano-1))))} registrados aqui.`],['check','Nota fiscal','Obrigatória quando a cliente é empresa (CNPJ). Para pessoa física é opcional, salvo exigência do município.'],['users','Funcionário','O MEI pode contratar 1 empregado. Trancista parceira deve ter contrato próprio (Lei do Salão-Parceiro).'],['info','Guarde comprovantes','Notas, recibos e relatórios por 5 anos.']].map(([i,t,s])=>`<div class="item"><div class="avatar" style="--lv:var(--rose)">${ic(i)}</div><div class="grow"><div class="t" style="white-space:normal">${t}</div><div class="s" style="white-space:normal">${s}</div></div></div>`).join('')}
+  </div><p class="small muted" style="margin-bottom:0">Referência 2026: limite anual de R$ 81.000 e DAS de serviços de R$ 86,05. Se a lei mudar, atualize em Ajustes.</p></section>`;
+}
+function finRel(){
+  const t=today();const ini=addMonths(ym(t),-UI.relPer+1)+'-01';const c=priv();
+  const ag=arr('agenda').filter(a=>a.data>=ini&&a.data<=t);const concl=ag.filter(a=>a.status==='concluido');
+  const porServ={};concl.forEach(a=>{const s=S.servicos.get(a.servicoId);const k=s?.nome||'Outro';const o=porServ[k]=porServ[k]||{n:0,rec:0,custo:0,min:0};o.n++;o.rec+=+a.valor||0;o.custo+=+s?.custo||0;o.min+=+a.duracao||+s?.duracao||0});
+  const servRows=Object.entries(porServ).map(([k,o])=>({k,...o,lucro:o.rec-o.custo,hora:o.min?(o.rec-o.custo)/(o.min/60):0})).sort((a,b)=>b.lucro-a.lucro);
+  const semana=[0,0,0,0,0,0,0];concl.forEach(a=>semana[parse(a.data).getDay()]++);const mxs=Math.max(1,...semana);
+  // retorno em até 90 dias
+  const base=concl.filter(a=>a.data<=addDays(t,-90));let volt=0;base.forEach(a=>{if(arr('agenda').some(b=>b.clienteId===a.clienteId&&b.status==='concluido'&&b.data>a.data&&b.data<=addDays(a.data,90)))volt++});
+  const retorno=base.length?volt/base.length:null;
+  const prim={};arr('agenda').filter(a=>a.status==='concluido').forEach(a=>{if(!prim[a.clienteId]||a.data<prim[a.clienteId])prim[a.clienteId]=a.data});
+  const novas=Object.entries(prim).filter(([,d])=>d>=ini);const meses=[...Array(UI.relPer)].map((_,i)=>addMonths(ym(t),i-UI.relPer+1));
+  const novasSerie=meses.map(k=>({k,r:novas.filter(([,d])=>ym(d)===k).length}));
+  const orig={};novas.forEach(([id])=>{const o=S.clientes.get(id)?.origem||'Não informado';orig[o]=(orig[o]||0)+1});const so=Object.entries(orig).sort((a,b)=>b[1]-a[1]);
+  const metaSerie=meses.map(k=>({k,r:soma(receitas(l=>ym(l.data)===k))}));const bat=metaSerie.filter(x=>x.r>=+c.meta).length;const melhor=[...metaSerie].sort((a,b)=>b.r-a.r)[0];
+  const faltas=ag.filter(a=>a.status==='faltou').length,canc=ag.filter(a=>a.status==='cancelado').length;
+  return `<div class="row between"><div class="chips">${[[3,'3 meses'],[6,'6 meses'],[12,'12 meses']].map(([k,n])=>`<button class="chip" data-act="relPer" data-n="${k}" aria-pressed="${UI.relPer===k}">${n}</button>`).join('')}</div></div>
+  <section class="kpis"><div class="kpi"><div class="l">Taxa de retorno</div><div class="v">${retorno==null?'—':pct(retorno)}</div><div class="d">voltaram em até 90 dias</div></div>
+   <div class="kpi"><div class="l">Clientes novas</div><div class="v">${cnt(novas.length,'n')}</div><div class="d">primeiro atendimento no período</div></div>
+   <div class="kpi"><div class="l">Meta batida</div><div class="v">${bat} de ${UI.relPer}</div><div class="d">melhor mês: ${melhor?`${MES3[+melhor.k.slice(5)-1]} (${BRL(melhor.r)})`:'—'}</div></div>
+   <div class="kpi"><div class="l">Faltas e cancelamentos</div><div class="v">${faltas+canc}</div><div class="d">${faltas} faltas · ${canc} cancelados · ${ag.length?pct((faltas+canc)/ag.length):'—'}</div></div></section>
+  <section class="card"><h3>Lucro por serviço <small>preço − material</small></h3>${servRows.length?`<div class="scroll-x"><table class="tbl"><thead><tr><th>Serviço</th><th class="v">Feitos</th><th class="v">Receita</th><th class="v">Material</th><th class="v">Lucro</th><th class="v">Lucro/hora</th></tr></thead><tbody>${servRows.map((r,i)=>`<tr><td>${i===0?'<b>':''}${esc(r.k)}${i===0?'</b>':''}</td><td class="v">${r.n}</td><td class="v">${BRL(r.rec)}</td><td class="v">${BRL(r.custo)}</td><td class="v"><b>${BRL(r.lucro)}</b></td><td class="v">${BRL(r.hora)}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Sem atendimentos concluídos no período.</div>'}</section>
+  <div class="grid g3"><section class="card"><h3>Dias mais cheios</h3>${semana.map((n,i)=>`<div class="hbar"><span>${SEM[i]}</span><div class="bar thin"><span style="width:${n/mxs*100}%;${n===mxs&&n?'background:var(--accent-ink)':''}"></span></div><b class="num" style="text-align:right">${n}</b></div>`).join('')}</section>
+  <section class="card"><h3>De onde vêm as clientes novas</h3>${so.length?bars(so.map(([k,v])=>[k,v,`${v} · ${pct(v/novas.length)}`]),so[0][1]):'<div class="empty">Sem clientes novas no período.</div>'}<p class="small muted" style="margin-bottom:0">Preencha "Como conheceu" no cadastro para este gráfico ficar preciso.</p></section>
+  <section class="card"><h3>Clientes novas por mês</h3>${grafico(novasSerie,ym(t),{key2:false,fmt:v=>Math.round(v)})}</section></div>
+  <section class="card"><h3>Receita x meta mensal <small>meta ${BRL(c.meta)}</small></h3>${grafico(metaSerie,ym(t),{key2:false})}</section>`;
+}
+function finServ(){
+  const sv=arr('servicos').sort((a,b)=>a.nome.localeCompare(b.nome));const ag=arr('agenda').filter(a=>a.status==='concluido');
+  return `<section class="card" style="padding:8px 14px">${sv.length?`<div class="list">${sv.map(s=>{const lucro=(+s.preco||0)-(+s.custo||0);const hora=s.duracao?lucro/(s.duracao/60):0;
+   return `<button class="item" data-act="editServ" data-id="${s.id}"><div class="grow"><div class="t">${esc(s.nome)}</div><div class="s">${durTxt(s.duracao)} · material ${BRL(s.custo)} · lucro/hora ${BRL(hora)} · ${ag.filter(a=>a.servicoId===s.id).length} feitos${(s.consumo||[]).length?` · baixa ${s.consumo.length} item(ns) do estoque`:''}</div></div><b class="num">${BRL(s.preco)}</b></button>`}).join('')}</div>`:'<div class="empty">Nenhum serviço cadastrado.</div>'}</section>
+  <div class="alert info">${ic('info')}<div><b>Precificação:</b> o lucro por hora mostra quanto cada serviço rende depois do material. Cadastre o consumo de estoque em cada serviço para a baixa automática.</div></div>`;
+}
+
+/* ================= CONTRATOS ================= */
+function vContratos(){
+  const tabs=[['emitir','Emitir documento'],['aceites','Aceites registrados'],['politica','Política da empresa']];const P=pol();
+  return head('Contratos','Contratos e <em>termos</em>',`Política versão ${P.versao||'—'}${P.pend?` · ${P.pend} itens a revisar`:' · revisada'}`)+
+  `<div class="alert info">${ic('shield')}<div>Os modelos seguem o Código de Defesa do Consumidor, o Código Civil e a LGPD, mas são um ponto de partida. <b>Peça a um(a) advogado(a) para revisar</b> antes de usar. Trechos em destaque amarelo ainda não foram revisados na política da empresa.</div></div>`+
+  `<div style="overflow-x:auto">${seg('ctTab',UI.ctTab,tabs)}</div>`+({emitir:ctEmitir,aceites:ctAceites,politica:ctPolitica}[UI.ctTab]||ctEmitir)();
+}
+function ctTipos(){const t=[['servico','Contrato de serviço'],['politica','Política do ateliê']];if(pode('anamnese'))t.splice(1,0,['anamnese','Anamnese e consentimento']);return t}
+function ctEmitir(){
+  const tipos=ctTipos();if(!tipos.some(x=>x[0]===UI.ctTipo))UI.ctTipo='servico';
+  const cls=arr('clientes').sort((a,b)=>a.nome.localeCompare(b.nome));const cli=S.clientes.get(UI.ctCli);
+  const ags=cli?arr('agenda').filter(a=>a.clienteId===cli.id&&a.status!=='cancelado').sort((a,b)=>a.data<b.data?1:-1):[];
+  if(UI.ctAg&&!ags.some(a=>a.id===UI.ctAg))UI.ctAg='';const ag=S.agenda.get(UI.ctAg)||null;
+  let doc='';if(UI.ctTipo==='servico')doc=docServico(cli,ag);else if(UI.ctTipo==='anamnese')doc=docAnamnese(cli,anamDe(cli?.id));else doc=docPolitica();
+  const precisaCli=UI.ctTipo!=='politica';const an=cli?anamDe(cli.id):null;
+  return `<section class="card"><div class="f2">
+   <label class="fld">Documento<select id="ctTipo">${tipos.map(([k,n])=>`<option value="${k}" ${k===UI.ctTipo?'selected':''}>${n}</option>`).join('')}</select></label>
+   <label class="fld">Cliente${precisaCli?'':' (opcional)'}<select id="ctCli"><option value="">Selecione…</option>${cls.map(c=>`<option value="${c.id}" ${c.id===UI.ctCli?'selected':''}>${esc(c.nome)}</option>`).join('')}</select></label>
+   ${UI.ctTipo==='servico'?`<label class="fld">Atendimento<select id="ctAg"><option value="">Sem atendimento definido</option>${ags.map(a=>`<option value="${a.id}" ${a.id===UI.ctAg?'selected':''}>${dataBR(a.data)} ${esc(a.hora)} · ${esc(nomeServ(a.servicoId))}</option>`).join('')}</select></label>`:''}</div>
+   ${UI.ctTipo==='anamnese'&&cli&&!an?`<div class="alert warn" style="margin-top:10px">${ic('alert')}<div>${esc(primeiro(cli.nome))} ainda não tem ficha preenchida. <button class="btn sm soft" data-act="anamnese" data-id="${cli.id}">Preencher ficha</button></div></div>`:''}
+   ${cli&&!cli.cpf&&precisaCli?`<p class="small muted" style="margin-bottom:0">Dica: cadastre o CPF da cliente para o contrato sair completo.</p>`:''}
+   <div class="row" style="margin-top:12px"><button class="btn primary" data-act="aceite" ${precisaCli&&!cli?'disabled':''}>${ic('pen')}Coletar aceite</button><button class="btn soft" data-act="copyDoc">${ic('copy')}Copiar texto</button><button class="btn soft" data-act="imprimirDoc">${ic('file')}Imprimir ou salvar PDF</button><button class="btn ghost" data-act="baixarDoc">${ic('down')}Baixar</button>${cli?.telefone?`<a class="btn ghost" href="${waLink(cli.telefone,`Oi, ${primeiro(cli.nome)}! Segue ${UI.ctTipo==='servico'?'o contrato do seu atendimento':UI.ctTipo==='anamnese'?'sua ficha de anamnese':'a política do ateliê'} para leitura. Se estiver de acordo, responda "Li e aceito".`)}" target="_blank" rel="noopener">${ic('chat')}Avisar no WhatsApp</a>`:''}</div></section>
+  <div id="docBox">${doc}</div>`;
+}
+function ctAceites(){
+  const L=arr('aceites').filter(a=>(UI.acFiltro==='todos'||a.tipo===UI.acFiltro)&&(a.tipo!=='anamnese'||pode('anamnese'))).sort((a,b)=>a.aceitoEm<b.aceitoEm?1:-1);
+  const nomes={servico:'Contrato de serviço',anamnese:'Anamnese e consentimento',politica:'Política do ateliê'};
+  return `<div class="chips">${[['todos','Todos'],...ctTipos()].map(([k,n])=>`<button class="chip" data-act="acFiltro" data-t="${k}" aria-pressed="${UI.acFiltro===k}">${n}</button>`).join('')}</div>
+  <section class="card" style="padding:8px 14px">${L.length?`<div class="list">${L.map(a=>`<button class="item" data-act="verAceite" data-id="${a.id}"><div class="avatar" style="--lv:var(--lv-perola)">${ic(a.meio==='Assinatura no aparelho'?'pen':a.meio==='Aceite por WhatsApp'?'chat':'file')}</div><div class="grow"><div class="t">${esc(a.nomeAssinante||nomeCli(a.clienteId))}</div><div class="s">${nomes[a.tipo]||a.tipo} · ${esc(a.meio)} · ${dataBR(a.aceitoEm.slice(0,10))} ${a.aceitoEm.slice(11,16)} · política v${a.versao||'—'}</div></div><span class="badge good">aceito</span></button>`).join('')}</div>`:'<div class="empty">Nenhum aceite registrado ainda.</div>'}</section>
+  <p class="small muted">Cada aceite guarda uma cópia exata do texto aceito, a versão da política, a data, o meio e um código de verificação. Se a política mudar, os aceites antigos continuam valendo com o texto da época.</p>`;
+}
+function ctPolitica(){
+  const P=pol();const ed=pode('politicaEdit');const grupos=[...new Set(POL_CAMPOS.map(f=>f.g))];
+  if(!ed)return `<div class="alert info">${ic('lock')}<div>Só a proprietária altera a política. Abaixo está a versão em vigor.</div></div>${docPolitica()}`;
+  return `<form class="stack" id="fPol">${grupos.map(g=>`<section class="card form"><h3>${g}</h3>${POL_CAMPOS.filter(f=>f.g===g).map(f=>{const v=P.campos[f.k];const id='pol_'+f.k;
+    const inp=f.t==='num'?`<input id="${id}" type="number" min="0" value="${esc(v)}">`:f.t==='sel'?`<select id="${id}">${f.o.map(o=>`<option ${o===v?'selected':''}>${esc(o)}</option>`).join('')}</select>`:f.t==='area'?`<textarea id="${id}" placeholder="Ex.: regras de pagamento de pacotes, uso do espaço, outras condições">${esc(v)}</textarea>`:`<input id="${id}" value="${esc(v)}">`;
+    return `<div class="stack" style="gap:6px"><label class="fld" for="${id}">${f.r}${f.suf?` <span style="font-weight:400">(${f.suf})</span>`:''}${inp}</label>${f.t!=='area'?`<label class="check small"><input type="checkbox" id="rev_${f.k}" ${P.rev[f.k]?'checked':''}>Revisado e aprovado</label>`:''}</div>`}).join('')}</section>`).join('')}
+   <div class="form-actions" style="position:sticky;bottom:calc(84px + env(safe-area-inset-bottom,0px))"><button class="btn primary" type="submit">${ic('check')}Salvar nova versão da política</button></div></form>
+   <p class="small muted">Salvar cria a versão ${P.versao+1}. Documentos aceitos antes continuam guardados com o texto da versão anterior.</p>`;
+}
+
+/* ================= PACOTES E VALES ================= */
+function vPacotes(){
+  return head('Vendas','Pacotes e <em>vales-presente</em>','',`<button class="btn primary" data-act="${UI.pkTab==='vales'?'novoVale':'novoPacote'}">${ic('plus')}${UI.pkTab==='vales'?'Vale-presente':'Pacote'}</button>`)+
+  seg('pkTab',UI.pkTab,[['pacotes','Pacotes'],['vales','Vales-presente']])+(UI.pkTab==='vales'?pkVales():pkPacotes());
+}
+function pkPacotes(){
+  const L=arr('pacotes').sort((a,b)=>(pacoteAtivo(b)?1:0)-(pacoteAtivo(a)?1:0)||(a.criadoEm<b.criadoEm?1:-1));
+  return `<section class="card" style="padding:8px 14px">${L.length?`<div class="list">${L.map(p=>{const u=pacoteUso(p);const at=pacoteAtivo(p);const venc=p.validade&&p.validade<today();
+   return `<button class="item" data-act="editPacote" data-id="${p.id}"><div class="avatar" style="--lv:var(--lv-ouro)">${ic('ticket')}</div><div class="grow"><div class="t">${esc(nomeCli(p.clienteId))} · ${esc(p.nome)}</div><div class="s">${u.usadas} de ${p.sessoes} usadas${u.reservadas?` · ${u.reservadas} agendada(s)`:''}${p.validade?` · válido até ${dataBR(p.validade)}`:''} · ${BRL(p.valor)}</div><div class="bar thin" style="margin-top:6px;max-width:260px"><span style="width:${u.usadas/(p.sessoes||1)*100}%"></span></div></div><span class="badge ${at?'good':venc?'bad':''}">${at?'ativo':venc?'vencido':'encerrado'}</span></button>`}).join('')}</div>`:'<div class="empty">Nenhum pacote vendido. Exemplos: "Box braids + 2 manutenções" ou "4 sessões de nagô infantil".</div>'}</section>
+  <div class="alert info">${ic('info')}<div>Ao agendar, escolha "Usar pacote": a sessão sai sem cobrança e o saldo baixa ao concluir. A receita entra no dia da venda do pacote.</div></div>`;
+}
+function pkVales(){
+  const L=arr('vales').sort((a,b)=>a.criadoEm<b.criadoEm?1:-1);
+  return `<section class="card" style="padding:8px 14px">${L.length?`<div class="list">${L.map(v=>{const s=valeSaldo(v);const at=valeAtivo(v);
+   return `<button class="item" data-act="editVale" data-id="${v.id}"><div class="avatar" style="--lv:var(--gold)">${ic('gift')}</div><div class="grow"><div class="t"><span class="code">${esc(v.codigo)}</span> · para ${esc(v.presenteada||'—')}</div><div class="s">De ${esc(v.compradora||'—')} · ${BRL(v.valor)} · saldo ${BRL(s)}${v.validade?` · até ${dataBR(v.validade)}`:''}</div></div><span class="badge ${at?'good':s<=0?'':'bad'}">${at?'ativo':s<=0?'usado':(v.pagamentos||[]).length?'vencido':'não pago'}</span></button>`}).join('')}</div>`:'<div class="empty">Nenhum vale-presente vendido. Ótimo para Dia das Mães, Natal e aniversários.</div>'}</section>
+  <div class="alert info">${ic('info')}<div>Na conclusão do atendimento, informe o código do vale para abater o valor. A receita entra no dia da venda do vale, sem contar duas vezes.</div></div>`;
+}
+
+/* ================= ESTOQUE ================= */
+function vEstoque(){
+  const L=arr('estoque').sort((a,b)=>(baixo(b)?1:0)-(baixo(a)?1:0)||a.nome.localeCompare(b.nome));const own=pode('custos');
+  const grp={};L.forEach(i=>(grp[i.categoria||'Outros']=grp[i.categoria||'Outros']||[]).push(i));
+  const valor=L.reduce((s,i)=>s+(+i.qtd||0)*(+i.custo||0),0);const nb=L.filter(baixo).length;
+  return head('Estoque','Materiais e <em>estoque</em>',`${L.length} itens · ${nb} abaixo do mínimo${own?` · ${BRL(valor)} em estoque`:''}`,`<button class="btn primary" data-act="novoItem">${ic('plus')}Item</button>`)+
+  (L.length?Object.entries(grp).map(([g,its])=>`<section class="card" style="padding:8px 14px"><div class="eyebrow" style="padding:10px 4px 2px">${esc(g)}</div><div class="list">${its.map(i=>`<div class="item"><div class="grow"><div class="t">${esc(i.nome)}</div><div class="s">mínimo ${i.minimo} ${esc(i.unidade)}${own&&+i.custo?` · ${BRL(i.custo)}/${esc(i.unidade)}`:''}${i.mov?.[0]?` · último: ${i.mov[0].qtd>0?'+':''}${i.mov[0].qtd} (${esc(i.mov[0].motivo)})`:''}</div></div><b class="num ${baixo(i)?'low':''}">${i.qtd} ${esc(i.unidade)}</b><button class="btn sm soft" data-act="movItem" data-id="${i.id}">Entrada/saída</button><button class="icon-btn" data-act="editItem" data-id="${i.id}" aria-label="Editar item">${ic('edit')}</button></div>`).join('')}</div></section>`).join(''):`<section class="card empty">Cadastre jumbos por cor e número, pomadas, linhas e miçangas.</section>`)+
+  `<div class="alert info">${ic('info')}<div>Ao concluir um atendimento, o sistema baixa os materiais do serviço (configurado em Finanças › Serviços). ${own?'Em "Entrada/saída", registrar uma compra também lança a despesa.':''}</div></div>`;
+}
+
+/* ================= CALENDÁRIO ================= */
+function vCalendario(){
+  const m=UI.calMes;const [y,mo]=m.split('-').map(Number);const first=new Date(y,mo-1,1);const ini=addDays(ymd(first),-first.getDay());const fimMes=ymd(new Date(y,mo,0));
+  const coms=datasEntre(ini,addDays(ini,41));const anivs=aniversariosEntre(ini,addDays(ini,41));const ideias=arr('ideias');const ag=arr('agenda').filter(a=>a.status!=='cancelado');const t=today();
+  const cells=[...Array(42)].map((_,i)=>{const d=addDays(ini,i);const dd=parse(d);
+    const hc=coms.some(x=>x.data===d&&x.tipo==='com'),hf=coms.some(x=>x.data===d&&x.tipo==='fiscal'),ha=anivs.some(x=>x.data===d),hi=ideias.some(x=>x.data===d),hg=ag.some(x=>x.data===d);
+    return `<button class="cell ${ym(d)!==m?'out':''} ${d===t?'today':''} ${hc?'has-com':''}" data-act="calDia" data-d="${d}" aria-pressed="${d===UI.calDia}" aria-label="${dataLonga(d)}"><span>${dd.getDate()}</span><span class="dots">${hc?'<i style="background:var(--accent-ink)"></i>':''}${ha?'<i style="background:var(--gold)"></i>':''}${hg?'<i style="background:var(--good)"></i>':''}${hf?'<i style="background:var(--muted)"></i>':''}${hi?'<i style="background:var(--lv-perola)"></i>':''}</span></button>`}).join('');
+  const d=UI.calDia;const pb=pub();
+  const evD=[...datasEntre(d,d).map(x=>`<div class="event"><span class="when">${x.tipo==='fiscal'?'Fiscal':'Data comemorativa'}</span><b>${esc(x.nome)}</b><p>${esc(x.ideia)}</p></div>`),
+    ...aniversariosEntre(d,d).map(x=>`<div class="event"><span class="when" style="color:var(--gold)">Aniversário</span><b>${esc(x.cli.nome)}</b><p>Mande parabéns e o presente de ${pb.descAniv}% de desconto.</p></div>`),
+    ...ag.filter(a=>a.data===d).map(a=>`<div class="event"><span class="when" style="color:var(--good)">Atendimento ${esc(a.hora)}</span><b>${esc(nomeCli(a.clienteId))}</b><p>${esc(nomeServ(a.servicoId))}</p></div>`),
+    ...ideias.filter(i=>i.data===d).map(ideiaCard)];
+  const doMes=datasEntre(m+'-01',fimMes).filter(x=>x.tipo==='com');const minhas=ideias.filter(i=>!i.data||ym(i.data)===m).sort((a,b)=>(a.feito?1:0)-(b.feito?1:0));
+  const prox=datasEntre(addDays(fimMes,1),addDays(fimMes,45)).filter(x=>x.tipo==='com').slice(0,2);
+  return head('Calendário especial',`${cap(MESES[mo-1])} <em>${y}</em>`,'Datas comemorativas, aniversários e suas ideias.',`<button class="icon-btn" data-act="calMes" data-n="-1" aria-label="Mês anterior">${ic('left')}</button><button class="btn sm soft" data-act="calHoje">Hoje</button><button class="icon-btn" data-act="calMes" data-n="1" aria-label="Próximo mês">${ic('right')}</button><button class="btn primary" data-act="novaIdeia">${ic('plus')}Ideia</button>`)+
+  `<div class="grid g2"><section class="card"><div class="cal">${SEM.map(s=>`<div class="h">${s}</div>`).join('')}${cells}</div>
+   <div class="legend" style="margin-top:12px"><span><i class="dot" style="background:var(--accent-ink)"></i>Comemorativa</span><span><i class="dot" style="background:var(--gold)"></i>Aniversário</span><span><i class="dot" style="background:var(--good)"></i>Atendimento</span>${pode('fin')?'<span><i class="dot" style="background:var(--muted)"></i>Fiscal</span>':''}<span><i class="dot" style="background:var(--lv-perola)"></i>Sua ideia</span></div></section>
+  <section class="stack"><div class="card"><h3>${esc(dataLonga(d))}<button class="btn sm soft" data-act="novaIdeia" data-d="${d}">${ic('plus')}Ideia</button></h3><div class="stack" style="gap:8px">${evD.join('')||'<div class="empty">Nada neste dia.</div>'}</div></div></section></div>
+  <div class="grid g2"><section class="card"><h3>Oportunidades do mês</h3><div class="stack" style="gap:8px">${doMes.map(x=>`<div class="event"><span class="when">${dataCurta(x.data)}</span><b>${esc(x.nome)}</b><p>${esc(x.ideia)}</p><div class="row"><button class="btn sm ghost" data-act="usarIdeia" data-d="${x.data}" data-n="${esc(x.nome)}" data-i="${esc(x.ideia)}">${ic('plus')}Salvar como ideia</button></div></div>`).join('')||'<div class="empty">Sem datas comemorativas neste mês.</div>'}
+   ${prox.length?`<div class="small muted">Prepare-se também para: ${prox.map(x=>`<b>${esc(x.nome)}</b> (${dataCurta(x.data)})`).join(', ')}.</div>`:''}</div></section>
+  <section class="card"><h3>Minhas ideias <small>${minhas.filter(i=>!i.feito).length} em aberto</small></h3><div class="stack" style="gap:8px">${minhas.map(ideiaCard).join('')||'<div class="empty">Anote ideias de promoções, posts e parcerias.</div>'}</div></section></div>`;
+}
+function ideiaCard(i){return `<div class="event" style="${i.feito?'opacity:.6':''}"><span class="when" style="color:var(--fg)">${i.data?dataCurta(i.data):'Sem data'} · ${esc(i.tipo||'Ideia')}</span><b style="${i.feito?'text-decoration:line-through':''}">${esc(i.titulo)}</b>${i.notas?`<p>${esc(i.notas)}</p>`:''}<div class="row"><button class="btn sm soft" data-act="ideiaFeita" data-id="${i.id}">${ic('check')}${i.feito?'Reabrir':'Feito'}</button><button class="btn sm ghost" data-act="editIdeia" data-id="${i.id}">${ic('edit')}Editar</button></div></div>`}
+
+/* ================= AJUSTES ================= */
+function contaCard(){return `<section class="card"><h3>Sua conta</h3><p style="margin:0">${esc(EMAIL)} · <b>${esc(PAPEIS[ROLE]||'')}</b></p><div class="row" style="margin-top:10px"><button class="btn soft" data-act="trocarSenha">${ic('lock')}Trocar senha</button><button class="btn ghost" data-act="sair">Sair</button></div></section>`}
+function vAjustes(){
+  const own=isOwner();
+  if(!own)return head('Ajustes','Sua <em>conta</em>')+contaCard()+`<section class="card"><h3>O que você acessa</h3><p class="small muted" style="margin:0">${ROLE==='parceira'?'Agenda, clientes, fichas de anamnese, estoque, pacotes, contratos e datas. Finanças e a política da empresa ficam só com a proprietária.':ROLE==='recepcao'?'Agenda, cadastro de clientes, pacotes, contratos de serviço e datas. Fichas de saúde, estoque e finanças ficam restritos.':'Finanças, contas, relatórios e obrigações do MEI, somente leitura. Clientes e fichas de saúde não ficam visíveis.'}</p></section>`+
+   (pode('contratos')?`<section class="card"><h3>Política do ateliê</h3><button class="btn soft" data-act="ctTab" data-t="politica">${ic('file')}Abrir política</button></section>`:'');
+  const pb=pub(),c=priv();const nEx=ALL_COLS.reduce((s,k)=>s+arr(k).filter(r=>r.exemplo).length,0);
+  const ped=arr('pedidos'),eq=arr('equipe');
+  return head('Ajustes','Seu <em>negócio</em>')+contaCard()+
+  `<section class="card"><h3>Equipe e acessos <small>${eq.filter(e=>e.ativo!==false).length} ativa(s)</small></h3>
+   <ol class="small muted" style="margin-top:0;padding-left:18px"><li>No <a href="https://console.firebase.google.com" target="_blank" rel="noopener">console do Firebase</a>, abra <b>Authentication › Usuários › Adicionar usuário</b> e crie o e-mail da pessoa com uma senha provisória.</li><li>Ela entra no sistema com esse e-mail e aparece aqui como pedido.</li><li>Você escolhe o perfil. As regras do servidor só liberam os dados daquele perfil.</li></ol>
+   ${ped.length?`<div class="eyebrow" style="margin:10px 0 4px">Pedidos de acesso</div><div class="list">${ped.map(p=>`<div class="item"><div class="avatar">${iniciais(p.nome||p.email)}</div><div class="grow"><div class="t">${esc(p.nome||p.email)}</div><div class="s">${esc(p.email)} · pediu em ${dataBR((p.pedidoEm||'').slice(0,10))}</div></div><button class="btn sm primary" data-act="aprovar" data-id="${p.id}">Definir perfil</button><button class="btn sm ghost danger" data-act="recusar" data-id="${p.id}">Recusar</button></div>`).join('')}</div>`:''}
+   ${eq.length?`<div class="eyebrow" style="margin:10px 0 4px">Equipe</div><div class="list">${eq.map(e=>`<div class="item"><div class="avatar">${iniciais(e.apelido||e.email)}</div><div class="grow"><div class="t">${esc(e.apelido||e.email)}</div><div class="s">${PAPEIS[e.papel]||e.papel}${e.ativo===false?' · desativada':''} · ${esc(e.email||'')}</div></div><button class="btn sm soft" data-act="aprovar" data-id="${e.id}">Alterar</button></div>`).join('')}</div>`:''}
+   ${!ped.length&&!eq.length?'<div class="empty">Ninguém da equipe ainda.</div>':''}
+   <details class="how" style="margin-top:10px"><summary>O que cada perfil acessa</summary><table>
+    <tr><td><b>Proprietária</b></td><td>Tudo, incluindo finanças, contas, relatórios, política da empresa e equipe.</td></tr>
+    <tr><td><b>Trancista parceira</b></td><td>Agenda, clientes, fichas de anamnese, estoque (sem custos), pacotes, vales, contratos e datas.</td></tr>
+    <tr><td><b>Recepção</b></td><td>Agenda, cadastro de clientes, pacotes, vales, contrato de serviço e datas. Sem fichas de saúde e sem estoque.</td></tr>
+    <tr><td><b>Contador(a)</b></td><td>Finanças, contas, relatórios e MEI, somente leitura. Sem clientes nem fichas.</td></tr></table>
+    <p>Todas essas separações são aplicadas pelas regras de segurança do Firestore, no servidor. Para bloquear alguém de vez, desative o acesso aqui e também desative o usuário em Authentication no console.</p></details></section>
+  <form class="card form" id="fCfg"><h3>Dados do negócio</h3>
+   <div class="f2"><label class="fld">Nome empresarial<input id="gNome" value="${esc(pb.nome)}"></label><label class="fld">Responsável<input id="gResp" value="${esc(pb.responsavel)}"></label><label class="fld">CNPJ<input id="gCnpj" inputmode="numeric" value="${esc(pb.cnpj)}" placeholder="00.000.000/0001-00"></label></div>
+   <div class="f2"><label class="fld">Endereço do ateliê<input id="gEnd" value="${esc(pb.endereco)}"></label><label class="fld">Município<input id="gMun" value="${esc(pb.municipio)}"></label><label class="fld">WhatsApp do ateliê<input id="gWa" inputmode="tel" value="${esc(pb.whatsapp)}"></label></div>
+   <div class="f2"><label class="fld">Início do expediente<input id="gAbre" type="time" value="${esc(pb.abre)}"></label><label class="fld">Fim do expediente<input id="gFecha" type="time" value="${esc(pb.fecha)}"></label><label class="fld">Desconto de aniversário (%)<input id="gAniv" type="number" min="0" max="50" value="${pb.descAniv}"></label></div>
+   <h3 style="margin-top:8px">Finanças e MEI <small>visível só para você e a contabilidade</small></h3>
+   <div class="f2"><label class="fld">Abertura do MEI<input id="gIni" type="month" value="${esc(c.inicioMei)}"></label><label class="fld">Limite anual (R$)<input id="gLim" type="number" step="0.01" value="${c.limite}"></label><label class="fld">Valor do DAS (R$)<input id="gDas" type="number" step="0.01" value="${c.das}"></label><label class="fld">Meta mensal (R$)<input id="gMeta" type="number" step="50" value="${c.meta}"></label></div>
+   <div class="f2"><label class="fld">Taxa débito (%)<input id="gTd" type="number" step="0.01" value="${c.taxaDebito}"></label><label class="fld">Taxa crédito à vista (%)<input id="gTc" type="number" step="0.01" value="${c.taxaCredito}"></label><label class="fld">Taxa crédito parcelado (%)<input id="gTp" type="number" step="0.01" value="${c.taxaParcelado}"></label></div>
+   <div class="form-actions"><button class="btn primary">${ic('check')}Salvar ajustes</button></div></form>
+  <section class="card"><h3>Cópia de segurança</h3><p class="small muted" style="margin-top:0">Os dados ficam no Firestore e aparecem no PC e no celular. Mesmo assim, baixe uma cópia por mês. Use "Restaurar" também para trazer a cópia do sistema antigo.</p>
+   <div class="row"><button class="btn soft" data-act="backup">${ic('down')}Baixar cópia (JSON)</button><label class="btn ghost">${ic('up')}Restaurar cópia<input type="file" id="restFile" accept=".json,application/json" hidden></label></div></section>
+  ${nEx?`<section class="card"><h3>Dados de exemplo</h3><p class="small muted" style="margin-top:0">Há ${nEx} registros de exemplo. Apague antes de começar a usar de verdade.</p><button class="btn danger soft" data-act="limparEx">${ic('trash')}Apagar dados de exemplo</button></section>`:''}`;
+}
+
+/* ================= folhas (sheets), avisos e arquivos ================= */
+function sheet(title,html){
+  closeSheet(true);
+  $('#sheetRoot').innerHTML=`<div class="sheet-back" data-act="closeBack"><div class="sheet" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="grab"></div><div class="sheet-head"><h2>${title}</h2><button class="icon-btn" data-act="close" aria-label="Fechar">${ic('x')}</button></div>${html}</div></div>`;
+  document.body.style.overflow='hidden';afterRender();
+}
+function closeSheet(now){const b=$('.sheet-back');if(!b)return;document.body.style.overflow='';
+  if(now){$('#sheetRoot').innerHTML='';return}
+  b.classList.add('closing');$('.sheet',b).classList.add('closing');setTimeout(()=>{if(b.isConnected)b.remove()},240)}
+function toast(m){const t=document.createElement('div');t.className='toast';t.textContent=m;$('#toastRoot').appendChild(t);setTimeout(()=>t.remove(),2900)}
+function confirmar(msg,ok){sheet('Confirmar',`<p>${msg}</p><div class="form-actions"><button class="btn ghost" data-act="close">Cancelar</button><button class="btn primary" id="okBtn">Confirmar</button></div>`);$('#okBtn').onclick=async()=>{$('#okBtn').disabled=true;await ok();closeSheet()}}
+async function baixar(nome,conteudo){try{return salvarArquivo(nome,conteudo)}catch(e){toast('Não foi possível baixar');return false}}
+async function copiar(txt,ok='Copiado'){try{await navigator.clipboard.writeText(txt);toast(ok)}catch(e){toast('Não foi possível copiar')}}
+const csv=rows=>'﻿'+rows.map(r=>r.map(v=>{const s=String(v??'');return /[;"\n]/.test(s)?`"${s.replace(/"/g,'""')}"`:s}).join(';')).join('\n');
+const optCli=(sel,extra='')=>`<option value="">Selecione…</option>${extra}${arr('clientes').sort((a,b)=>a.nome.localeCompare(b.nome)).map(c=>`<option value="${c.id}" ${c.id===sel?'selected':''}>${esc(c.nome)}</option>`).join('')}`;
+const optServ=(sel,{preco=true,vazio='Selecione…'}={})=>`<option value="">${vazio}</option>${arr('servicos').sort((a,b)=>a.nome.localeCompare(b.nome)).map(s=>`<option value="${s.id}" ${s.id===sel?'selected':''}>${esc(s.nome)}${preco?` · ${BRL(s.preco)}`:''}</option>`).join('')}`;
+const optFormas=sel=>FORMAS.map(f=>`<option ${f===sel?'selected':''}>${f}</option>`).join('');
+const parcelasSel=(id,max)=>`<label class="fld" id="${id}Box" hidden>Parcelas<select id="${id}">${[...Array(Math.max(1,+max||1))].map((_,i)=>`<option value="${i+1}">${i+1}x</option>`).join('')}</select></label>`;
+function ligaParcelas(forma,id){const f=$('#'+forma),b=$('#'+id+'Box');if(!f||!b)return;const up=()=>{b.hidden=f.value!=='Cartão de crédito'};f.addEventListener('change',up);up()}
+
+/* ---------- menu Mais ---------- */
+function mais(){const vs=visiveis().filter(v=>!['inicio','agenda','clientes'].includes(v[0]));
+  sheet('Mais',`<div class="mais">${vs.map(([k,n,i])=>`<button data-act="go" data-v="${k}">${ic(i)}${n}</button>`).join('')}</div>`)}
+
+/* ---------- clientes ---------- */
+function abrirCliente(id){
+  const c=S.clientes.get(id);if(!c)return;const f=fidelidade(c);const nv=NIVEIS[f.nivel];
+  const hist=arr('agenda').filter(a=>a.clienteId===id).sort((a,b)=>a.data<b.data?1:-1);const ind=c.indicadaPor?S.clientes.get(c.indicadaPor):null;
+  const barras=[['Frequência',f.p.freq,35],['Valor',f.p.valor,30],['Recência',f.p.rec,20],['Indicações',f.p.ind,15]];
+  const l=waLink(c.telefone,`Oi, ${primeiro(c.nome)}! `);const an=anamDe(id);const al=anamAlertas(an);
+  const pks=arr('pacotes').filter(p=>p.clienteId===id&&pacoteAtivo(p));const acs=arr('aceites').filter(a=>a.clienteId===id&&(a.tipo!=='anamnese'||pode('anamnese')));
+  sheet(esc(c.nome),`<div class="stack">
+   <div class="row"><div class="avatar" style="--lv:${nv.c};width:56px;height:56px;font-size:1.1rem">${iniciais(c.nome)}</div><div class="grow"><span class="badge lv" style="--lv:${nv.c}">${nv.n}</span> ${f.risco?'<span class="badge warn">em risco</span>':''}<div class="small muted" style="margin-top:4px">${f.score} pontos de 100</div></div></div>
+   <div class="alert info">${ic('gift')}<div><b>Benefício do nível:</b> ${nv.b}</div></div>
+   ${pode('anamnese')?`<div class="alert ${!an||anamVencida(an)?'warn':al.length?'bad':'info'}">${ic('shield')}<div><b>Anamnese:</b> ${!an?'não preenchida.':anamVencida(an)?'vencida (mais de 12 meses).':al.length?`atenção – ${esc(al.map(x=>x.q.replace(/\?$/,'')+(x.det?': '+x.det:'')).join('; '))}.`:`sem restrições · ${dataBR(an.atualizadaEm.slice(0,10))}.`} <button class="btn sm ghost" data-act="anamnese" data-id="${id}">${an?'Atualizar':'Preencher'} ficha</button></div></div>`:''}
+   <div class="stack" style="gap:8px">${barras.map(([n,v,m])=>`<div><div class="row between small"><span>${n}</span><span class="num muted">${v}/${m}</span></div><div class="bar thin"><span style="width:${v/m*100}%"></span></div></div>`).join('')}${f.p.pen?`<div class="small" style="color:var(--bad)">Faltas: −${f.p.pen} pontos</div>`:''}</div>
+   ${pode('fin')?`<div class="kpis"><div class="kpi"><div class="l">Total gasto</div><div class="v">${BRL(f.total)}</div></div><div class="kpi"><div class="l">Ticket médio</div><div class="v">${BRL(f.ticket)}</div></div></div>`:''}
+   <div class="small">${c.telefone?`<div><b>Telefone:</b> ${esc(c.telefone)}</div>`:''}${c.cpf?`<div><b>CPF:</b> ${esc(c.cpf)}</div>`:''}${c.instagram?`<div><b>Instagram:</b> ${esc(c.instagram)}</div>`:''}${c.aniversario?`<div><b>Aniversário:</b> ${dataCurta(c.aniversario)}</div>`:''}${c.cabelo?`<div><b>Cabelo:</b> ${esc(c.cabelo)}</div>`:''}${c.origem?`<div><b>Como conheceu:</b> ${esc(c.origem)}</div>`:''}${ind?`<div><b>Indicada por:</b> ${esc(ind.nome)}</div>`:''}${f.ind?`<div><b>Indicou:</b> ${f.ind} cliente${f.ind>1?'s':''}</div>`:''}${c.obs?`<div><b>Notas:</b> ${esc(c.obs)}</div>`:''}</div>
+   ${pks.length?`<div class="small"><b>Pacotes ativos:</b> ${pks.map(p=>`${esc(p.nome)} (${pacoteSaldo(p)} sessão(ões) disponível(is))`).join(', ')}</div>`:''}
+   ${acs.length?`<div class="small"><b>Documentos aceitos:</b> ${acs.map(a=>`${a.tipo==='servico'?'contrato':a.tipo} em ${dataBR(a.aceitoEm.slice(0,10))}`).join(', ')}</div>`:''}
+   <div class="row"><button class="btn primary" data-act="novoAg" data-c="${id}">${ic('cal')}Agendar</button>${l?`<a class="btn soft" href="${l}" target="_blank" rel="noopener">${ic('chat')}WhatsApp</a>`:''}<button class="btn soft" data-act="docCli" data-id="${id}">${ic('file')}Contrato</button><button class="btn ghost" data-act="editCli" data-id="${id}">${ic('edit')}Editar</button></div>
+   <div><div class="eyebrow" style="margin-bottom:6px">Histórico</div>${hist.length?`<div class="list">${hist.map(a=>`<div class="item"><span class="time">${dataCurta(a.data)}</span><div class="grow"><div class="t">${esc(nomeServ(a.servicoId))}</div><div class="s">${a.data.slice(0,4)} · ${a.pacoteId?'pacote':BRL(a.valor)}</div></div><span class="badge">${STATUS[a.status]?.n||''}</span></div>`).join('')}</div>`:'<div class="empty">Sem atendimentos ainda.</div>'}</div></div>`);
+}
+function formCliente(id){
+  const c=id?S.clientes.get(id):{};const outras=arr('clientes').filter(x=>x.id!==id).sort((a,b)=>a.nome.localeCompare(b.nome));
+  sheet(id?'Editar cliente':'Nova cliente',`<form class="form" id="fCli">
+   <label class="fld">Nome completo<input id="cNome" required value="${esc(c.nome)}" autocomplete="off"></label>
+   <div class="f2"><label class="fld">WhatsApp<input id="cTel" inputmode="tel" placeholder="(27) 99999-9999" value="${esc(c.telefone)}"></label><label class="fld">CPF (para contratos)<input id="cCpf" inputmode="numeric" value="${esc(c.cpf)}"></label></div>
+   <div class="f2"><label class="fld">Instagram<input id="cIg" placeholder="@usuario" value="${esc(c.instagram)}"></label><label class="fld">Data de nascimento<input id="cAniv" type="date" value="${esc(c.aniversario)}"></label></div>
+   <div class="f2"><label class="fld">Como conheceu<select id="cOrig"><option value="">Selecione…</option>${ORIGENS.map(o=>`<option ${o===c.origem?'selected':''}>${o}</option>`).join('')}</select></label><label class="fld">Indicada por<select id="cInd"><option value="">Ninguém</option>${outras.map(o=>`<option value="${o.id}" ${o.id===c.indicadaPor?'selected':''}>${esc(o.nome)}</option>`).join('')}</select></label></div>
+   <label class="fld">Tipo e comprimento do cabelo<input id="cCab" placeholder="Ex.: crespo 4C, ombro" value="${esc(c.cabelo)}"></label>
+   <label class="fld">Notas<textarea id="cObs">${esc(c.obs)}</textarea></label>
+   ${pode('anamnese')?'<p class="small muted" style="margin:0">Alergias e condições de saúde vão na ficha de anamnese, que tem consentimento próprio.</p>':''}
+   <div class="form-actions">${id&&isOwner()?`<button type="button" class="btn danger ghost" data-act="delCli" data-id="${id}">${ic('trash')}Excluir</button>`:''}<button class="btn primary" type="submit">${ic('check')}Salvar</button></div></form>`);
+  $('#fCli').onsubmit=async e=>{e.preventDefault();
+    const d={...(c||{}),nome:$('#cNome').value.trim(),telefone:$('#cTel').value.trim(),cpf:$('#cCpf').value.trim(),instagram:$('#cIg').value.trim(),aniversario:$('#cAniv').value,origem:$('#cOrig').value,indicadaPor:$('#cInd').value,cabelo:$('#cCab').value.trim(),obs:$('#cObs').value.trim()};
+    if(!d.nome)return;if(!id)d.criadoEm=today();const nid=await save('clientes',id,d);closeSheet();toast(id?'Cliente atualizada':'Cliente cadastrada');
+    if(!id&&pode('anamnese'))setTimeout(()=>formAnamnese(nid),300)};
+}
+
+/* ---------- anamnese ---------- */
+function formAnamnese(cid){
+  const c=S.clientes.get(cid);if(!c)return;const an=anamDe(cid)||{};const r=an.respostas||{};const resp=an.responsavel||{};
+  const menorPadrao=c.aniversario?diffDays(c.aniversario,today())<18*365.25:false;
+  sheet('Ficha de anamnese',`<form class="form" id="fAn"><p class="muted small" style="margin:0">${esc(c.nome)}${an.atualizadaEm?` · última atualização ${dataBR(an.atualizadaEm.slice(0,10))}`:''}</p>
+   <div>${ANAM_Q.map(([k,q])=>`<div class="qa"><span class="small">${esc(q)}</span><div class="seg" data-q="${k}"><button type="button" data-v="0" aria-pressed="${!r[k]?.sim}">Não</button><button type="button" data-v="1" aria-pressed="${!!r[k]?.sim}">Sim</button></div><input class="fld" id="det_${k}" placeholder="Detalhe (qual, quando)" value="${esc(r[k]?.det)}" ${r[k]?.sim?'':'hidden'} style="border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--surface)"></div>`).join('')}</div>
+   <label class="fld">Observações da profissional<textarea id="anObs" placeholder="Ex.: couro sensível na nuca, evitar tensão">${esc(an.obs)}</textarea></label>
+   <label class="check"><input type="checkbox" id="anMenor" ${an.menor??menorPadrao?'checked':''}>Cliente menor de 18 anos</label>
+   <div class="f2" id="anResp" ${an.menor??menorPadrao?'':'hidden'}><label class="fld">Responsável legal<input id="rNome" value="${esc(resp.nome)}"></label><label class="fld">CPF do responsável<input id="rCpf" value="${esc(resp.cpf)}"></label><label class="fld">Parentesco<input id="rPar" value="${esc(resp.parentesco)}"></label></div>
+   <label class="check"><input type="checkbox" id="anImg" ${an.imagem?'checked':''}>A cliente autoriza fotos e vídeos para divulgação</label>
+   <div class="alert info">${ic('shield')}<div>Dados de saúde são sensíveis (LGPD, art. 11). Depois de salvar, colete o aceite do termo de consentimento.</div></div>
+   <div class="form-actions"><button class="btn primary" type="submit">${ic('check')}Salvar e coletar aceite</button></div></form>`);
+  $$('#fAn .seg').forEach(sg=>sg.onclick=e=>{const b=e.target.closest('button');if(!b)return;$$('button',sg).forEach(x=>x.setAttribute('aria-pressed',x===b));$('#det_'+sg.dataset.q).hidden=b.dataset.v!=='1'});
+  $('#anMenor').onchange=e=>{$('#anResp').hidden=!e.target.checked};
+  $('#fAn').onsubmit=async e=>{e.preventDefault();const respostas={};
+    ANAM_Q.forEach(([k])=>{const sim=$(`#fAn .seg[data-q="${k}"] button[data-v="1"]`).getAttribute('aria-pressed')==='true';respostas[k]={sim,det:sim?$('#det_'+k).value.trim():''}});
+    const hist=[...(an.historico||[])];if(an.atualizadaEm)hist.unshift({atualizadaEm:an.atualizadaEm,respostas:an.respostas,obs:an.obs});
+    const d={clienteId:cid,respostas,obs:$('#anObs').value.trim(),menor:$('#anMenor').checked,responsavel:{nome:$('#rNome').value.trim(),cpf:$('#rCpf').value.trim(),parentesco:$('#rPar').value.trim()},imagem:$('#anImg').checked,atualizadaEm:nowIso(),historico:hist.slice(0,5),...(an.exemplo?{exemplo:true}:{})};
+    await save('anamneses',cid,d);toast('Ficha salva');coletarAceite('anamnese',cid,'')};
+}
+
+/* ---------- aceites e assinatura ---------- */
+function docHtml(tipo,cid,agid){const cli=S.clientes.get(cid);return tipo==='servico'?docServico(cli,S.agenda.get(agid)||null):tipo==='anamnese'?docAnamnese(cli,anamDe(cid)):docPolitica()}
+function coletarAceite(tipo,cid,agid){
+  const cli=S.clientes.get(cid);const an=anamDe(cid);const menor=tipo==='anamnese'&&an?.menor;
+  const nomeAss=menor?(an.responsavel?.nome||''):(cli?.nome||'');
+  sheet('Coletar aceite',`<div class="stack"><div style="max-height:34vh;overflow:auto;border-radius:16px">${docHtml(tipo,cid,agid)}</div>
+   <form class="form" id="fAc"><div class="f2"><label class="fld">Nome de quem aceita<input id="acNome" required value="${esc(nomeAss)}"></label><label class="fld">CPF<input id="acCpf" value="${esc(menor?an.responsavel?.cpf:cli?.cpf)}"></label></div>
+    <label class="fld">Como foi o aceite<select id="acMeio"><option>Assinatura no aparelho</option><option>Aceite por WhatsApp</option><option>Assinatura em papel (arquivada)</option></select></label>
+    <div id="sigBox"><div class="row between small"><span class="muted">Assine com o dedo ou o mouse</span><button type="button" class="btn sm ghost" id="sigLimpar">Limpar</button></div><canvas class="sig" id="sigPad"></canvas></div>
+    <label class="check"><input type="checkbox" id="acOk" required>Li e concordo com todos os termos acima</label>
+    <div class="form-actions"><button class="btn primary" type="submit">${ic('check')}Registrar aceite</button></div></form></div>`);
+  $('#acMeio').onchange=e=>{$('#sigBox').hidden=e.target.value!=='Assinatura no aparelho'};
+  $('#sigLimpar').onclick=()=>sigClear($('#sigPad'));
+  $('#fAc').onsubmit=async e=>{e.preventDefault();const meio=$('#acMeio').value;const pad=$('#sigPad');
+    if(meio==='Assinatura no aparelho'&&!pad.dataset.ink){toast('Falta a assinatura');return}
+    const tmp=document.createElement('div');tmp.innerHTML=docHtml(tipo,cid,agid);const texto=tmp.innerText.replace(/\n{3,}/g,'\n\n').trim();
+    const P=pol();const d={tipo,clienteId:cid||'',agendaId:agid||'',versao:P.versao,texto,hash:await hashTexto(texto),nomeAssinante:$('#acNome').value.trim(),cpf:$('#acCpf').value.trim(),meio,aceitoEm:nowIso(),registradoPor:ME||'',assinatura:meio==='Assinatura no aparelho'?pad.toDataURL('image/png'):''};
+    await save('aceites',null,d);closeSheet();toast('Aceite registrado')};
+}
+function sigInit(c){c.dataset.on='1';const r=c.getBoundingClientRect();const dpr=window.devicePixelRatio||1;c.width=Math.max(300,r.width)*dpr;c.height=170*dpr;const x=c.getContext('2d');x.scale(dpr,dpr);x.lineWidth=2.2;x.lineCap='round';x.lineJoin='round';x.strokeStyle='#432B33';
+  let on=false;const pos=e=>{const b=c.getBoundingClientRect();return [e.clientX-b.left,e.clientY-b.top]};
+  c.addEventListener('pointerdown',e=>{on=true;c.setPointerCapture(e.pointerId);const[a,b]=pos(e);x.beginPath();x.moveTo(a,b)});
+  c.addEventListener('pointermove',e=>{if(!on)return;const[a,b]=pos(e);x.lineTo(a,b);x.stroke();c.dataset.ink='1'});
+  ['pointerup','pointercancel','pointerleave'].forEach(t=>c.addEventListener(t,()=>{on=false}))}
+function sigClear(c){const x=c.getContext('2d');x.save();x.setTransform(1,0,0,1,0,0);x.clearRect(0,0,c.width,c.height);x.restore();delete c.dataset.ink}
+function verAceite(id){const a=S.aceites.get(id);if(!a)return;
+  sheet('Aceite registrado',`<div class="stack"><div class="small"><div><b>Assinante:</b> ${esc(a.nomeAssinante)}${a.cpf?` · CPF ${esc(a.cpf)}`:''}</div><div><b>Meio:</b> ${esc(a.meio)}</div><div><b>Data e hora:</b> ${new Date(a.aceitoEm).toLocaleString('pt-BR')}</div><div><b>Política:</b> versão ${a.versao||'—'} · <b>Código de verificação:</b> <span class="code">${esc(a.hash||'—')}</span></div><div><b>Registrado por:</b> ${esc(nomePessoa(a.registradoPor))}</div></div>
+   ${a.assinatura?`<img src="${a.assinatura}" alt="Assinatura" style="background:#fff;border-radius:12px;border:1px solid var(--line);max-height:140px;object-fit:contain">`:''}
+   <div class="out" style="max-height:40vh;overflow:auto">${esc(a.texto)}</div>
+   <div class="row"><button class="btn soft" data-act="baixarAceite" data-id="${id}">${ic('down')}Baixar cópia</button><button class="btn ghost" data-act="copyAceite" data-id="${id}">${ic('copy')}Copiar texto</button></div></div>`)}
+function htmlDocStandalone(title,body,extra=''){return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${esc(title)}</title><style>body{font-family:Georgia,serif;max-width:720px;margin:40px auto;padding:0 20px;line-height:1.6;color:#222}h1{text-align:center;font-size:22px}h2{font-size:13px;letter-spacing:.1em;text-transform:uppercase;margin-top:22px}.sub{text-align:center;color:#666;font-size:12px}.rev{background:#fff3cd}.ass{display:flex;gap:40px;margin-top:50px}.ass div{flex:1;border-top:1px solid #222;padding-top:6px;text-align:center;font-size:12px}table{width:100%;border-collapse:collapse}td{border-bottom:1px solid #ddd;padding:6px 4px;vertical-align:top;font-size:14px}pre{white-space:pre-wrap;font-family:inherit}</style></head><body>${body}${extra}</body></html>`}
+
+/* ---------- agenda ---------- */
+function formAgenda(id,pre={}){
+  const a=id?S.agenda.get(id):{data:pre.d||UI.agDia,hora:pre.h||'09:00',status:'agendado',clienteId:pre.c||''};
+  const P=pol();const sinalPago=soma((a.pagamentos||[]).filter(p=>p.tipo==='sinal'));
+  sheet(id?'Editar atendimento':'Novo atendimento',`<form class="form" id="fAg">
+   <label class="fld">Cliente<select id="aCli">${optCli(a.clienteId,'<option value="__nova">+ Nova cliente</option>')}</select></label>
+   <div class="f2" id="novaBox" hidden><label class="fld">Nome da nova cliente<input id="aNovaNome"></label><label class="fld">WhatsApp<input id="aNovaTel" inputmode="tel"></label></div>
+   <label class="fld">Serviço<select id="aServ">${optServ(a.servicoId)}</select></label>
+   <label class="fld" id="pkBox" hidden>Pacote<select id="aPk"></select></label>
+   <div class="f2"><label class="fld">Data<input id="aData" type="date" required value="${esc(a.data)}"></label><label class="fld">Hora<input id="aHora" type="time" required value="${esc(a.hora)}"></label><label class="fld">Duração (min)<input id="aDur" type="number" min="15" step="15" value="${esc(a.duracao||'')}"></label></div>
+   <div class="f2" id="valBox"><label class="fld">Valor (R$)<input id="aVal" type="number" step="0.01" min="0" inputmode="decimal" value="${esc(a.valor??'')}"></label>
+    ${sinalPago?`<div class="fld">Sinal<div class="small" style="padding:11px 0;color:var(--fg)">${BRL(sinalPago)} já recebido</div></div>`:`<label class="fld">Sinal recebido (R$)<input id="aSinal" type="number" step="0.01" min="0" inputmode="decimal" placeholder="sugestão ${P.campos.sinalPct}%"></label><label class="fld">Forma do sinal<select id="aSinalF">${optFormas('Pix')}</select></label>`}</div>
+   ${id?`<label class="fld">Situação<select id="aSt">${Object.entries(STATUS).map(([k,v])=>`<option value="${k}" ${k===a.status?'selected':''}>${v.n}</option>`).join('')}</select></label>`:''}
+   <label class="fld">Observações<textarea id="aObs" placeholder="Ex.: levar cabelo 1B, comprimento cintura">${esc(a.obs)}</textarea></label>
+   <div id="aConf"></div>
+   ${id&&a.atualizadoPor?`<p class="small muted" style="margin:0">Última alteração por ${esc(nomePessoa(a.atualizadoPor))} em ${new Date(a.atualizadoEm).toLocaleString('pt-BR')}.</p>`:''}
+   <div class="form-actions">${id&&isOwner()?`<button type="button" class="btn danger ghost" data-act="delAg" data-id="${id}">${ic('trash')}Excluir</button>`:''}<button class="btn primary" type="submit">${ic('check')}Salvar</button></div></form>`);
+  const sel=$('#aCli'),srv=$('#aServ'),pk=$('#aPk');
+  const upPk=()=>{const ps=arr('pacotes').filter(p=>p.clienteId===sel.value&&(pacoteAtivo(p)||p.id===a.pacoteId));
+    pk.innerHTML=`<option value="">Não usar pacote</option>${ps.map(p=>`<option value="${p.id}" ${p.id===a.pacoteId?'selected':''}>${esc(p.nome)} · ${pacoteSaldo(p)+(p.id===a.pacoteId?1:0)} disponível(is)</option>`).join('')}`;
+    $('#pkBox').hidden=!ps.length;$('#valBox').hidden=!!pk.value};
+  sel.onchange=()=>{$('#novaBox').hidden=sel.value!=='__nova';upPk()};pk.onchange=()=>{$('#valBox').hidden=!!pk.value};upPk();
+  const sinalSug=()=>{const s=$('#aSinal');if(s)s.placeholder=`sugestão ${BRL((+$('#aVal').value||0)*P.campos.sinalPct/100)}`};
+  srv.onchange=()=>{const s=S.servicos.get(srv.value);if(s){$('#aVal').value=s.preco;$('#aDur').value=s.duracao}sinalSug();checkConf()};$('#aVal').oninput=sinalSug;sinalSug();
+  const checkConf=()=>{const d=$('#aData').value,h=hm2min($('#aHora').value),du=+$('#aDur').value||120;
+    const c=arr('agenda').filter(x=>x.id!==id&&x.data===d&&x.status!=='cancelado'&&x.status!=='faltou'&&hm2min(x.hora)<h+du&&h<hm2min(x.hora)+(+x.duracao||120));
+    $('#aConf').innerHTML=c.length?`<div class="alert warn">${ic('alert')}<div>Conflita com ${c.map(x=>`${esc(nomeCli(x.clienteId))} (${x.hora})`).join(', ')}.</div></div>`:''};
+  ['aData','aHora','aDur'].forEach(i=>$('#'+i).addEventListener('change',checkConf));checkConf();
+  $('#fAg').onsubmit=async e=>{e.preventDefault();let cid=sel.value;
+    if(cid==='__nova'){const n=$('#aNovaNome').value.trim();if(!n){toast('Informe o nome da nova cliente');return}cid=await save('clientes',null,{nome:n,telefone:$('#aNovaTel').value.trim(),criadoEm:today()})}
+    if(!cid){toast('Escolha a cliente');return}
+    const antes=a.status;const pac=pk.value;
+    const d={...a,clienteId:cid,servicoId:srv.value,pacoteId:pac||'',data:$('#aData').value,hora:$('#aHora').value,duracao:+$('#aDur').value||120,valor:pac?0:+$('#aVal').value||0,obs:$('#aObs').value.trim(),status:id?$('#aSt').value:'agendado',pagamentos:[...(a.pagamentos||[])]};
+    const sv=+($('#aSinal')?.value||0);if(sv>0&&!pac)d.pagamentos.push({id:uid(),tipo:'sinal',data:today(),valor:sv,forma:$('#aSinalF').value,parcelas:1,nf:false});
+    await save('agenda',id,d);closeSheet();UI.agDia=d.data;toast(id?'Atendimento atualizado':'Horário marcado');
+    if(id&&(antes==='agendado'||antes==='confirmado')&&(d.status==='cancelado'||d.status==='faltou'))setTimeout(()=>sugerirEspera(d),300)};
+}
+function sugerirEspera(a){const esp=arr('espera').filter(e=>e.status==='aguardando');if(!esp.length){toast('Horário liberado');return}
+  sheet('Horário liberado',`<p class="muted small" style="margin-top:0">${dataLonga(a.data)} às ${esc(a.hora)} ficou livre. Avise quem está na lista de espera:</p><div class="list">${esp.map(e=>{const cli=S.clientes.get(e.clienteId);const nome=cli?.nome||e.nome;const w=waLink(cli?.telefone||e.telefone,`Oi, ${primeiro(nome)}! Abriu um horário ${dataLonga(a.data)} às ${a.hora}. Quer que eu reserve para você?`);
+   return `<div class="item"><div class="grow"><div class="t">${esc(nome)}</div><div class="s">${esc(nomeServ(e.servicoId))} · ${esc(e.preferencia||'qualquer horário')}</div></div>${w?`<a class="btn sm soft" href="${w}" target="_blank" rel="noopener" data-act="avisada" data-id="${e.id}">${ic('chat')}Avisar</a>`:''}</div>`}).join('')}</div>`)}
+function concluir(id){
+  const a=S.agenda.get(id);if(!a)return;const P=pol();const pago=soma(a.pagamentos||[]);const s=S.servicos.get(a.servicoId);
+  const rest=a.pacoteId?0:Math.max(0,(+a.valor||0)-pago);
+  const cons=(s?.consumo||[]).map(c=>({...c}));const itens=arr('estoque').sort((x,y)=>x.nome.localeCompare(y.nome));
+  const consRow=(c,i)=>`<div class="cons" data-i="${i}"><label class="fld">Material<select class="cItem"><option value="">—</option>${itens.map(it=>`<option value="${it.id}" ${it.id===c.itemId?'selected':''}>${esc(it.nome)} (${it.qtd} ${esc(it.unidade)})</option>`).join('')}</select></label><label class="fld">Qtd<input class="cQtd" type="number" step="0.5" min="0" value="${c.qtd||1}"></label><button type="button" class="icon-btn" data-rm="${i}" aria-label="Remover">${ic('x')}</button></div>`;
+  sheet('Concluir atendimento',`<form class="form" id="fCon"><p class="muted small" style="margin:0">${esc(nomeCli(a.clienteId))} · ${esc(nomeServ(a.servicoId))}${a.pacoteId?' · sessão de pacote':''}${pago?` · ${BRL(pago)} já recebido`:''}</p>
+   ${a.pacoteId?`<div class="alert info">${ic('ticket')}<div>Sessão coberta pelo pacote. Nada a cobrar.</div></div>`:`
+   <div class="f2"><label class="fld">Valor total do serviço<input id="kTot" type="number" step="0.01" inputmode="decimal" value="${+a.valor||0}"></label><label class="fld">Vale-presente (código)<input id="kVale" placeholder="SM-XXXXX" style="text-transform:uppercase"></label></div>
+   <div id="kValeInfo" class="small"></div>
+   <div class="f2"><label class="fld">Recebido agora<input id="kVal" type="number" step="0.01" inputmode="decimal" value="${rest.toFixed(2)}"></label><label class="fld">Forma de pagamento<select id="kForma">${optFormas('Pix')}</select></label>${parcelasSel('kParc',(+a.valor||0)>=+P.campos.parcelaMin?P.campos.parcelas:1)}</div>
+   <label class="check"><input type="checkbox" id="kNf">Emiti nota fiscal (obrigatório quando a cliente é empresa/CNPJ)</label>`}
+   ${pode('estoque')?`<div><div class="eyebrow" style="margin-bottom:6px">Materiais usados (baixa no estoque)</div><div id="consList" class="stack" style="gap:8px">${cons.map(consRow).join('')}</div><button type="button" class="btn sm ghost" id="consAdd" style="margin-top:6px">${ic('plus')}Adicionar material</button></div>`:''}
+   <div class="form-actions"><button class="btn primary" type="submit">${ic('check')}Concluir atendimento</button></div></form>`);
+  ligaParcelas('kForma','kParc');
+  let vale=null;
+  const upRest=()=>{if(a.pacoteId)return;const tot=+$('#kTot').value||0;const vv=vale?Math.min(valeSaldo(vale),Math.max(0,tot-pago)):0;$('#kVal').value=Math.max(0,tot-pago-vv).toFixed(2)};
+  if(!a.pacoteId){$('#kTot').oninput=upRest;$('#kVale').oninput=e=>{const cod=e.target.value.trim().toUpperCase();vale=arr('vales').find(v=>v.codigo===cod)||null;
+    $('#kValeInfo').innerHTML=!cod?'':!vale?'<span style="color:var(--bad)">Código não encontrado.</span>':!valeAtivo(vale)?'<span style="color:var(--bad)">Vale sem saldo, vencido ou não pago.</span>':`<span style="color:var(--good)">Vale de ${esc(vale.presenteada||'—')} · saldo ${BRL(valeSaldo(vale))}</span>`;if(vale&&!valeAtivo(vale))vale=null;upRest()}}
+  if(pode('estoque')){const list=$('#consList');list.onclick=e=>{const b=e.target.closest('[data-rm]');if(b)b.closest('.cons').remove()};$('#consAdd').onclick=()=>list.insertAdjacentHTML('beforeend',consRow({itemId:'',qtd:1},Date.now()))}
+  $('#fCon').onsubmit=async e=>{e.preventDefault();$('#fCon button[type=submit]').disabled=true;
+    const d={...a,status:'concluido',pagamentos:[...(a.pagamentos||[])]};
+    if(!a.pacoteId){const tot=+$('#kTot').value||0;d.valor=tot;const v=+$('#kVal').value||0;const dataPg=a.data<=today()?a.data:today();
+      if(vale){const usar=Math.min(valeSaldo(vale),Math.max(0,tot-pago));if(usar>0){d.valeUsado={valeId:vale.id,codigo:vale.codigo,valor:usar};await save('vales',vale.id,{...vale,usos:[...(vale.usos||[]),{agendaId:id,valor:usar,em:dataPg}]})}}
+      if(v>0)d.pagamentos.push({id:uid(),tipo:'servico',data:dataPg,valor:v,forma:$('#kForma').value,parcelas:$('#kForma').value==='Cartão de crédito'?+$('#kParc').value:1,nf:$('#kNf').checked})}
+    if(pode('estoque')){const usos=$$('#consList .cons').map(r=>({itemId:$('.cItem',r).value,qtd:+$('.cQtd',r).value||0})).filter(u=>u.itemId&&u.qtd>0);d.consumo=usos;
+      for(const u of usos){const it=S.estoque.get(u.itemId);if(it)await save('estoque',it.id,{...it,qtd:Math.round(((+it.qtd||0)-u.qtd)*100)/100,mov:[{em:today(),qtd:-u.qtd,motivo:`${nomeServ(a.servicoId)} · ${primeiro(nomeCli(a.clienteId))}`},...(it.mov||[])].slice(0,40)})}}
+    await save('agenda',id,d);closeSheet();toast('Atendimento concluído');
+    const bx=(d.consumo||[]).map(u=>S.estoque.get(u.itemId)).filter(it=>it&&baixo(it));if(bx.length)setTimeout(()=>toast(`Repor: ${bx.map(i=>i.nome).join(', ')}`),1200)};
+}
+function formEspera(id){
+  const e=id?S.espera.get(id):{status:'aguardando',desde:today()};
+  sheet(id?'Lista de espera':'Adicionar à lista de espera',`<form class="form" id="fEs"><label class="fld">Cliente<select id="eCli">${optCli(e.clienteId,'<option value="__avulsa">Pessoa ainda não cadastrada</option>')}</select></label>
+   <div class="f2" id="eAv" hidden><label class="fld">Nome<input id="eNome" value="${esc(e.nome)}"></label><label class="fld">WhatsApp<input id="eTel" inputmode="tel" value="${esc(e.telefone)}"></label></div>
+   <label class="fld">Serviço desejado<select id="eServ">${optServ(e.servicoId,{preco:false,vazio:'Qualquer serviço'})}</select></label>
+   <label class="fld">Preferência de dia e horário<input id="ePref" placeholder="Ex.: sábados de manhã, depois das 14h" value="${esc(e.preferencia)}"></label>
+   ${id?`<label class="fld">Situação<select id="eSt">${[['aguardando','Aguardando'],['avisada','Avisada'],['agendada','Agendada'],['desistiu','Desistiu']].map(([k,n])=>`<option value="${k}" ${k===e.status?'selected':''}>${n}</option>`).join('')}</select></label>`:''}
+   <div class="form-actions">${id?`<button type="button" class="btn danger ghost" data-act="delEspera" data-id="${id}">${ic('trash')}Remover</button>`:''}<button class="btn primary">${ic('check')}Salvar</button></div></form>`);
+  const c=$('#eCli');const up=()=>{$('#eAv').hidden=c.value!=='__avulsa'};c.onchange=up;if(!e.clienteId&&e.nome){c.value='__avulsa'}up();
+  $('#fEs').onsubmit=async ev=>{ev.preventDefault();const av=c.value==='__avulsa';if(!c.value||(av&&!$('#eNome').value.trim())){toast('Informe a cliente');return}
+    await save('espera',id,{...e,clienteId:av?'':c.value,nome:av?$('#eNome').value.trim():'',telefone:av?$('#eTel').value.trim():'',servicoId:$('#eServ').value,preferencia:$('#ePref').value.trim(),status:id?$('#eSt').value:'aguardando'});closeSheet();toast('Lista de espera atualizada')};
+}
+
+/* ---------- divulgar horários ---------- */
+function divulgar(){
+  sheet('Divulgar horários livres',`<div class="form"><div class="f2"><label class="fld">Período<select id="dvP"><option value="7">Próximos 7 dias</option><option value="14">Próximos 14 dias</option></select></label><label class="fld">Duração mínima<select id="dvD">${[[120,'2 horas'],[180,'3 horas'],[240,'4 horas'],[300,'5 horas']].map(([v,n])=>`<option value="${v}" ${v===180?'selected':''}>${n}</option>`).join('')}</select></label></div>
+   <div class="out" id="dvTxt"></div><div class="row"><button class="btn soft" id="dvCopy">${ic('copy')}Copiar texto</button><button class="btn soft" id="dvImg">${ic('down')}Baixar imagem para stories</button></div>
+   <canvas id="dvCanvas" width="1080" height="1920" style="width:100%;max-width:240px;border-radius:16px;align-self:center;border:1px solid var(--line)"></canvas></div>`);
+  const up=()=>{const n=+$('#dvP').value,m=+$('#dvD').value;const pb=pub();const dias=[];
+    for(let i=0;i<n;i++){const d=addDays(today(),i);const l=livresDia(d,m);if(l.length)dias.push({d,l})}
+    const linhas=dias.map(x=>`${cap(SEMX[parse(x.d).getDay()])} ${dataCurta(x.d)}: ${x.l.map(([a,b])=>`${min2hm(a)} às ${min2hm(b)}`).join(' · ')}`);
+    const txt=`✨ Horários disponíveis\n${pb.nome}\n\n${linhas.join('\n')||'Agenda cheia no período 💕 Peça para entrar na lista de espera!'}\n\nAgende pelo WhatsApp${pb.whatsapp?` ${pb.whatsapp}`:''}. Sinal de ${pol().campos.sinalPct}% garante o horário.`;
+    $('#dvTxt').textContent=txt;desenhaStory(dias,pb);return txt};
+  ['dvP','dvD'].forEach(i=>$('#'+i).onchange=up);let txt=up();
+  $('#dvCopy').onclick=()=>copiar($('#dvTxt').textContent,'Texto copiado');
+  $('#dvImg').onclick=()=>$('#dvCanvas').toBlob(b=>b&&baixar(`horarios-${today()}.png`,b),'image/png');
+}
+function desenhaStory(dias,pb){const c=$('#dvCanvas');if(!c)return;const x=c.getContext('2d');const W=1080,H=1920;
+  const g=x.createLinearGradient(0,0,0,H);g.addColorStop(0,'#FDF1F4');g.addColorStop(1,'#F6D3DD');x.fillStyle=g;x.fillRect(0,0,W,H);
+  x.strokeStyle='rgba(169,79,108,.18)';x.lineWidth=10;for(let k=0;k<3;k++){x.beginPath();for(let i=0;i<=60;i++){const y=i*(H/60);const xx=W-90+40*Math.sin(i/60*Math.PI*8+k*2.1);i?x.lineTo(xx,y):x.moveTo(xx,y)}x.stroke()}
+  x.fillStyle='#A94F6C';x.textAlign='left';x.font='italic 500 92px "Bodoni Moda", Georgia, serif';x.fillText('Horários',90,260);x.fillText('disponíveis',90,370);
+  x.fillStyle='#8C6F78';x.font='600 34px Figtree, sans-serif';x.fillText(pb.nome.toUpperCase(),90,440);
+  let y=560;x.font='700 46px Figtree, sans-serif';
+  if(!dias.length){x.fillStyle='#432B33';x.fillText('Agenda cheia no período.',90,y);x.font='400 40px Figtree, sans-serif';x.fillText('Peça para entrar na lista de espera!',90,y+70)}
+  dias.slice(0,9).forEach(d=>{x.fillStyle='#432B33';x.font='700 44px Figtree, sans-serif';x.fillText(`${cap(SEMX[parse(d.d).getDay()])} ${dataCurta(d.d)}`,90,y);
+    x.fillStyle='#A94F6C';x.font='500 40px Figtree, sans-serif';x.fillText(d.l.map(([a,b])=>`${min2hm(a)}–${min2hm(b)}`).join('   '),90,y+56);y+=140});
+  x.fillStyle='#A94F6C';x.beginPath();x.roundRect?x.roundRect(90,H-260,W-180,120,60):x.rect(90,H-260,W-180,120);x.fill();
+  x.fillStyle='#fff';x.textAlign='center';x.font='700 42px Figtree, sans-serif';x.fillText(pb.whatsapp?`Agende: ${pb.whatsapp}`:'Agende pelo WhatsApp',W/2,H-185)}
+
+/* ---------- finanças ---------- */
+function formLan(id){
+  const l=id?S.lancamentos.get(id):{tipo:'receita',data:today(),forma:'Pix'};let tipo=l.tipo;
+  const cats=()=>(tipo==='receita'?CAT_REC:CAT_DES).map(c=>`<option ${c===l.categoria?'selected':''}>${c}</option>`).join('');
+  sheet(id?'Editar lançamento':'Novo lançamento',`<form class="form" id="fLa"><div class="seg" id="lTipo">${['receita','despesa'].map(t=>`<button type="button" data-t="${t}" aria-pressed="${t===tipo}">${t==='receita'?'Receita':'Despesa'}</button>`).join('')}</div>
+   <div class="f2"><label class="fld">Valor (R$)<input id="lVal" type="number" step="0.01" min="0" inputmode="decimal" required value="${esc(l.valor??'')}"></label><label class="fld">Data<input id="lData" type="date" required value="${esc(l.data)}"></label></div>
+   <label class="fld">Categoria<select id="lCat">${cats()}</select></label><label class="fld">Descrição<input id="lDesc" value="${esc(l.descricao)}" placeholder="Ex.: Jumbo 1B · 5 pacotes"></label>
+   <div class="f2"><label class="fld">Forma de pagamento<select id="lForma">${optFormas(l.forma)}</select></label>${parcelasSel('lParc',12)}</div>
+   <label class="check" id="lNfBox" ${tipo!=='receita'?'hidden':''}><input type="checkbox" id="lNf" ${l.nf?'checked':''}>Com nota fiscal emitida</label>
+   <p class="small muted" style="margin:0">Pagamentos de atendimentos, pacotes e vales entram sozinhos; use este formulário para o resto.</p>
+   <div class="form-actions">${id?`<button type="button" class="btn danger ghost" data-act="delLan" data-id="${id}">${ic('trash')}Excluir</button>`:''}<button class="btn primary">${ic('check')}Salvar</button></div></form>`);
+  ligaParcelas('lForma','lParc');if(l.parcelas)$('#lParc').value=l.parcelas;
+  $('#lTipo').onclick=e=>{const b=e.target.closest('button');if(!b)return;tipo=b.dataset.t;$$('#lTipo button').forEach(x=>x.setAttribute('aria-pressed',x===b));$('#lCat').innerHTML=cats();$('#lNfBox').hidden=tipo!=='receita'};
+  $('#fLa').onsubmit=async e=>{e.preventDefault();await save('lancamentos',id,{...l,tipo,valor:+$('#lVal').value||0,data:$('#lData').value,categoria:$('#lCat').value,descricao:$('#lDesc').value.trim(),forma:$('#lForma').value,parcelas:$('#lForma').value==='Cartão de crédito'?+$('#lParc').value:1,nf:tipo==='receita'&&$('#lNf').checked});closeSheet();toast('Lançamento salvo')};
+}
+function formConta(id){
+  const c=id?S.contas.get(id):{vencimento:today(),recorrente:'mensal',categoria:'Aluguel / espaço'};
+  sheet(id?'Editar conta':'Nova conta a pagar',`<form class="form" id="fCt"><label class="fld">Descrição<input id="tDesc" required value="${esc(c.descricao)}" placeholder="Ex.: Aluguel da sala"></label>
+   <div class="f2"><label class="fld">Valor (R$)<input id="tVal" type="number" step="0.01" required value="${esc(c.valor??'')}"></label><label class="fld">Vencimento${c.recorrente==='mensal'?' (1ª)':''}<input id="tVenc" type="date" required value="${esc(c.vencimento)}"></label></div>
+   <div class="f2"><label class="fld">Repetição<select id="tRec"><option value="mensal" ${c.recorrente==='mensal'?'selected':''}>Todo mês</option><option value="unica" ${c.recorrente!=='mensal'?'selected':''}>Uma vez</option></select></label><label class="fld">Até (opcional)<input id="tAte" type="month" value="${esc(c.ate?ym(c.ate):'')}"></label></div>
+   <label class="fld">Categoria<select id="tCat">${CAT_DES.map(x=>`<option ${x===c.categoria?'selected':''}>${x}</option>`).join('')}</select></label>
+   <div class="form-actions">${id?`<button type="button" class="btn danger ghost" data-act="delConta" data-id="${id}">${ic('trash')}Excluir</button>`:''}<button class="btn primary">${ic('check')}Salvar</button></div></form>`);
+  $('#fCt').onsubmit=async e=>{e.preventDefault();await save('contas',id,{...c,descricao:$('#tDesc').value.trim(),valor:+$('#tVal').value||0,vencimento:$('#tVenc').value,recorrente:$('#tRec').value,ate:$('#tAte').value?$('#tAte').value+'-28':'',categoria:$('#tCat').value,pagas:c.pagas||{}});closeSheet();toast('Conta salva')};
+}
+function formServ(id){
+  const s=id?S.servicos.get(id):{duracao:180,consumo:[]};const itens=arr('estoque').sort((a,b)=>a.nome.localeCompare(b.nome));
+  const row=(c,i)=>`<div class="cons"><label class="fld">Material<select class="sItem"><option value="">—</option>${itens.map(it=>`<option value="${it.id}" ${it.id===c.itemId?'selected':''}>${esc(it.nome)}</option>`).join('')}</select></label><label class="fld">Qtd<input class="sQtd" type="number" step="0.5" min="0" value="${c.qtd||1}"></label><button type="button" class="icon-btn" data-rm="1" aria-label="Remover">${ic('x')}</button></div>`;
+  sheet(id?'Editar serviço':'Novo serviço',`<form class="form" id="fSv"><label class="fld">Nome<input id="sNome" required value="${esc(s.nome)}"></label>
+   <div class="f2"><label class="fld">Preço (R$)<input id="sPre" type="number" step="0.01" inputmode="decimal" value="${esc(s.preco??'')}"></label><label class="fld">Duração (min)<input id="sDur" type="number" step="15" value="${esc(s.duracao)}"></label><label class="fld">Custo de material (R$)<input id="sCus" type="number" step="0.01" inputmode="decimal" value="${esc(s.custo??'')}"></label></div>
+   <div><div class="eyebrow" style="margin-bottom:6px">Consumo padrão de estoque</div><div id="sCons" class="stack" style="gap:8px">${(s.consumo||[]).map(row).join('')}</div><button type="button" class="btn sm ghost" id="sAdd" style="margin-top:6px">${ic('plus')}Adicionar material</button><p class="small muted" style="margin:4px 0 0">A cor do jumbo pode ser trocada na hora de concluir.</p></div>
+   <div class="form-actions">${id?`<button type="button" class="btn danger ghost" data-act="delServ" data-id="${id}">${ic('trash')}Excluir</button>`:''}<button class="btn primary">${ic('check')}Salvar</button></div></form>`);
+  $('#sCons').onclick=e=>{const b=e.target.closest('[data-rm]');if(b)b.closest('.cons').remove()};$('#sAdd').onclick=()=>$('#sCons').insertAdjacentHTML('beforeend',row({},0));
+  $('#fSv').onsubmit=async e=>{e.preventDefault();const consumo=$$('#sCons .cons').map(r=>({itemId:$('.sItem',r).value,qtd:+$('.sQtd',r).value||0})).filter(c=>c.itemId&&c.qtd>0);
+    await save('servicos',id,{...s,nome:$('#sNome').value.trim(),preco:+$('#sPre').value||0,duracao:+$('#sDur').value||60,custo:+$('#sCus').value||0,consumo});closeSheet();toast('Serviço salvo')};
+}
+
+/* ---------- estoque ---------- */
+function formItem(id){const it=id?S.estoque.get(id):{unidade:'pacote',qtd:0,minimo:2,categoria:CAT_EST[0]};const own=pode('custos');
+  sheet(id?'Editar item':'Novo item de estoque',`<form class="form" id="fIt"><label class="fld">Nome<input id="iNome" required value="${esc(it.nome)}" placeholder="Ex.: Jumbo 1B (preto natural)"></label>
+   <div class="f2"><label class="fld">Categoria<select id="iCat">${CAT_EST.map(c=>`<option ${c===it.categoria?'selected':''}>${c}</option>`).join('')}</select></label><label class="fld">Unidade<input id="iUn" value="${esc(it.unidade)}" placeholder="pacote, pote, unidade"></label></div>
+   <div class="f2">${!id?`<label class="fld">Quantidade atual<input id="iQtd" type="number" step="0.5" value="${it.qtd}"></label>`:''}<label class="fld">Estoque mínimo<input id="iMin" type="number" step="0.5" value="${it.minimo}"></label>${own?`<label class="fld">Custo por unidade (R$)<input id="iCus" type="number" step="0.01" value="${esc(it.custo??'')}"></label>`:''}</div>
+   <div class="form-actions">${id&&own?`<button type="button" class="btn danger ghost" data-act="delItem" data-id="${id}">${ic('trash')}Excluir</button>`:''}<button class="btn primary">${ic('check')}Salvar</button></div></form>`);
+  $('#fIt').onsubmit=async e=>{e.preventDefault();await save('estoque',id,{...it,nome:$('#iNome').value.trim(),categoria:$('#iCat').value,unidade:$('#iUn').value.trim()||'unidade',qtd:id?it.qtd:+$('#iQtd').value||0,minimo:+$('#iMin').value||0,custo:own?+($('#iCus')?.value||0):(it.custo||0),mov:it.mov||[]});closeSheet();toast('Item salvo')}}
+function movItem(id){const it=S.estoque.get(id);const own=pode('custos');
+  sheet('Movimentar estoque',`<form class="form" id="fMv"><p class="muted small" style="margin:0">${esc(it.nome)} · atual: <b>${it.qtd} ${esc(it.unidade)}</b></p>
+   <div class="seg" id="mvT"><button type="button" data-t="compra" aria-pressed="true">${own?'Compra':'Entrada'}</button><button type="button" data-t="saida" aria-pressed="false">Saída/perda</button><button type="button" data-t="ajuste" aria-pressed="false">Contagem</button></div>
+   <div class="f2"><label class="fld" id="mvQL">Quantidade<input id="mvQ" type="number" step="0.5" min="0" required></label>${own?`<label class="fld" id="mvVL">Valor total pago (R$)<input id="mvV" type="number" step="0.01" min="0"></label><label class="fld" id="mvFL">Forma<select id="mvF">${optFormas('Pix')}</select></label>`:''}</div>
+   <label class="fld">Observação<input id="mvO" placeholder="Ex.: fornecedor, motivo da perda"></label>
+   ${own?'<p class="small muted" style="margin:0" id="mvNote">A compra também lança a despesa no financeiro.</p>':''}
+   <div class="form-actions"><button class="btn primary">${ic('check')}Registrar</button></div></form>`);
+  let t='compra';$('#mvT').onclick=e=>{const b=e.target.closest('button');if(!b)return;t=b.dataset.t;$$('#mvT button').forEach(x=>x.setAttribute('aria-pressed',x===b));
+    if(own){$('#mvVL').hidden=$('#mvFL').hidden=$('#mvNote').hidden=t!=='compra'}$('#mvQL').firstChild.textContent=t==='ajuste'?'Quantidade contada':'Quantidade'};
+  $('#fMv').onsubmit=async e=>{e.preventDefault();const q=+$('#mvQ').value||0;const obs=$('#mvO').value.trim();
+    const nova=t==='compra'?(+it.qtd||0)+q:t==='saida'?(+it.qtd||0)-q:q;const delta=Math.round((nova-(+it.qtd||0))*100)/100;
+    const upd={...it,qtd:Math.round(nova*100)/100,mov:[{em:today(),qtd:delta,motivo:t==='compra'?'compra':t==='saida'?(obs||'saída'):'contagem'},...(it.mov||[])].slice(0,40)};
+    if(own&&t==='compra'){const v=+$('#mvV').value||0;if(v>0){await save('lancamentos',null,{tipo:'despesa',data:today(),valor:v,categoria:it.categoria==='Cabelo / fibra'?'Cabelo / fibra':'Materiais (pomada, linha, elástico)',descricao:`Compra: ${it.nome} (${q} ${it.unidade})${obs?' · '+obs:''}`,forma:$('#mvF').value});if(q>0)upd.custo=Math.round(v/q*100)/100}}
+    await save('estoque',id,upd);closeSheet();toast('Estoque atualizado')}}
+
+/* ---------- pacotes e vales ---------- */
+function formPacote(id){const p=id?S.pacotes.get(id):{sessoes:3,validade:addDays(today(),120),status:'ativo'};const P=pol();const u=id?pacoteUso(p):{usadas:0,reservadas:0};
+  sheet(id?'Pacote':'Vender pacote',`<form class="form" id="fPk"><label class="fld">Cliente<select id="pCli" ${id?'disabled':''}>${optCli(p.clienteId)}</select></label>
+   <label class="fld">Nome do pacote<input id="pNome" required value="${esc(p.nome)}" placeholder="Ex.: Box braids + 2 manutenções"></label>
+   <div class="f2"><label class="fld">Sessões<input id="pSes" type="number" min="1" value="${p.sessoes}"></label><label class="fld">Valor total (R$)<input id="pVal" type="number" step="0.01" value="${esc(p.valor??'')}" ${id&&(p.pagamentos||[]).length?'disabled':''}></label><label class="fld">Validade<input id="pVal2" type="date" value="${esc(p.validade)}"></label></div>
+   ${!id||!(p.pagamentos||[]).length?`<div class="f2"><label class="fld">Forma de pagamento<select id="pForma">${optFormas('Pix')}</select></label>${parcelasSel('pParc',P.campos.parcelas)}</div><label class="check"><input type="checkbox" id="pNf">Com nota fiscal</label>`:`<p class="small muted" style="margin:0">Pago em ${dataBR(p.pagamentos[0].data)} · ${esc(p.pagamentos[0].forma)} · ${BRL(soma(p.pagamentos))}</p>`}
+   ${id?`<p class="small" style="margin:0">${u.usadas} usada(s) · ${u.reservadas} agendada(s) · ${pacoteSaldo(p)} disponível(is)</p><label class="check"><input type="checkbox" id="pEnc" ${p.status==='encerrado'?'checked':''}>Encerrar pacote</label>`:''}
+   <div class="form-actions">${id&&isOwner()?`<button type="button" class="btn danger ghost" data-act="delPacote" data-id="${id}">${ic('trash')}Excluir</button>`:''}<button class="btn primary">${ic('check')}${id?'Salvar':'Vender pacote'}</button></div></form>`);
+  ligaParcelas('pForma','pParc');
+  $('#fPk').onsubmit=async e=>{e.preventDefault();const cli=id?p.clienteId:$('#pCli').value;if(!cli){toast('Escolha a cliente');return}
+    const d={...p,clienteId:cli,nome:$('#pNome').value.trim(),sessoes:+$('#pSes').value||1,validade:$('#pVal2').value,criadoEm:p.criadoEm||today(),status:id&&$('#pEnc').checked?'encerrado':'ativo',pagamentos:[...(p.pagamentos||[])]};
+    if(!d.pagamentos.length){d.valor=+$('#pVal').value||0;if(d.valor>0)d.pagamentos.push({id:uid(),tipo:'pacote',data:today(),valor:d.valor,forma:$('#pForma').value,parcelas:$('#pForma').value==='Cartão de crédito'?+$('#pParc').value:1,nf:$('#pNf').checked})}
+    await save('pacotes',id,d);closeSheet();toast(id?'Pacote atualizado':'Pacote vendido')}}
+function formVale(id){const v=id?S.vales.get(id):{codigo:novoCodigo(),validade:addDays(today(),180)};const pb=pub();
+  const msg=`🎁 Vale-presente ${pb.nome}\nPara: ${v.presenteada||''}\nDe: ${v.compradora||''}\nValor: ${BRL(v.valor)}\nCódigo: ${v.codigo}\nVálido até ${dataBR(v.validade)}.\nAgende pelo WhatsApp${pb.whatsapp?` ${pb.whatsapp}`:''} e informe o código.`;
+  sheet(id?'Vale-presente':'Vender vale-presente',`<form class="form" id="fVl"><div class="row between"><span class="code" style="font-size:1.3rem;color:var(--accent-ink)">${esc(v.codigo)}</span>${id?`<span class="badge ${valeAtivo(v)?'good':''}">saldo ${BRL(valeSaldo(v))}</span>`:''}</div>
+   <div class="f2"><label class="fld">Quem compra<input id="vCom" required value="${esc(v.compradora)}"></label><label class="fld">WhatsApp de quem compra<input id="vTel" value="${esc(v.telCompradora)}"></label></div>
+   <div class="f2"><label class="fld">Para quem é<input id="vPara" value="${esc(v.presenteada)}"></label><label class="fld">Valor (R$)<input id="vVal" type="number" step="0.01" required value="${esc(v.valor??'')}" ${id?'disabled':''}></label><label class="fld">Validade<input id="vValid" type="date" value="${esc(v.validade)}"></label></div>
+   ${!id?`<div class="f2"><label class="fld">Forma de pagamento<select id="vForma">${optFormas('Pix')}</select></label></div>`:''}
+   ${(v.usos||[]).length?`<div class="small"><b>Usos:</b> ${v.usos.map(u=>`${dataBR(u.em)} · ${BRL(u.valor)}`).join('; ')}</div>`:''}
+   ${id?`<div class="out small">${esc(msg)}</div><button type="button" class="btn soft" id="vCopy">${ic('copy')}Copiar mensagem do vale</button>`:''}
+   <div class="form-actions">${id&&isOwner()?`<button type="button" class="btn danger ghost" data-act="delVale" data-id="${id}">${ic('trash')}Excluir</button>`:''}<button class="btn primary">${ic('check')}${id?'Salvar':'Vender vale'}</button></div></form>`);
+  if(id)$('#vCopy').onclick=()=>copiar(msg,'Mensagem copiada');
+  $('#fVl').onsubmit=async e=>{e.preventDefault();const d={...v,compradora:$('#vCom').value.trim(),telCompradora:$('#vTel').value.trim(),presenteada:$('#vPara').value.trim(),validade:$('#vValid').value,criadoEm:v.criadoEm||today(),usos:v.usos||[],pagamentos:[...(v.pagamentos||[])]};
+    if(!id){d.valor=+$('#vVal').value||0;d.pagamentos.push({id:uid(),tipo:'vale',data:today(),valor:d.valor,forma:$('#vForma').value,parcelas:1,nf:false})}
+    const nid=await save('vales',id,d);closeSheet();toast(id?'Vale atualizado':'Vale vendido');if(!id)setTimeout(()=>formVale(nid),300)}}
+
+/* ---------- ideias ---------- */
+function formIdeia(id,pre={}){const i=id?S.ideias.get(id):{data:pre.d||'',titulo:pre.n||'',notas:pre.i||'',tipo:'Promoção'};
+  sheet(id?'Editar ideia':'Nova ideia',`<form class="form" id="fId"><label class="fld">Título<input id="iTit" required value="${esc(i.titulo)}"></label>
+   <div class="f2"><label class="fld">Data (opcional)<input id="iData" type="date" value="${esc(i.data)}"></label><label class="fld">Tipo<select id="iTipo">${['Promoção','Post / conteúdo','Parceria','Evento','Curso','Outro'].map(x=>`<option ${x===i.tipo?'selected':''}>${x}</option>`).join('')}</select></label></div>
+   <label class="fld">Detalhes<textarea id="iNot">${esc(i.notas)}</textarea></label>
+   <div class="form-actions">${id?`<button type="button" class="btn danger ghost" data-act="delIdeia" data-id="${id}">${ic('trash')}Excluir</button>`:''}<button class="btn primary">${ic('check')}Salvar</button></div></form>`);
+  $('#fId').onsubmit=async e=>{e.preventDefault();await save('ideias',id,{...i,titulo:$('#iTit').value.trim(),data:$('#iData').value,tipo:$('#iTipo').value,notas:$('#iNot').value.trim(),feito:!!i.feito});closeSheet();toast('Ideia salva')}}
+
+/* ---------- equipe ---------- */
+function aprovar(uidp){const e=S.equipe.get(uidp)||{};const p=S.pedidos.get(uidp)||{};const email=e.email||p.email||'';
+  sheet('Perfil de acesso',`<form class="form" id="fEq"><p class="small muted" style="margin:0">Conta: <b>${esc(email)}</b></p>
+   <label class="fld">Nome para exibir<input id="qNome" value="${esc(e.apelido||p.nome||'')}"></label>
+   <label class="fld">Perfil<select id="qPapel">${[['parceira','Trancista parceira'],['recepcao','Recepção'],['contador','Contador(a) – somente leitura das finanças']].map(([k,n])=>`<option value="${k}" ${e.papel===k?'selected':''}>${n}</option>`).join('')}</select></label>
+   ${S.equipe.has(uidp)?`<label class="check"><input type="checkbox" id="qAtivo" ${e.ativo!==false?'checked':''}>Acesso ativo</label>`:''}
+   <div class="form-actions"><button class="btn primary">${ic('check')}Salvar perfil</button></div></form>`);
+  $('#fEq').onsubmit=async ev=>{ev.preventDefault();await save('equipe',uidp,{papel:$('#qPapel').value,apelido:$('#qNome').value.trim(),email,ativo:$('#qAtivo')?$('#qAtivo').checked:true,desde:e.desde||today()});if(S.pedidos.has(uidp))await del('pedidos',uidp);closeSheet();toast('Perfil salvo')}}
+
+/* ---------- planilha do contador ---------- */
+function carregaXLSX(){return new Promise((res,rej)=>{if(window.XLSX)return res(window.XLSX);const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';s.onload=()=>res(window.XLSX);s.onerror=rej;document.head.appendChild(s)})}
+async function pacoteContador(){const ano=$('#ctdAno')?.value||today().slice(0,4);toast('Gerando planilha…');
+  let X;try{X=await carregaXLSX()}catch(e){toast('Não foi possível carregar o gerador de planilhas');return}
+  const pb=pub(),c=priv();const doAno=l=>l.data.slice(0,4)===ano;
+  const L=[...receitas(doAno),...despesas(doAno)].sort((a,b)=>a.data<b.data?-1:1).map(l=>({Data:dataBR(l.data),Tipo:l.tipo==='receita'?'Receita':'Despesa',Categoria:l.categoria,'Descrição':l.descricao,Forma:l.forma||'',Parcelas:l.parcelas||1,'Nota fiscal':l.tipo==='receita'?(l.nf?'Sim':'Não'):'',Valor:Math.round((l.tipo==='despesa'?-1:1)*l.valor*100)/100}));
+  const rel=[...Array(12)].map((_,i)=>{const k=`${ano}-${pad(i+1)}`;const R=receitas(l=>ym(l.data)===k);const v=f=>Math.round(soma(R.filter(f))*100)/100;
+    return {'Mês':cap(mesNome(k)),'I Comércio sem NF':v(l=>ehComercio(l)&&!l.nf),'II Comércio com NF':v(l=>ehComercio(l)&&l.nf),'III Total comércio':v(ehComercio),'IV Indústria sem NF':0,'V Indústria com NF':0,'VI Total indústria':0,'VII Serviços sem NF':v(l=>!ehComercio(l)&&!l.nf),'VIII Serviços com NF':v(l=>!ehComercio(l)&&l.nf),'IX Total serviços':v(l=>!ehComercio(l)),'X Total geral':v(()=>true)}});
+  const tot=k=>Math.round(rel.reduce((s,r)=>s+r[k],0)*100)/100;
+  const res=[{Item:'Empresa',Valor:pb.nome},{Item:'CNPJ',Valor:pb.cnpj},{Item:'Ano-calendário',Valor:ano},{Item:'Receita bruta total',Valor:tot('X Total geral')},{Item:'Receita de comércio (revenda)',Valor:tot('III Total comércio')},{Item:'Receita de serviços',Valor:tot('IX Total serviços')},{Item:'Limite do ano',Valor:Math.round(limiteAno(ano)*100)/100},{Item:'Teve empregado no ano?',Valor:'Confirmar'},{Item:'Despesas totais registradas',Valor:Math.round(soma(despesas(doAno))*100)/100}];
+  const das=[...Array(12)].map((_,i)=>{const k=`${ano}-${pad(i+1)}`;return {'Competência':cap(mesNome(k)),'Vencimento':dataBR(ymd(new Date(+ano,i+1,20))),'Valor':+c.das,'Situação':(c.dasPagos||{})[k]?'Pago':'Não marcado como pago'}});
+  const contas=ocorrencias(`${ano}-12-31`).filter(o=>o.k.slice(0,4)===ano).map(o=>({'Vencimento':dataBR(o.venc),'Descrição':o.conta.descricao,'Categoria':o.conta.categoria,'Valor':+o.conta.valor,'Situação':o.paga?'Paga':'Em aberto'}));
+  const wb=X.utils.book_new();[['Lançamentos',L],['Relatório mensal',rel],['Resumo DASN-SIMEI',res],['DAS',das],['Contas a pagar',contas]].forEach(([n,rows])=>X.utils.book_append_sheet(wb,X.utils.json_to_sheet(rows.length?rows:[{Aviso:'Sem registros'}]),n));
+  const buf=X.write(wb,{type:'array',bookType:'xlsx'});await baixar(`contador-${(pb.nome||'mei').replace(/\s+/g,'-').toLowerCase()}-${ano}.xlsx`,new Uint8Array(buf))}
+function relatorioLinhas(){const m=UI.finMes;const pb=pub();const R=receitas(l=>ym(l.data)===m);const v=f=>soma(R.filter(f)).toFixed(2).replace('.',',');
+  return [['Relatório mensal das receitas brutas',mesNome(m)],['CNPJ',pb.cnpj],['Empreendedora',pb.responsavel],['I - Revenda de mercadorias sem documento fiscal',v(l=>ehComercio(l)&&!l.nf)],['II - Revenda de mercadorias com documento fiscal',v(l=>ehComercio(l)&&l.nf)],['III - Total comércio',v(ehComercio)],['IV - Indústria sem documento fiscal','0,00'],['V - Indústria com documento fiscal','0,00'],['VI - Total indústria','0,00'],['VII - Serviços sem documento fiscal',v(l=>!ehComercio(l)&&!l.nf)],['VIII - Serviços com documento fiscal',v(l=>!ehComercio(l)&&l.nf)],['IX - Total serviços',v(l=>!ehComercio(l))],['X - Total geral',v(()=>true)],['Local e data',pb.municipio+', ____/____/______'],['Assinatura','']]}
+
+/* ================= dados de exemplo ================= */
+function catalogoBase(ex){
+  const X=ex?{exemplo:true}:{};const ops=[];const E={};
+  [['j1b','Jumbo 1B (preto natural)','Cabelo / fibra','pacote',14,6,18],['j2','Jumbo 2 (castanho escuro)','Cabelo / fibra','pacote',6,4,18],['j27','Jumbo 27 (mel)','Cabelo / fibra','pacote',3,4,19],['org','Cabelo orgânico cacheado','Cabelo / fibra','pacote',4,2,45],
+   ['pom','Pomada modeladora','Pomadas e finalizadores','pote',1.5,2,22],['mou','Mousse finalizador','Pomadas e finalizadores','frasco',3,1,28],['lin','Linha para tranças','Linhas e elásticos','rolo',5,2,6],['ela','Elásticos de silicone','Linhas e elásticos','pacote',4,2,5],['mic','Miçangas e anéis','Miçangas e acessórios','kit',6,3,12]]
+   .forEach(([k,nome,categoria,unidade,qtd,minimo,custo])=>{E[k]=uid();ops.push(['estoque',E[k],{nome,categoria,unidade,qtd:ex?qtd:0,minimo,custo,mov:[],...X}])});
+  const SV={};
+  [['box','Box braids (médias)',280,300,60,[['j1b',5],['pom',.5]]],['nago','Nagô (até 10 tranças)',120,120,15,[['pom',.5],['ela',1]]],['ful','Fulani braids',260,270,55,[['j1b',4],['mic',1],['pom',.5]]],['twi','Twist / Senegalese',300,300,65,[['j1b',5],['mou',.5]]],
+   ['gyp','Gypsy braids',350,360,90,[['j1b',4],['org',2],['mou',.5]]],['inf','Tranças infantis',90,120,15,[['ela',1],['mic',1]]],['man','Manutenção',100,120,10,[['pom',.5]]],['ret','Retirada de tranças',70,120,0,[]]]
+   .forEach(([k,nome,preco,duracao,custo,cons])=>{SV[k]=uid();ops.push(['servicos',SV[k],{nome,preco,duracao,custo,consumo:cons.map(([i,q])=>({itemId:E[i],qtd:q})),...X}])});
+  return {ops,E,SV};
+}
+async function seed(ex){
+  if(!pode('seed'))return;toast(ex?'Carregando exemplos…':'Preparando…');
+  const t=today();const {ops,SV}=catalogoBase(ex);const X={exemplo:true};
+  const P={box:280,nago:120,ful:260,twi:300,gyp:350,inf:90,man:100,ret:70},D={box:300,nago:120,ful:270,twi:300,gyp:360,inf:120,man:120,ret:120};
+  const pagos={};
+  if(ex){
+    let r=7;const rnd=()=>(r=(r*9301+49297)%233280)/233280;const formas=['Pix','Pix','Dinheiro','Cartão de crédito','Cartão de débito'];
+    const CL=[['ana','Ana Beatriz Souza','(27) 99812-4410','Crespo 4C, ombro',6,20,50,'box',0,null,'1994-'+addDays(t,6).slice(5),'Instagram','123.456.789-00'],['jes','Jéssica Santos','(27) 99745-1023','Crespo 4B, busto',4,40,60,'ful',0,'ana','1997-03-28','Indicação',''],['cam','Camila Rocha','(27) 99630-7781','Cacheado 3C, longo',3,130,70,'twi',0,null,'1992-08-14','TikTok',''],
+      ['lar','Larissa Oliveira','(27) 99521-3399','Crespo 4A, curto',2,60,90,'nago',1,'ana','2001-12-02','Indicação',''],['tha','Thaís Nascimento','(27) 99410-8866','Crespo 4C, médio',1,15,0,'gyp',0,null,'1999-05-19','Instagram',''],['pri','Priscila Lima','(27) 99387-2251','Transição capilar',0,0,0,'nago',0,'jes','','WhatsApp','']];
+    const C={};
+    for(const [k,nome,tel,cab,nv,last,intv,serv,faltas,ind,aniv,origem,cpf] of CL){C[k]=uid();
+      ops.push(['clientes',C[k],{nome,telefone:tel,cabelo:cab,aniversario:aniv,indicadaPor:ind?C[ind]:'',origem,cpf,criadoEm:addDays(t,-400),...X}]);
+      for(let i=0;i<nv;i++){const d=addDays(t,-(last+i*intv));const sk=i%3===2?'man':serv;const f=formas[Math.floor(rnd()*5)];
+        ops.push(['agenda',uid(),{clienteId:C[k],servicoId:SV[sk],data:d,hora:['09:00','13:30','08:30'][i%3],duracao:D[sk],valor:P[sk],status:'concluido',pagamentos:[{id:uid(),tipo:'servico',data:d,valor:P[sk],forma:f,parcelas:f==='Cartão de crédito'&&P[sk]>=200?2:1,nf:false}],...X}])}
+      for(let i=0;i<faltas;i++)ops.push(['agenda',uid(),{clienteId:C[k],servicoId:SV[serv],data:addDays(t,-25),hora:'14:00',duracao:120,valor:P[serv],status:'faltou',pagamentos:[{id:uid(),tipo:'sinal',data:addDays(t,-30),valor:36,forma:'Pix',parcelas:1,nf:false}],...X}]);
+    }
+    const pkId=uid();ops.push(['pacotes',pkId,{clienteId:C.ana,nome:'Box braids + 2 manutenções',sessoes:3,valor:450,validade:addDays(t,100),criadoEm:addDays(t,-20),status:'ativo',pagamentos:[{id:uid(),tipo:'pacote',data:addDays(t,-20),valor:450,forma:'Pix',parcelas:1,nf:false}],...X}]);
+    [[ 'jes',0,'09:00','box','confirmado',84,''],['pri',0,'15:30','nago','agendado',0,''],['ana',1,'10:00','man','agendado',0,pkId],['lar',3,'09:00','ful','agendado',78,''],['cam',6,'08:30','twi','agendado',90,'']]
+     .forEach(([ck,dd,h,sk,st,sinal,pk])=>ops.push(['agenda',uid(),{clienteId:C[ck],servicoId:SV[sk],pacoteId:pk,data:addDays(t,dd),hora:h,duracao:D[sk],valor:pk?0:P[sk],status:st,pagamentos:sinal?[{id:uid(),tipo:'sinal',data:addDays(t,-2),valor:sinal,forma:'Pix',parcelas:1,nf:false}]:[],...X}]));
+    ops.push(['vales',uid(),{codigo:'SM-MAE26',compradora:'Jéssica Santos',telCompradora:'(27) 99745-1023',presenteada:'Dona Célia',valor:150,validade:addDays(t,170),criadoEm:addDays(t,-10),usos:[],pagamentos:[{id:uid(),tipo:'vale',data:addDays(t,-10),valor:150,forma:'Pix',parcelas:1,nf:false}],...X}]);
+    ops.push(['espera',uid(),{clienteId:C.tha,servicoId:SV.ful,preferencia:'sábados de manhã',desde:addDays(t,-3),status:'aguardando',...X}]);
+    ops.push(['espera',uid(),{clienteId:'',nome:'Bruna Alves',telefone:'(27) 99222-0145',servicoId:SV.box,preferencia:'dias de semana, depois das 13h',desde:addDays(t,-1),status:'aguardando',...X}]);
+    const R0=Object.fromEntries(ANAM_Q.map(([k])=>[k,{sim:false,det:''}]));
+    ops.push(['anamneses',C.ana,{clienteId:C.ana,respostas:R0,obs:'Couro tranquilo. Prefere tranças com pouca tensão na nuca.',menor:false,responsavel:{},imagem:true,atualizadaEm:addDays(t,-120)+'T12:00:00.000Z',historico:[],...X}]);
+    ops.push(['anamneses',C.jes,{clienteId:C.jes,respostas:{...R0,alergia:{sim:true,det:'pomadas com fragrância forte'},quimica:{sim:true,det:'coloração há 20 dias'}},obs:'Usar pomada sem fragrância.',menor:false,responsavel:{},imagem:false,atualizadaEm:addDays(t,-40)+'T12:00:00.000Z',historico:[],...X}]);
+    for(let i=0;i<6;i++){const b=addMonths(ym(t),-i)+'-05';
+      [['Cabelo / fibra',180+Math.round(rnd()*140),'Jumbo e fibra orgânica','Pix'],['Materiais (pomada, linha, elástico)',60+Math.round(rnd()*30),'Pomada, mousse e elásticos','Cartão de débito'],['Transporte',80,'Uber para atendimentos em domicílio','Pix'],['Marketing e redes',i%2?0:40,'Impulsionamento no Instagram','Cartão de crédito'],['Retirada pró-labore',900,'Retirada mensal','Transferência']]
+       .forEach(([cat,v,desc,f])=>{if(v){const d=addDays(b,Math.floor(rnd()*20));if(d<=t)ops.push(['lancamentos',uid(),{tipo:'despesa',data:d,valor:v,categoria:cat,descricao:desc,forma:f,...X}])}});
+      for(let k=0;k<5+Math.floor(rnd()*5);k++){const sk=['box','nago','ful','twi','gyp','inf'][Math.floor(rnd()*6)];const d=addDays(b,Math.floor(rnd()*24));if(d>t)continue;const f=formas[Math.floor(rnd()*5)];
+        ops.push(['lancamentos',uid(),{tipo:'receita',data:d,valor:P[sk],categoria:'Serviço de trança',descricao:'Atendimento avulso (sem cadastro)',forma:f,parcelas:1,nf:k===0&&i===1,...X}])}
+      if(addDays(b,10)<=t)ops.push(['lancamentos',uid(),{tipo:'receita',data:addDays(b,10),valor:35,categoria:'Venda de produto',descricao:'Kit de anéis para tranças',forma:'Pix',nf:false,...X}]);
+      if(i>0){const mesDas=addMonths(ym(b),-1);pagos[mesDas]=true;ops.push(['lancamentos',uid(),{tipo:'despesa',data:ym(b)+'-18',valor:DEF_PRIV.das,categoria:'DAS-MEI',descricao:`DAS ${mesNome(mesDas)}`,forma:'Pix',dasRef:mesDas,...X}])}}
+    const aluguel={descricao:'Aluguel da sala',valor:450,vencimento:addMonths(ym(t),-4)+'-10',recorrente:'mensal',categoria:'Aluguel / espaço',pagas:{},...X};
+    for(let i=4;i>=1;i--){const k=addMonths(ym(t),-i);const lid=uid();aluguel.pagas[k]=lid;ops.push(['lancamentos',lid,{tipo:'despesa',data:k+'-10',valor:450,categoria:'Aluguel / espaço',descricao:'Aluguel da sala',forma:'Pix',contaRef:k,...X}])}
+    ops.push(['contas',uid(),aluguel]);
+    ops.push(['contas',uid(),{descricao:'Internet do ateliê',valor:99.9,vencimento:ym(t)+'-15',recorrente:'mensal',categoria:'Outras despesas',pagas:{},...X}]);
+    ops.push(['contas',uid(),{descricao:'Curso de tranças nagô avançado',valor:300,vencimento:addDays(t,12),recorrente:'unica',categoria:'Cursos',pagas:{},...X}]);
+    ops.push(['ideias',uid(),{titulo:'Sorteio de uma manutenção no Instagram',tipo:'Promoção',data:addDays(t,10),notas:'Regra: seguir, curtir e marcar 2 amigas.',...X}]);
+    ops.push(['ideias',uid(),{titulo:'Parceria com loja de acessórios para tranças',tipo:'Parceria',data:'',notas:'Cupom cruzado: minhas clientes ganham 10% na loja.',...X}]);
+  }
+  ops.push(['publico','config',{...pub(),started:true}]);
+  ops.push(['privado','config',{...priv(),dasPagos:pagos}]);
+  ops.forEach(([c,id,d])=>{S[c].set(id,{id,...d})});touch();
+  await pool(ops.map(([c,id,d])=>()=>save(c,id,d,{quiet:true})),8);
+  toast(ex?'Dados de exemplo carregados':'Pronto! Ajuste preços em Finanças › Serviços e o estoque inicial');
+}
+async function limparEx(){const ops=[];ALL_COLS.forEach(c=>arr(c).filter(r=>r.exemplo).forEach(r=>ops.push([c,r.id])));
+  await pool(ops.map(([c,id])=>()=>del(c,id)),8);await save('privado','config',{...priv(),dasPagos:{}});toast('Exemplos apagados')}
+
+/* ================= ações ================= */
+const ACT={
+ go:t=>go(t.dataset.v),mais:()=>mais(),close:()=>closeSheet(),
+ seed:t=>seed(t.dataset.ex==='1'),
+ novoAg:t=>formAgenda(null,{d:t.dataset.d,h:t.dataset.h,c:t.dataset.c}),editAg:t=>formAgenda(t.dataset.id),
+ agDia:t=>{UI.agDia=t.dataset.d;if(UI.view!=='agenda')go('agenda');else render()},agNav:t=>{UI.agDia=addDays(UI.agDia,+t.dataset.n);render()},agHoje:()=>{UI.agDia=today();render()},
+ stAg:async t=>{const a=S.agenda.get(t.dataset.id);await save('agenda',a.id,{...a,status:t.dataset.s});toast('Atendimento confirmado')},
+ concluir:t=>concluir(t.dataset.id),divulgar:()=>divulgar(),
+ delAg:t=>confirmar('Excluir este atendimento? Os pagamentos registrados nele também saem do financeiro.',()=>del('agenda',t.dataset.id)),
+ novaEspera:()=>formEspera(),editEspera:t=>formEspera(t.dataset.id),delEspera:t=>confirmar('Remover da lista de espera?',()=>del('espera',t.dataset.id)),
+ avisada:t=>{const e=S.espera.get(t.dataset.id);if(e)save('espera',e.id,{...e,status:'avisada'})},
+ novaCli:()=>formCliente(),editCli:t=>formCliente(t.dataset.id),verCli:t=>abrirCliente(t.dataset.id),
+ delCli:t=>confirmar('Excluir esta cliente? O histórico fica sem nome. Pela LGPD, apague também a ficha de anamnese se ela pediu exclusão dos dados.',async()=>{await del('clientes',t.dataset.id);if(S.anamneses.has(t.dataset.id))await del('anamneses',t.dataset.id)}),
+ cliNivel:t=>{UI.cliNivel=t.dataset.n;render()},cliOrd:t=>{UI.cliOrd=t.dataset.o;render()},
+ anamnese:t=>formAnamnese(t.dataset.id),
+ docCli:t=>{UI.ctCli=t.dataset.id;UI.ctAg='';UI.ctTab='emitir';UI.ctTipo='servico';go('contratos')},
+ finTab:t=>{UI.finTab=t.dataset.t;if(UI.view!=='financeiro')go('financeiro');else render()},finMes:t=>{UI.finMes=addMonths(UI.finMes,+t.dataset.n);render()},
+ lanTipo:t=>{UI.lanTipo=t.dataset.t;render()},novoLan:()=>pode('finEdit')&&formLan(),editLan:t=>pode('finEdit')?formLan(t.dataset.id):toast('Perfil somente leitura'),delLan:t=>confirmar('Excluir este lançamento?',()=>del('lancamentos',t.dataset.id)),
+ abrirOrigem:t=>{const o=t.dataset.o,id=t.dataset.oid;if(o==='agenda'){const a=S.agenda.get(id);if(a){UI.agDia=a.data;go('agenda')}}else if(o==='pacotes'){UI.pkTab='pacotes';go('pacotes');formPacote(id)}else if(o==='vales'){UI.pkTab='vales';go('pacotes');formVale(id)}else toast('Calculado automaticamente pela taxa do cartão (Ajustes)')},
+ novaConta:()=>pode('finEdit')&&formConta(),editConta:t=>pode('finEdit')&&formConta(t.dataset.id),delConta:t=>confirmar('Excluir esta conta? Lançamentos já pagos continuam no financeiro.',()=>del('contas',t.dataset.id)),
+ pagarConta:async t=>{if(!pode('finEdit'))return;const c=S.contas.get(t.dataset.id);const k=t.dataset.k;const pg={...(c.pagas||{})};
+   if(pg[k]){if(S.lancamentos.has(pg[k]))await del('lancamentos',pg[k]);delete pg[k];await save('contas',c.id,{...c,pagas:pg});toast('Pagamento desfeito');return}
+   const lid=await save('lancamentos',null,{tipo:'despesa',data:today(),valor:+c.valor,categoria:c.categoria,descricao:c.descricao,forma:'Pix',contaRef:k});pg[k]=lid;await save('contas',c.id,{...c,pagas:pg});toast('Conta paga e despesa lançada')},
+ novoServ:()=>pode('finEdit')&&formServ(),editServ:t=>pode('finEdit')?formServ(t.dataset.id):toast('Perfil somente leitura'),delServ:t=>confirmar('Excluir este serviço do catálogo?',()=>del('servicos',t.dataset.id)),
+ relPer:t=>{UI.relPer=+t.dataset.n;render()},
+ das:async t=>{if(!pode('finEdit'))return;const k=t.dataset.k;const g=priv();const p={...(g.dasPagos||{})};const ja=!!p[k];
+   if(ja){delete p[k];const l=arr('lancamentos').find(x=>x.dasRef===k);if(l)await del('lancamentos',l.id)}
+   else{p[k]=true;await save('lancamentos',null,{tipo:'despesa',data:today(),valor:+g.das,categoria:'DAS-MEI',descricao:`DAS ${mesNome(k)}`,forma:'Pix',dasRef:k})}
+   await save('privado','config',{...g,dasPagos:p});toast(ja?'DAS desmarcado':'DAS marcado como pago e despesa lançada')},
+ csvLanc:()=>{const m=UI.finMes;const L=[...receitas(),...despesas()].filter(l=>ym(l.data)===m).sort((a,b)=>a.data<b.data?-1:1);
+   baixar(`lancamentos-${m}.csv`,csv([['Data','Tipo','Categoria','Descrição','Forma','Parcelas','Nota fiscal','Valor'],...L.map(l=>[dataBR(l.data),l.tipo,l.categoria,l.descricao,l.forma,l.parcelas||1,l.nf?'sim':'não',String(((l.tipo==='despesa'?-1:1)*l.valor).toFixed(2)).replace('.',',')])]))},
+ csvRel:()=>baixar(`relatorio-receitas-brutas-${UI.finMes}.csv`,csv(relatorioLinhas())),
+ copyRel:()=>copiar(relatorioLinhas().map(r=>r.join(': ')).join('\n'),'Relatório copiado'),
+ pacoteContador:()=>pacoteContador(),
+ ctTab:t=>{UI.ctTab=t.dataset.t;if(UI.view!=='contratos')go('contratos');else render()},acFiltro:t=>{UI.acFiltro=t.dataset.t;render()},
+ aceite:()=>coletarAceite(UI.ctTipo,UI.ctCli,UI.ctAg),verAceite:t=>verAceite(t.dataset.id),
+ copyDoc:()=>copiar($('#docBox').innerText,'Texto copiado'),
+ baixarDoc:()=>{const nm={servico:'contrato',anamnese:'anamnese',politica:'politica'}[UI.ctTipo];const cli=S.clientes.get(UI.ctCli);baixar(`${nm}${cli?'-'+primeiro(cli.nome).toLowerCase():''}-${today()}.html`,htmlDocStandalone(nm,$('#docBox').innerHTML))},
+ baixarAceite:t=>{const a=S.aceites.get(t.dataset.id);baixar(`aceite-${a.tipo}-${a.aceitoEm.slice(0,10)}.html`,htmlDocStandalone('Aceite',`<pre>${esc(a.texto)}</pre>`,`<hr><p><b>Aceito por:</b> ${esc(a.nomeAssinante)}${a.cpf?` (CPF ${esc(a.cpf)})`:''}<br><b>Meio:</b> ${esc(a.meio)}<br><b>Data e hora:</b> ${new Date(a.aceitoEm).toLocaleString('pt-BR')}<br><b>Versão da política:</b> ${a.versao||'—'} · <b>Código:</b> ${esc(a.hash||'')}</p>${a.assinatura?`<img src="${a.assinatura}" style="max-width:320px">`:''}`))},
+ copyAceite:t=>copiar(S.aceites.get(t.dataset.id).texto,'Texto copiado'),
+ pkTab:t=>{UI.pkTab=t.dataset.t;render()},novoPacote:()=>formPacote(),editPacote:t=>formPacote(t.dataset.id),delPacote:t=>confirmar('Excluir este pacote? O pagamento dele sai do financeiro.',()=>del('pacotes',t.dataset.id)),
+ novoVale:()=>formVale(),editVale:t=>formVale(t.dataset.id),delVale:t=>confirmar('Excluir este vale? O pagamento dele sai do financeiro.',()=>del('vales',t.dataset.id)),
+ novoItem:()=>formItem(),editItem:t=>formItem(t.dataset.id),movItem:t=>movItem(t.dataset.id),delItem:t=>confirmar('Excluir este item do estoque?',()=>del('estoque',t.dataset.id)),
+ calDia:t=>{UI.calDia=t.dataset.d;if(ym(t.dataset.d)!==UI.calMes)UI.calMes=ym(t.dataset.d);render()},
+ calMes:t=>{UI.calMes=addMonths(UI.calMes,+t.dataset.n);UI.calDia=UI.calMes+'-01';render()},calHoje:()=>{UI.calMes=ym(today());UI.calDia=today();render()},
+ novaIdeia:t=>formIdeia(null,{d:t.dataset.d}),editIdeia:t=>formIdeia(t.dataset.id),usarIdeia:t=>formIdeia(null,{d:t.dataset.d,n:t.dataset.n,i:t.dataset.i}),
+ ideiaFeita:async t=>{const i=S.ideias.get(t.dataset.id);await save('ideias',i.id,{...i,feito:!i.feito})},delIdeia:t=>confirmar('Excluir esta ideia?',()=>del('ideias',t.dataset.id)),
+ aprovar:t=>aprovar(t.dataset.id),recusar:t=>confirmar('Recusar este pedido? Desative ou exclua também o usuário em Authentication, no console do Firebase.',()=>del('pedidos',t.dataset.id)),
+ sair:()=>{pararTudo();signOut(AUTH)},virarDona:()=>virarDona(),
+ esqueci:async()=>{const em=($('#lgEmail')?.value||'').trim();if(!em){$('#lgMsg').textContent='Digite seu e-mail acima e toque de novo em "Esqueci minha senha".';return}try{await sendPasswordResetEmail(AUTH,em);$('#lgMsg').style.color='var(--good)';$('#lgMsg').textContent='Enviamos um link para redefinir a senha. Confira também o spam.'}catch(e){$('#lgMsg').textContent='Não foi possível enviar. Confira o e-mail digitado.'}},
+ trocarSenha:async()=>{try{await sendPasswordResetEmail(AUTH,EMAIL);toast('Link para trocar a senha enviado para '+EMAIL)}catch(e){toast('Não foi possível enviar o e-mail')}},
+ imprimirDoc:()=>window.print(),
+ backup:()=>{const o={versao:3,gerado:nowIso()};ALL_COLS.filter(c=>c!=='pedidos').forEach(c=>o[c]=arr(c));baixar(`backup-stefany-trancista-${today()}.json`,JSON.stringify(o,null,1))},
+ limparEx:()=>confirmar('Apagar todos os registros marcados como exemplo?',limparEx)
+};
+document.addEventListener('click',e=>{const t=e.target.closest('[data-act]');if(!t)return;
+  if(t.dataset.act==='closeBack'){if(e.target===t)closeSheet();return}
+  const f=ACT[t.dataset.act];if(!f)return;if(t.tagName!=='A')e.preventDefault();if(t.disabled)return;f(t,e)});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeSheet()});
+let buscaT;document.addEventListener('input',e=>{if(e.target.id==='cliBusca'){UI.cliBusca=e.target.value;clearTimeout(buscaT);buscaT=setTimeout(()=>{const pos=e.target.selectionStart;render();const i=$('#cliBusca');if(i){i.focus();try{i.setSelectionRange(pos,pos)}catch(_){}}},200)}});
+document.addEventListener('change',e=>{const id=e.target.id;
+  if(id==='ctTipo'){UI.ctTipo=e.target.value;render()}else if(id==='ctCli'){UI.ctCli=e.target.value;UI.ctAg='';render()}else if(id==='ctAg'){UI.ctAg=e.target.value;render()}
+  else if(id==='restFile'&&e.target.files[0]){const fr=new FileReader();fr.onload=()=>{let o;try{o=JSON.parse(fr.result)}catch(_){toast('Arquivo inválido');return}
+    confirmar('Restaurar esta cópia? Registros com o mesmo identificador serão substituídos.',async()=>{const ops=[];ALL_COLS.filter(c=>c!=='equipe'&&c!=='pedidos').forEach(c=>(o[c]||[]).forEach(r=>{if(r&&r.id)ops.push([c,r.id,r])}));await pool(ops.map(([c,id,r])=>()=>save(c,id,r,{quiet:true})),8);toast(`${ops.length} registros restaurados`)})};fr.readAsText(e.target.files[0])}});
+document.addEventListener('submit',async e=>{
+  if(e.target.id==='fLogin'){e.preventDefault();const m=$('#lgMsg');m.style.color='var(--bad)';m.textContent='Entrando…';
+    try{await signInWithEmailAndPassword(AUTH,$('#lgEmail').value.trim(),$('#lgSenha').value)}catch(err){const c=err.code||'';m.textContent=/invalid-credential|wrong-password|user-not-found|invalid-email/.test(c)?'E-mail ou senha incorretos.':/too-many-requests/.test(c)?'Muitas tentativas. Aguarde alguns minutos.':/network/.test(c)?'Sem internet. Tente de novo.':'Não foi possível entrar.'}
+    return}
+  if(e.target.id==='fCfg'){e.preventDefault();const v=i=>$('#'+i).value.trim();
+    await save('publico','config',{...pub(),nome:v('gNome')||DEF_PUB.nome,responsavel:v('gResp'),cnpj:v('gCnpj'),endereco:v('gEnd'),municipio:v('gMun'),whatsapp:v('gWa'),abre:v('gAbre')||'08:00',fecha:v('gFecha')||'20:00',descAniv:+v('gAniv')||0,started:true});
+    await save('privado','config',{...priv(),inicioMei:v('gIni'),limite:+v('gLim')||81000,das:+v('gDas')||DEF_PRIV.das,meta:+v('gMeta')||0,taxaDebito:+v('gTd')||0,taxaCredito:+v('gTc')||0,taxaParcelado:+v('gTp')||0});toast('Ajustes salvos')}
+  else if(e.target.id==='fPol'){e.preventDefault();const P=pol();const campos={},rev={};
+    POL_CAMPOS.forEach(f=>{const el=$('#pol_'+f.k);campos[f.k]=f.t==='num'?+el.value||0:el.value.trim();const r=$('#rev_'+f.k);if(r&&r.checked)rev[f.k]=true});
+    await save('publico','politica',{campos,revisados:rev,versao:P.versao+1,atualizadaEm:nowIso()});toast(`Política salva (versão ${P.versao+1})`);window.scrollTo({top:0,behavior:'smooth'})}
+});
+const hsh=(location.hash||'').slice(1);if(VIEWS.some(v=>v[0]===hsh))UI.view=hsh;
+if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+boot();

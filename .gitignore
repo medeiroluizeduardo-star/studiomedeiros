@@ -1,0 +1,6 @@
+# nunca enviar chaves privadas para o GitHub
+*-firebase-adminsdk-*.json
+service-account*.json
+*.key
+.firebase/
+node_modules/

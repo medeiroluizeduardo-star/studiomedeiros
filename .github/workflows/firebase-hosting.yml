@@ -1,0 +1,26 @@
+name: Publicar no Firebase
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    env:
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verificar chave do Firebase
+        if: env.FIREBASE_SA == ''
+        run: |
+          echo "::warning::Falta cadastrar o segredo FIREBASE_SERVICE_ACCOUNT em Settings > Secrets and variables > Actions. O site ainda não foi publicado."
+      - name: Publicar site no Firebase Hosting
+        if: env.FIREBASE_SA != ''
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          channelId: live
+          projectId: stefany-medeiros-trancista

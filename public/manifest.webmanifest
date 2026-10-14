@@ -1,0 +1,17 @@
+{
+  "name": "Stéfany Medeiros Trancista",
+  "short_name": "Stéfany Trancista",
+  "description": "Gestão do ateliê: agenda, clientes, finanças MEI e contratos",
+  "lang": "pt-BR",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#FDF6F8",
+  "theme_color": "#FDF6F8",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

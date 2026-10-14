@@ -1,0 +1,114 @@
+rules_version = '2';
+
+// Regras de segurança · Stéfany Medeiros Trancista
+// Perfis: proprietária (dona), trancista parceira, recepção e contador(a).
+// O servidor recusa qualquer leitura ou gravação fora do perfil, mesmo que alguém altere o site.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function logada() { return request.auth != null; }
+    function caminho(c, id) { return /databases/$(database)/documents/$(c)/$(id); }
+
+    function dona() {
+      return logada()
+        && exists(caminho('sistema', 'acesso'))
+        && request.auth.uid in get(caminho('sistema', 'acesso')).data.donas;
+    }
+    function perfil() { return get(caminho('equipe', request.auth.uid)).data; }
+    function eh(papel) {
+      return logada()
+        && exists(caminho('equipe', request.auth.uid))
+        && perfil().ativo == true
+        && perfil().papel == papel;
+    }
+    function atendimento() { return dona() || eh('parceira') || eh('recepcao'); }
+    function saude()       { return dona() || eh('parceira'); }
+    function financas()    { return dona() || eh('contador'); }
+
+    // Quem é a proprietária. Só pode ser criado uma vez, pela própria conta.
+    match /sistema/acesso {
+      allow read: if logada();
+      allow create: if logada()
+        && !exists(caminho('sistema', 'acesso'))
+        && request.resource.data.donas == [request.auth.uid];
+      allow update, delete: if dona();
+    }
+
+    // Perfis da equipe: só a proprietária define. Cada pessoa lê apenas o próprio.
+    match /equipe/{uid} {
+      allow read: if dona() || (logada() && request.auth.uid == uid);
+      allow write: if dona();
+    }
+
+    // Pedidos de acesso: cada pessoa cria o seu; só a proprietária vê todos.
+    match /pedidos/{uid} {
+      allow read: if dona() || (logada() && request.auth.uid == uid);
+      allow create, update: if logada() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['email', 'nome', 'pedidoEm']);
+      allow delete: if dona();
+    }
+
+    // Atendimento do dia a dia
+    match /clientes/{id} {
+      allow read, create, update: if atendimento();
+      allow delete: if dona();
+    }
+    match /agenda/{id} {
+      allow read: if atendimento() || eh('contador');
+      allow create, update: if atendimento();
+      allow delete: if dona();
+    }
+    match /espera/{id}  { allow read, write: if atendimento(); }
+    match /ideias/{id}  { allow read, write: if atendimento(); }
+    match /pacotes/{id} {
+      allow read: if atendimento() || eh('contador');
+      allow create, update: if atendimento();
+      allow delete: if dona();
+    }
+    match /vales/{id} {
+      allow read: if atendimento() || eh('contador');
+      allow create, update: if atendimento();
+      allow delete: if dona();
+    }
+
+    // Dados de saúde (LGPD, dado sensível): só proprietária e trancista parceira.
+    match /anamneses/{id} {
+      allow read, create, update: if saude();
+      allow delete: if dona();
+    }
+
+    // Estoque: proprietária e trancista parceira.
+    match /estoque/{id} {
+      allow read, create, update: if saude();
+      allow delete: if dona();
+    }
+
+    // Aceites de contratos: não podem ser alterados depois de registrados.
+    // Termos de anamnese só são visíveis para quem pode ver dados de saúde.
+    match /aceites/{id} {
+      allow read: if saude() || (eh('recepcao') && resource.data.tipo in ['servico', 'politica']);
+      allow create: if saude() || (eh('recepcao') && request.resource.data.tipo in ['servico', 'politica']);
+      allow update: if false;
+      allow delete: if dona();
+    }
+
+    // Tabela de preços e configurações públicas: todos leem, só a proprietária altera.
+    match /servicos/{id} {
+      allow read: if atendimento() || eh('contador');
+      allow write: if dona();
+    }
+    match /publico/{id} {
+      allow read: if atendimento() || eh('contador');
+      allow write: if dona();
+    }
+
+    // Finanças: proprietária altera; contador(a) só lê.
+    match /lancamentos/{id} { allow read: if financas(); allow write: if dona(); }
+    match /contas/{id}      { allow read: if financas(); allow write: if dona(); }
+    match /privado/{id}     { allow read: if financas(); allow write: if dona(); }
+
+    // Qualquer outro caminho é bloqueado.
+    match /{documento=**} { allow read, write: if false; }
+  }
+}
