@@ -341,3 +341,12 @@ details.how td{padding:6px 4px;border-bottom:1px solid var(--line);vertical-alig
   body.imprimindo #printArea{display:block}
   body.imprimindo #printArea .doc{border:0;box-shadow:none;max-width:none;padding:0;color:#000;background:#fff}
 }
+
+/* topo no celular: tudo em uma linha */
+@media (max-width:899px){
+  .topbar{flex-wrap:nowrap}
+  .topbar .brand{min-width:0;flex:1}
+  .topbar .brand-name{font-size:1.1rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .topbar .row{flex-wrap:nowrap;flex:none}
+  .topbar .role{display:none}
+}
