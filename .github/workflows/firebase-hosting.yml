@@ -12,15 +12,21 @@ jobs:
       FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
       - name: Verificar chave do Firebase
         if: env.FIREBASE_SA == ''
-        run: |
-          echo "::warning::Falta cadastrar o segredo FIREBASE_SERVICE_ACCOUNT em Settings > Secrets and variables > Actions. O site ainda não foi publicado."
+        run: echo "::warning::Falta cadastrar o segredo FIREBASE_SERVICE_ACCOUNT em Settings > Secrets and variables > Actions."
       - name: Publicar site no Firebase Hosting
         if: env.FIREBASE_SA != ''
-        uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          channelId: live
-          projectId: stefany-medeiros-trancista
+        run: |
+          echo "$FIREBASE_SA" > "$RUNNER_TEMP/sa.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
+          set -o pipefail
+          npx -y firebase-tools@13.29.1 deploy --only hosting --project stefany-medeiros-trancista --non-interactive 2>&1 | tee deploy.log
+      - name: Mostrar o motivo da falha
+        if: failure()
+        run: |
+          msg=$( (tail -n 25 deploy.log 2>/dev/null; tail -n 25 firebase-debug.log 2>/dev/null) | sed -e 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g')
+          echo "::error title=Falha na publicação::$msg"
