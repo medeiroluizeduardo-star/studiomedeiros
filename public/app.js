@@ -366,7 +366,7 @@ function docServico(cli,ag){
   <p><b>CONTRATADA:</b> ${esc(pb.responsavel||pb.nome)}, microempreendedora individual, nome empresarial ${esc(pb.nome)}, CNPJ ${linha(pb.cnpj)}, com endereço em ${linha(pb.endereco||pb.municipio)}, WhatsApp ${linha(pb.whatsapp)}.</p>
   <p><b>CONTRATANTE:</b> ${linha(cli?.nome)}, CPF ${linha(cli?.cpf)}, telefone ${linha(cli?.telefone)}.</p>
   <h2>Cláusula 1 – Objeto</h2>
-  <p>Prestação do serviço de <b>${linha(s?.nome)}</b>, na data ${ag&&ag.data?`<b>${dataExt(ag.data)}</b>${ag.hora?`, às <b>${esc(ag.hora)}</b>`:''}`:'a combinar entre as partes'}, com duração estimada de ${s?durTxt(ag.duracao||s.duracao):'____'}, ${pb.endereco?`no endereço ${esc(pb.endereco)}`:'no local combinado entre as partes'}.</p>
+  <p>Prestação do serviço de <b>${linha(s?.nome||ag?.servicoNome)}</b>, na data ${ag&&ag.data?`<b>${dataExt(ag.data)}</b>${ag.hora?`, às <b>${esc(ag.hora)}</b>`:''}`:'a combinar entre as partes'}, com duração estimada de ${s||ag?.duracao?durTxt(ag.duracao||s.duracao):'____'}, ${pb.endereco?`no endereço ${esc(pb.endereco)}`:'no local combinado entre as partes'}.</p>
   <h2>Cláusula 2 – Preço e pagamento</h2>
   <p>2.1. O valor total do serviço é de <b>${ag?BRL(valor):'R$ ________'}</b>. Para reservar o horário, a CONTRATANTE paga sinal de ${V('sinalPct')}% (${ag?BRL(sinal):'R$ ______'}), que será abatido do valor final.</p>
   <p>2.2. Formas aceitas: Pix, dinheiro e cartões de débito e crédito. O parcelamento no cartão de crédito é possível em até ${V('parcelas')} vezes para serviços a partir de R$ ${V('parcelaMin')}, ${V('jurosParc')}.</p>
@@ -728,6 +728,7 @@ function finRel(){
 }
 function finServ(){
   const sv=arr('servicos').sort((a,b)=>a.nome.localeCompare(b.nome));const ag=arr('agenda').filter(a=>a.status==='concluido');
+  if(!sv.length)return `<section class="card empty">Nenhum serviço cadastrado. Os serviços aparecem na agenda, nos contratos e no catálogo.<div class="row" style="justify-content:center;margin-top:10px"><button class="btn primary" data-act="servSug">${ic('spark')}Adicionar serviços sugeridos</button><button class="btn soft" data-act="novoServ">${ic('plus')}Cadastrar um serviço</button></div></section>`;
   return `<section class="card" style="padding:8px 14px">${sv.length?`<div class="list">${sv.map(s=>{const lucro=(+s.preco||0)-(+s.custo||0);const hora=s.duracao?lucro/(s.duracao/60):0;
    return `<button class="item" data-act="editServ" data-id="${s.id}"><div class="grow"><div class="t">${esc(s.nome)}</div><div class="s">${durTxt(s.duracao)} · material ${BRL(s.custo)} · lucro/hora ${BRL(hora)} · ${ag.filter(a=>a.servicoId===s.id).length} feitos${(s.consumo||[]).length?` · baixa ${s.consumo.length} item(ns) do estoque`:''}</div></div><b class="num">${BRL(s.preco)}</b></button>`}).join('')}</div>`:'<div class="empty">Nenhum serviço cadastrado.</div>'}</section>
   <div class="alert info">${ic('info')}<div><b>Precificação:</b> o lucro por hora mostra quanto cada serviço rende depois do material. Cadastre o consumo de estoque em cada serviço para a baixa automática.</div></div>`;
@@ -986,7 +987,7 @@ function formAgenda(id,pre={}){
   sheet(id?'Editar atendimento':'Novo atendimento',`<form class="form" id="fAg">
    <label class="fld">Cliente<select id="aCli">${optCli(a.clienteId,'<option value="__nova">+ Nova cliente</option>')}</select></label>
    <div class="f2" id="novaBox" hidden><label class="fld">Nome da nova cliente<input id="aNovaNome"></label><label class="fld">WhatsApp<input id="aNovaTel" inputmode="tel"></label></div>
-   <label class="fld">Serviço<select id="aServ">${optServ(a.servicoId)}</select></label>
+   <label class="fld">Serviço<select id="aServ">${optServ(a.servicoId)}</select></label>${S.servicos.size?'':`<div class="alert warn">${ic('alert')}<div>Nenhum serviço cadastrado. ${pode('precos')?`<button type="button" class="btn sm ghost" data-act="servSug">Adicionar serviços sugeridos</button>`:'Peça à proprietária para cadastrar.'}</div></div>`}
    <label class="fld" id="pkBox" hidden>Pacote<select id="aPk"></select></label>
    <div class="f2"><label class="fld">Data<input id="aData" type="date" required value="${esc(a.data)}"></label><label class="fld">Hora<input id="aHora" type="time" required value="${esc(a.hora)}"></label><label class="fld">Duração (min)<input id="aDur" type="number" min="15" step="15" value="${esc(a.duracao||'')}"></label></div>
    <div class="f2" id="valBox"><label class="fld">Valor (R$)<input id="aVal" type="number" step="0.01" min="0" inputmode="decimal" value="${esc(a.valor??'')}"></label>
@@ -1211,6 +1212,10 @@ function relatorioLinhas(){const m=UI.finMes;const pb=pub();const R=receitas(l=>
   return [['Relatório mensal das receitas brutas',mesNome(m)],['CNPJ',pb.cnpj],['Empreendedora',pb.responsavel],['I - Revenda de mercadorias sem documento fiscal',v(l=>ehComercio(l)&&!l.nf)],['II - Revenda de mercadorias com documento fiscal',v(l=>ehComercio(l)&&l.nf)],['III - Total comércio',v(ehComercio)],['IV - Indústria sem documento fiscal','0,00'],['V - Indústria com documento fiscal','0,00'],['VI - Total indústria','0,00'],['VII - Serviços sem documento fiscal',v(l=>!ehComercio(l)&&!l.nf)],['VIII - Serviços com documento fiscal',v(l=>!ehComercio(l)&&l.nf)],['IX - Total serviços',v(l=>!ehComercio(l))],['X - Total geral',v(()=>true)],['Local e data',pb.municipio+', ____/____/______'],['Assinatura','']]}
 
 /* ================= dados de exemplo ================= */
+async function servicosSugeridos(){if(!pode('precos')){toast('Peça à proprietária para cadastrar os serviços.','erro');return}
+  const {ops}=catalogoBase(false);const temEst=S.estoque.size>0;const sel=ops.filter(([c])=>c==='servicos'||(c==='estoque'&&!temEst));
+  if(temEst)sel.forEach(o=>{if(o[0]==='servicos')o[2]={...o[2],consumo:[]}});
+  for(const [c,id,d] of sel)await save(c,id,d,{quiet:true});toast('Serviços sugeridos adicionados. Ajuste os preços em Finanças › Serviços.')}
 function catalogoBase(ex){
   const X=ex?{exemplo:true}:{};const ops=[];const E={};
   [['j1b','Jumbo 1B (preto natural)','Cabelo / fibra','pacote',14,6,18],['j2','Jumbo 2 (castanho escuro)','Cabelo / fibra','pacote',6,4,18],['j27','Jumbo 27 (mel)','Cabelo / fibra','pacote',3,4,19],['org','Cabelo orgânico cacheado','Cabelo / fibra','pacote',4,2,45],
@@ -1219,7 +1224,7 @@ function catalogoBase(ex){
   const SV={};
   [['box','Box braids (médias)',280,300,60,[['j1b',5],['pom',.5]]],['nago','Nagô (até 10 tranças)',120,120,15,[['pom',.5],['ela',1]]],['ful','Fulani braids',260,270,55,[['j1b',4],['mic',1],['pom',.5]]],['twi','Twist / Senegalese',300,300,65,[['j1b',5],['mou',.5]]],
    ['gyp','Gypsy braids',350,360,90,[['j1b',4],['org',2],['mou',.5]]],['inf','Tranças infantis',90,120,15,[['ela',1],['mic',1]]],['man','Manutenção',100,120,10,[['pom',.5]]],['ret','Retirada de tranças',70,120,0,[]]]
-   .forEach(([k,nome,preco,duracao,custo,cons])=>{SV[k]=uid();ops.push(['servicos',SV[k],{nome,preco,duracao,custo,consumo:cons.map(([i,q])=>({itemId:E[i],qtd:q})),...X}])});
+   .forEach(([k,nome,preco,duracao,custo,cons])=>{SV[k]=uid();ops.push(['servicos',SV[k],{nome,preco,duracao,custo,consumo:cons.map(([i,q])=>({itemId:E[i],qtd:q}))}])});
   return {ops,E,SV};
 }
 async function seed(ex){
@@ -1462,7 +1467,8 @@ function formLinkContrato(pre={}){
    <div class="f2" id="lkNova" hidden><label class="fld">Nome completo<input id="lkNome"></label><label class="fld">WhatsApp<input id="lkTel" inputmode="tel"></label></div>
    <label class="fld">CPF da cliente (aparece no contrato)<input id="lkCpf" inputmode="numeric" placeholder="000.000.000-00"></label>
    <label class="fld">Atendimento<select id="lkAg"></select></label>
-   <div class="f2" id="lkManual"><label class="fld">Serviço<select id="lkServ">${optServ('')}</select></label><label class="fld">Data<input id="lkData" type="date"></label><label class="fld">Hora<input id="lkHora" type="time"></label><label class="fld">Valor (R$)<input id="lkVal" type="number" step="0.01" min="0"></label></div>
+   ${S.servicos.size?'':`<div class="alert warn">${ic('alert')}<div>Nenhum serviço cadastrado ainda. Digite o nome do serviço abaixo${pode('precos')?` ou <button type="button" class="btn sm ghost" data-act="servSug">adicione os serviços sugeridos</button>`:''}.</div></div>`}
+   <div class="f2" id="lkManual"><label class="fld">Serviço<select id="lkServ">${optServ('')}<option value="__outro">Outro: digitar o nome</option></select></label><label class="fld" id="lkOutroBox" hidden>Nome do serviço<input id="lkOutro" placeholder="Ex.: Box braids longas"></label><label class="fld" id="lkDurBox" hidden>Duração (min)<input id="lkDur" type="number" step="15" min="15" value="180"></label><label class="fld">Data<input id="lkData" type="date"></label><label class="fld">Hora<input id="lkHora" type="time"></label><label class="fld">Valor (R$)<input id="lkVal" type="number" step="0.01" min="0"></label></div>
    <label class="fld">O link vale por<select id="lkDias"><option value="3">3 dias</option><option value="7" selected>7 dias</option><option value="15">15 dias</option><option value="30">30 dias</option></select></label>
    <div class="form-actions"><button class="btn primary" type="submit">${ic('file')}Gerar link</button></div></form>`);
   const sel=$('#lkCli'),ag=$('#lkAg');
@@ -1470,17 +1476,20 @@ function formLinkContrato(pre={}){
     const fs=c?futuros(c.id):[];ag.innerHTML=fs.map(a=>`<option value="${a.id}" ${a.id===pre.a?'selected':''}>${dataBR(a.data)} ${esc(a.hora)} · ${esc(nomeServ(a.servicoId))}${a.pacoteId?'':` · ${BRL(a.valor)}`}</option>`).join('')+'<option value="">Ainda não marcado: informar abaixo</option>';
     if(pre.a&&fs.some(a=>a.id===pre.a))ag.value=pre.a;upAg()};
   const upAg=()=>{$('#lkManual').hidden=!!ag.value};
-  sel.onchange=up;ag.onchange=upAg;$('#lkServ').onchange=e=>{const s=S.servicos.get(e.target.value);if(s)$('#lkVal').value=s.preco};up();
+  sel.onchange=up;ag.onchange=upAg;
+  const upServ=()=>{const v=$('#lkServ').value;$('#lkOutroBox').hidden=$('#lkDurBox').hidden=v!=='__outro';const s=S.servicos.get(v);if(s)$('#lkVal').value=s.preco};
+  $('#lkServ').onchange=upServ;if(!S.servicos.size){$('#lkServ').value='__outro'}up();upServ();
   $('#fLk').onsubmit=async e=>{e.preventDefault();let cid=sel.value;const bt=$('#fLk button[type=submit]');
     if(cid==='__nova'){const n=$('#lkNome').value.trim();if(!n){toast('Informe o nome da cliente.','erro');return}cid=await save('clientes',null,{nome:n,telefone:$('#lkTel').value.trim(),cpf:$('#lkCpf').value.trim(),criadoEm:today()})}
     if(!cid){toast('Escolha a cliente.','erro');return}
     let cli=S.clientes.get(cid);const cpf=$('#lkCpf').value.trim();if(cpf&&cpf!==cli.cpf){await save('clientes',cid,{...cli,cpf});cli=S.clientes.get(cid)}
     let a=ag.value?S.agenda.get(ag.value):null;
-    if(!a){const sid=$('#lkServ').value;if(!sid){toast('Escolha o serviço do contrato.','erro');return}const s=S.servicos.get(sid);a={servicoId:sid,data:$('#lkData').value,hora:$('#lkHora').value,duracao:s?.duracao||120,valor:+$('#lkVal').value||0}}
+    if(!a){const sid=$('#lkServ').value;const outro=$('#lkOutro').value.trim();if(!sid||(sid==='__outro'&&!outro)){toast('Escolha ou digite o serviço do contrato.','erro');return}
+      const s=S.servicos.get(sid);a={servicoId:s?sid:'',servicoNome:s?s.nome:outro,data:$('#lkData').value,hora:$('#lkHora').value,duracao:s?.duracao||+$('#lkDur').value||120,valor:+$('#lkVal').value||0}}
     bt.disabled=true;
     const html=semRevisao(docServico(cli,a));const texto=htmlParaTexto(html);const pb=pub();
     const token=gerarToken();const ptok=await portalCriar(cid,false,true);
-    saveRaw('contratosLink',token,{tipo:'servico',clienteId:cid,agendaId:a.id||'',nome:cli.nome,cpf:cli.cpf||'',telefone:cli.telefone||'',servico:nomeServ(a.servicoId),data:a.data||'',hora:a.hora||'',valor:+a.valor||0,html,texto,versao:pol().versao||0,hash:await hashTexto(texto),status:'pendente',criadoEm:nowIso(),criadoPor:ME||'',expiraEm:Timestamp.fromDate(new Date(Date.now()+(+$('#lkDias').value||7)*864e5)),portalToken:ptok||'',atelie:{nome:pb.nome,responsavel:pb.responsavel,whatsapp:pb.whatsapp}});
+    saveRaw('contratosLink',token,{tipo:'servico',clienteId:cid,agendaId:a.id||'',nome:cli.nome,cpf:cli.cpf||'',telefone:cli.telefone||'',servico:a.servicoNome||nomeServ(a.servicoId),data:a.data||'',hora:a.hora||'',valor:+a.valor||0,html,texto,versao:pol().versao||0,hash:await hashTexto(texto),status:'pendente',criadoEm:nowIso(),criadoPor:ME||'',expiraEm:Timestamp.fromDate(new Date(Date.now()+(+$('#lkDias').value||7)*864e5)),portalToken:ptok||'',atelie:{nome:pb.nome,responsavel:pb.responsavel,whatsapp:pb.whatsapp}});
     closeSheet(true);verLinkContrato(token)};
 }
 function msgLink(l){const pb=pub();return `Oi, ${primeiro(l.nome)}! 💕 Antes de confirmar seu horário de ${l.servico}${l.data?` em ${dataBR(l.data)}${l.hora?` às ${l.hora}`:''}`:''}, leia o contrato e confirme por este link:\n${urlPublica('contrato',l.id)}\n\nAssim que você aceitar, eu te envio o link de pagamento do sinal para garantir o horário. Beijos, ${primeiro(pb.responsavel)}`}
@@ -1622,6 +1631,7 @@ const ACT={
  limparEx:()=>confirmar('Apagar todos os registros marcados como exemplo?',limparEx),
  tornarDona:t=>{const id=t.dataset.id;const e=S.equipe.get(id)||S.pedidos.get(id)||{};confirmar(`Dar acesso total de proprietária para <b>${esc(e.apelido||e.nome||e.email||'esta pessoa')}</b>? Ela passa a ver finanças, contratos, equipe e configurações.`,()=>tornarDona(id))},
  removerDona:t=>confirmar('Remover o acesso de proprietária desta conta? Ela deixará de entrar no sistema até receber um perfil.',()=>removerDona(t.dataset.id)),
+ servSug:async()=>{await servicosSugeridos();const f=$('#fLk')||$('#fAg');if(f){const sel=f.querySelector('#lkServ,#aServ');if(sel){const v=sel.value;sel.innerHTML=optServ('')+(sel.id==='lkServ'?'<option value="__outro">Outro: digitar o nome</option>':'');sel.value=v==='__outro'?'':v;sel.dispatchEvent(new Event('change'))}const al=f.querySelector('.alert.warn');if(al&&/Nenhum serviço/.test(al.textContent))al.remove()}},
  folgaRem:t=>{const i=+t.dataset.i;const f=[...(pub().folgas||[])];f.splice(i,1);save('publico','config',{...pub(),folgas:f});toast('Bloqueio removido')},
  novoCat:()=>formCatalogo(),editCat:t=>pode('catalogoEdit')?formCatalogo(t.dataset.id):verCatalogo(t.dataset.id),
  copiarCatalogo:()=>copiar(urlPublica('catalogo'),'Link do catálogo copiado'),
