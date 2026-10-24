@@ -1,6 +1,6 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, onSnapshot, setDoc, deleteDoc, getDoc, query, where } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, onSnapshot, setDoc, deleteDoc, getDoc, updateDoc, query, where, Timestamp, arrayUnion, arrayRemove, deleteField } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 import { firebaseConfig } from './firebase-config.js';
 /* Stéfany Medeiros Trancista · sistema de gestão (Firebase) */
 /* ================= utilidades ================= */
@@ -84,7 +84,7 @@ const NIVEIS={
  nova:{n:'Nova',c:'var(--lv-nova)',min:-1,b:'Boas-vindas: 5% na segunda visita.'}
 };
 const PAPEIS={owner:'Proprietária',parceira:'Trancista parceira',recepcao:'Recepção',contador:'Contador(a)'};
-const DEF_PUB={nome:'Stéfany Medeiros Trancista',responsavel:'Stéfany Medeiros',cnpj:'',municipio:'Serra - ES',endereco:'',whatsapp:'',abre:'08:00',fecha:'20:00',descAniv:10,started:false};
+const DEF_PUB={nome:'Stéfany Medeiros Trancista',responsavel:'Stéfany Medeiros',cnpj:'',municipio:'Serra - ES',endereco:'',whatsapp:'',abre:'08:00',fecha:'20:00',dias:[1,2,3,4,5,6],intervaloIni:'',intervaloFim:'',folgas:[],instagram:'',descAniv:10,started:false};
 const DEF_PRIV={das:86.05,limite:81000,inicioMei:'',meta:4000,dasPagos:{},taxaDebito:1.99,taxaCredito:4.98,taxaParcelado:9.9};
 const ANAM_Q=[
  ['couro','Sente sensibilidade ou dor no couro cabeludo?'],
@@ -99,15 +99,15 @@ const ANAM_Q=[
 ];
 
 /* ================= armazenamento (Firestore) e perfis ================= */
-const ALL_COLS=['clientes','servicos','agenda','estoque','pacotes','vales','espera','anamneses','aceites','ideias','publico','equipe','pedidos','lancamentos','contas','privado'];
+const ALL_COLS=['clientes','servicos','agenda','estoque','pacotes','vales','espera','anamneses','aceites','ideias','publico','equipe','pedidos','lancamentos','contas','privado','catalogo','contratosLink','solicitacoes'];
 const COLS_POR_PAPEL={
   owner:ALL_COLS,
-  parceira:['clientes','servicos','agenda','estoque','pacotes','vales','espera','anamneses','aceites','ideias','publico'],
-  recepcao:['clientes','servicos','agenda','pacotes','vales','espera','aceites','ideias','publico'],
+  parceira:['clientes','servicos','agenda','estoque','pacotes','vales','espera','anamneses','aceites','ideias','publico','catalogo','contratosLink','solicitacoes'],
+  recepcao:['clientes','servicos','agenda','pacotes','vales','espera','aceites','ideias','publico','catalogo','contratosLink','solicitacoes'],
   contador:['servicos','agenda','pacotes','vales','publico','lancamentos','contas','privado']
 };
 const S={};ALL_COLS.forEach(c=>S[c]=new Map());
-let MODE='db',ROLE='carregando',ME=null,EMAIL='',APP=null,AUTH=null,FS=null;
+let MODE='db',ROLE='carregando',ME=null,EMAIL='',APP=null,AUTH=null,FS=null,ACESSO=null;const ctl={acesso:null,equipe:null};
 let NEED=new Set();const loaded=new Set();const unsubs=[];
 let DATAV=0;const MEMO=new Map();
 const memo=(k,fn)=>{const m=MEMO.get(k);if(m&&m.v===DATAV)return m.r;const r=fn();MEMO.set(k,{v:DATAV,r});return r};
@@ -118,7 +118,8 @@ function pode(f){const own=isOwner(),r=ROLE;
     case 'fin':return own||r==='contador';
     case 'finEdit':case 'custos':case 'equipe':case 'politicaEdit':case 'precos':case 'seed':return own;
     case 'anamnese':case 'estoque':return own||r==='parceira';
-    case 'contratos':case 'base':return own||r==='parceira'||r==='recepcao';
+    case 'contratos':case 'base':case 'portal':return own||r==='parceira'||r==='recepcao';
+    case 'catalogoEdit':return own;
     default:return own;
   }}
 const pub=()=>({...DEF_PUB,...(S.publico.get('config')||{})});
@@ -138,19 +139,31 @@ async function pool(tasks,n=8){const q=[...tasks];const run=async()=>{while(q.le
 function dbErr(e){const c=e&&e.code;toast(c==='permission-denied'?'Seu perfil não tem permissão para esta alteração.':c==='resource-exhausted'?'Limite diário do plano gratuito atingido. Tente amanhã ou mude de plano.':'Não foi possível salvar. Verifique a internet e tente de novo.','erro');console.error(e)}
 function touch(){DATAV++;schedule()}
 
-function pararTudo(){unsubs.splice(0).forEach(u=>{try{u()}catch(e){}});loaded.clear();ALL_COLS.forEach(c=>S[c]=new Map());NEED=new Set()}
+function pararDados(){unsubs.splice(0).forEach(u=>{try{u()}catch(e){}});loaded.clear();ALL_COLS.forEach(c=>S[c]=new Map());NEED=new Set()}
+function pararTudo(){pararDados();['acesso','equipe'].forEach(k=>{if(ctl[k]){try{ctl[k]()}catch(e){}ctl[k]=null}});ACESSO=null}
 function subscribe(cols){
   NEED=new Set(cols);
   cols.forEach(c=>{
     let q=collection(FS,c);
     if(c==='aceites'&&ROLE==='recepcao')q=query(q,where('tipo','in',['servico','politica']));
-    const u=onSnapshot(q,snap=>{const m=new Map();snap.docs.forEach(d=>m.set(d.id,{id:d.id,...d.data()}));S[c]=m;loaded.add(c);touch()},
+    if(c==='contratosLink')q=query(q,where('criadoEm','>=',addDays(today(),-120)));
+    const u=onSnapshot(q,snap=>{const m=new Map();snap.docs.forEach(d=>m.set(d.id,{id:d.id,...d.data()}));S[c]=m;loaded.add(c);touch();agendaProcessar()},
       err=>{console.error(c,err);loaded.add(c);touch();if(err.code==='permission-denied')toast('Seu acesso mudou. Entre novamente.')});
     unsubs.push(u);
   });
 }
 const configPendente=()=>!firebaseConfig||!firebaseConfig.apiKey||/COLE|SUA_/i.test(firebaseConfig.apiKey);
 
+function virarPapel(papel){if(ROLE===papel)return;pararDados();ROLE=papel;if(COLS_POR_PAPEL[papel]){if(!visiveis().some(v=>v[0]===UI.view))UI.view=visiveis()[0][0];subscribe(COLS_POR_PAPEL[papel])}render()}
+function vigiarEquipe(user){
+  if(ctl.equipe)return;
+  ctl.equipe=onSnapshot(doc(FS,'equipe',ME),s=>{
+    if(ROLE==='owner')return;
+    const d=s.exists()?s.data():null;const papel=d&&d.ativo!==false&&COLS_POR_PAPEL[d.papel]&&d.papel!=='owner'?d.papel:null;
+    if(papel)virarPapel(papel);
+    else if(ROLE!=='pendente'){virarPapel('pendente');setDoc(doc(FS,'pedidos',ME),{email:EMAIL,nome:user.displayName||'',pedidoEm:nowIso()}).catch(()=>{})}
+  },()=>virarPapel('pendente'));
+}
 async function boot(){
   $('#loadMark').innerHTML=braidMark(56,true);
   if(configPendente()){ROLE='config';render();return}
@@ -162,24 +175,27 @@ async function boot(){
     pararTudo();
     if(!user){ME=null;EMAIL='';ROLE='login';render();return}
     ME=user.uid;EMAIL=user.email||'';ROLE='carregando';render();
-    let acesso=null;
-    try{const s=await getDoc(doc(FS,'sistema','acesso'));acesso=s.exists()?s.data():null}catch(e){ROLE='erro';render();return}
-    if(!acesso){ROLE='primeiro';render();return}
-    if((acesso.donas||[]).includes(ME)){ROLE='owner';subscribe(COLS_POR_PAPEL.owner);return}
-    const u=onSnapshot(doc(FS,'equipe',ME),s=>{
-      const d=s.exists()?s.data():null;const papel=d&&d.ativo!==false&&COLS_POR_PAPEL[d.papel]&&d.papel!=='owner'?d.papel:null;
-      if(papel&&ROLE!==papel){const keep=unsubs.splice(0,1);pararTudo();unsubs.push(...keep);ROLE=papel;UI.view=visiveis()[0][0];subscribe(COLS_POR_PAPEL[papel])}
-      else if(!papel&&ROLE!=='pendente'){const keep=unsubs.splice(0,1);pararTudo();unsubs.push(...keep);ROLE='pendente';
-        setDoc(doc(FS,'pedidos',ME),{email:EMAIL,nome:user.displayName||'',pedidoEm:nowIso()}).catch(()=>{});render()}
-    },()=>{ROLE='pendente';render()});
-    unsubs.unshift(u);
+    ctl.acesso=onSnapshot(doc(FS,'sistema','acesso'),s=>{
+      ACESSO=s.exists()?s.data():null;
+      if(!ACESSO){if(ctl.equipe){ctl.equipe();ctl.equipe=null}virarPapel('primeiro');return}
+      const dona=(ACESSO.donas||[]).includes(ME);
+      if(dona){if(ctl.equipe){ctl.equipe();ctl.equipe=null}virarPapel('owner');
+        const info=(ACESSO.donasInfo||{})[ME];if(!info||info.email!==EMAIL)updateDoc(doc(FS,'sistema','acesso'),{['donasInfo.'+ME]:{email:EMAIL,nome:(info&&info.nome)||user.displayName||''}}).catch(()=>{});
+        touch()}
+      else{if(ROLE==='owner'||ROLE==='carregando'||ROLE==='primeiro'){if(ROLE==='owner'){pararDados();ROLE='carregando'}vigiarEquipe(user)}touch()}
+    },err=>{console.error(err);ROLE='erro';render()});
   });
 }
-async function virarDona(){try{await setDoc(doc(FS,'sistema','acesso'),{donas:[ME],criadoEm:nowIso()});ROLE='owner';subscribe(COLS_POR_PAPEL.owner);toast('Pronto! Esta conta é a proprietária.')}
-  catch(e){toast('Não foi possível. Outra conta já é a proprietária.');console.error(e)}}
+async function virarDona(){try{await setDoc(doc(FS,'sistema','acesso'),{donas:[ME],donasInfo:{[ME]:{email:EMAIL,nome:''}},criadoEm:nowIso()});toast('Pronto! Esta conta é a proprietária.')}
+  catch(e){toast('Não foi possível. Outra conta já é a proprietária.','erro');console.error(e)}}
+async function tornarDona(u){const e=S.equipe.get(u)||{},p=S.pedidos.get(u)||{};
+  try{await updateDoc(doc(FS,'sistema','acesso'),{donas:arrayUnion(u),['donasInfo.'+u]:{email:e.email||p.email||'',nome:e.apelido||p.nome||''}});
+    if(S.equipe.has(u))await del('equipe',u);if(S.pedidos.has(u))await del('pedidos',u);toast('Acesso de proprietária liberado')}catch(err){dbErr(err)}}
+async function removerDona(u){const ds=(ACESSO&&ACESSO.donas)||[];if(u===ME){toast('Você não pode remover o seu próprio acesso.','erro');return}if(ds.length<2){toast('O sistema precisa de pelo menos uma proprietária.','erro');return}
+  try{await updateDoc(doc(FS,'sistema','acesso'),{donas:arrayRemove(u),['donasInfo.'+u]:deleteField()});toast('Acesso de proprietária removido')}catch(err){dbErr(err)}}
 
 /* nomes da equipe */
-function nomePessoa(id){if(!id)return '';if(id===ME)return isOwner()?'Você':'Você';
+function nomePessoa(id){if(!id)return '';if(id===ME)return 'Você';if(id==='link')return 'Cliente, pelo link';const di=ACESSO&&ACESSO.donasInfo&&ACESSO.donasInfo[id];if(di)return di.nome||di.email||'Proprietária';
   const e=S.equipe.get(id);if(e&&(e.apelido||e.email))return e.apelido||e.email;const p=S.pedidos.get(id);if(p)return p.nome||p.email;
   return isOwner()?'Proprietária ou equipe':'Pessoa da equipe'}
 
@@ -250,11 +266,17 @@ const valeAtivo=v=>valeSaldo(v)>0&&(!v.validade||v.validade>=today())&&(v.pagame
 function novoCodigo(){const a='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';let s='SM-';for(let i=0;i<5;i++)s+=a[Math.floor(Math.random()*a.length)];return s}
 
 /* horários livres */
-function livresDia(d,minDur=60){const c=pub();let cur=hm2min(c.abre);const fim=hm2min(c.fecha);const out=[];
+const diasTrabalho=()=>{const d=pub().dias;return Array.isArray(d)&&d.length?d:[1,2,3,4,5,6]};
+function folgaDe(d){return (pub().folgas||[]).find(f=>d>=f.ini&&d<=(f.fim||f.ini))}
+function diaFechado(d){if(!diasTrabalho().includes(parse(d).getDay()))return 'Dia sem atendimento';const f=folgaDe(d);return f?(f.motivo||'Agenda bloqueada'):''}
+function intervalo(){const pb=pub();if(!pb.intervaloIni||!pb.intervaloFim)return null;const a=hm2min(pb.intervaloIni),b=hm2min(pb.intervaloFim);return b>a?[a,b]:null}
+function livresDia(d,minDur=60){const c=pub();if(diaFechado(d))return [];let cur=hm2min(c.abre);const fim=hm2min(c.fecha);const out=[];
+  if(d<today())return [];
   if(d===today()){const n=new Date();cur=Math.max(cur,Math.ceil((n.getHours()*60+n.getMinutes())/30)*30)}
-  arr('agenda').filter(a=>a.data===d&&a.status!=='cancelado'&&a.status!=='faltou').sort((a,b)=>a.hora<b.hora?-1:1)
-   .forEach(a=>{const s=hm2min(a.hora);if(s-cur>=minDur)out.push([cur,s]);cur=Math.max(cur,s+(+a.duracao||120))});
-  if(fim-cur>=minDur)out.push([cur,fim]);return out}
+  const ocup=arr('agenda').filter(a=>a.data===d&&a.status!=='cancelado'&&a.status!=='faltou').map(a=>{const s=hm2min(a.hora);return [s,s+(+a.duracao||120)]});
+  const iv=intervalo();if(iv)ocup.push(iv);
+  ocup.sort((a,b)=>a[0]-b[0]).forEach(([s,e])=>{if(s-cur>=minDur)out.push([cur,Math.min(s,fim)]);cur=Math.max(cur,e)});
+  if(fim-cur>=minDur)out.push([cur,fim]);return out.filter(([a,b])=>b-a>=minDur)}
 
 /* anamnese */
 const anamDe=cid=>S.anamneses.get(cid);
@@ -339,12 +361,12 @@ const linha=v=>v?esc(v):'______________________';
 function docServico(cli,ag){
   const P=pol(),pb=pub(),V=k=>polV(P,k,pb);const s=ag?S.servicos.get(ag.servicoId):null;
   const valor=ag?+ag.valor||0:0;const sinal=valor*(+P.campos.sinalPct||0)/100;
-  return `<article class="doc"><h1>Contrato de Prestação de Serviços de Tranças</h1><div class="sub">Política versão ${P.versao||'—'}${P.atualizadaEm?` · atualizada em ${dataBR(P.atualizadaEm.slice(0,10))}`:''}</div>
+  return `<article class="doc"><h1>Contrato de Prestação de Serviços de Tranças</h1>${P.versao?`<div class="sub">Política versão ${P.versao}${P.atualizadaEm?` · atualizada em ${dataBR(P.atualizadaEm.slice(0,10))}`:''}</div>`:''}
   <h2>Partes</h2>
   <p><b>CONTRATADA:</b> ${esc(pb.responsavel||pb.nome)}, microempreendedora individual, nome empresarial ${esc(pb.nome)}, CNPJ ${linha(pb.cnpj)}, com endereço em ${linha(pb.endereco||pb.municipio)}, WhatsApp ${linha(pb.whatsapp)}.</p>
   <p><b>CONTRATANTE:</b> ${linha(cli?.nome)}, CPF ${linha(cli?.cpf)}, telefone ${linha(cli?.telefone)}.</p>
   <h2>Cláusula 1 – Objeto</h2>
-  <p>Prestação do serviço de <b>${linha(s?.nome)}</b>, na data ${ag?`<b>${dataExt(ag.data)}</b>, às <b>${esc(ag.hora)}</b>`:'______________'}, com duração estimada de ${s?durTxt(ag.duracao||s.duracao):'____'}, ${pb.endereco?`no endereço ${esc(pb.endereco)}`:'no local combinado entre as partes'}.</p>
+  <p>Prestação do serviço de <b>${linha(s?.nome)}</b>, na data ${ag&&ag.data?`<b>${dataExt(ag.data)}</b>${ag.hora?`, às <b>${esc(ag.hora)}</b>`:''}`:'a combinar entre as partes'}, com duração estimada de ${s?durTxt(ag.duracao||s.duracao):'____'}, ${pb.endereco?`no endereço ${esc(pb.endereco)}`:'no local combinado entre as partes'}.</p>
   <h2>Cláusula 2 – Preço e pagamento</h2>
   <p>2.1. O valor total do serviço é de <b>${ag?BRL(valor):'R$ ________'}</b>. Para reservar o horário, a CONTRATANTE paga sinal de ${V('sinalPct')}% (${ag?BRL(sinal):'R$ ______'}), que será abatido do valor final.</p>
   <p>2.2. Formas aceitas: Pix, dinheiro e cartões de débito e crédito. O parcelamento no cartão de crédito é possível em até ${V('parcelas')} vezes para serviços a partir de R$ ${V('parcelaMin')}, ${V('jurosParc')}.</p>
@@ -434,8 +456,8 @@ function docPolitica(){
 async function hashTexto(t){try{const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(t));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('').slice(0,16)}catch(e){return ''}}
 
 /* ================= interface: casca ================= */
-const UI={view:'inicio',agDia:today(),calMes:ym(today()),calDia:today(),finTab:'visao',finMes:ym(today()),lanTipo:'todos',cliBusca:'',cliNivel:'todos',cliOrd:'score',ctTab:'emitir',ctTipo:'servico',ctCli:'',ctAg:'',acFiltro:'todos',pkTab:'pacotes',relPer:6,lastView:null};
-const VIEWS=[['inicio','Início','home',()=>pode('base')],['agenda','Agenda','cal',()=>pode('base')],['clientes','Clientes','users',()=>pode('base')],['financeiro','Finanças','wallet',()=>pode('fin')],['contratos','Contratos','file',()=>pode('contratos')],['pacotes','Pacotes e vales','ticket',()=>pode('base')],['estoque','Estoque','box',()=>pode('estoque')],['calendario','Datas e ideias','spark',()=>pode('base')],['ajustes','Ajustes','gear',()=>true]];
+const UI={view:'inicio',agDia:today(),calMes:ym(today()),calDia:today(),finTab:'visao',finMes:ym(today()),lanTipo:'todos',cliBusca:'',cliNivel:'todos',cliOrd:'score',ctTab:'links',ctTipo:'servico',ctCli:'',ctAg:'',acFiltro:'todos',pkTab:'pacotes',relPer:6,lastView:null};
+const VIEWS=[['inicio','Início','home',()=>pode('base')],['agenda','Agenda','cal',()=>pode('base')],['clientes','Clientes','users',()=>pode('base')],['catalogo','Catálogo','image',()=>pode('base')],['financeiro','Finanças','wallet',()=>pode('fin')],['contratos','Contratos','file',()=>pode('contratos')],['pacotes','Pacotes e vales','ticket',()=>pode('base')],['estoque','Estoque','box',()=>pode('estoque')],['calendario','Datas e ideias','spark',()=>pode('base')],['ajustes','Ajustes','gear',()=>true]];
 const visiveis=()=>VIEWS.filter(v=>v[3]());
 let rq=0;function schedule(){if(rq)return;rq=requestAnimationFrame(()=>{rq=0;render()})}
 function go(v){if(!visiveis().some(x=>x[0]===v))v=visiveis()[0][0];UI.view=v;try{history.replaceState(null,'','#'+v)}catch(e){}window.scrollTo({top:0,behavior:'smooth'});closeSheet(true);render()}
@@ -457,7 +479,7 @@ function render(){
   if(ROLE==='carregando'||[...NEED].some(c=>!loaded.has(c))){if(!$('#loadMark')){main.innerHTML=`<div class="sk-wrap" aria-busy="true" aria-label="Carregando"><div id="loadMark" class="row" style="gap:12px">${braidMark(40,true)}<div class="sk" style="width:180px;height:28px"></div></div><div class="sk" style="height:96px"></div><div class="kpis">${'<div class="sk" style="height:84px"></div>'.repeat(4)}</div><div class="grid g2"><div class="sk" style="height:220px"></div><div class="sk" style="height:220px"></div></div></div>`}return}
   if(!visiveis().some(v=>v[0]===UI.view))UI.view=visiveis()[0][0];
   const top=shell();
-  const fn={inicio:vInicio,agenda:vAgenda,clientes:vClientes,financeiro:vFinanceiro,contratos:vContratos,pacotes:vPacotes,estoque:vEstoque,calendario:vCalendario,ajustes:vAjustes}[UI.view]||vInicio;
+  const fn={inicio:vInicio,agenda:vAgenda,clientes:vClientes,catalogo:vCatalogo,financeiro:vFinanceiro,contratos:vContratos,pacotes:vPacotes,estoque:vEstoque,calendario:vCalendario,ajustes:vAjustes}[UI.view]||vInicio;
   const changed=UI.lastView!==UI.view;UI.lastView=UI.view;const y=window.scrollY;
   const ae=document.activeElement;const aid=ae&&main.contains(ae)?ae.id:null;
   main.innerHTML=top+`<div class="stack ${changed?'enter':''}" id="view">${fn()}</div>`;
@@ -465,7 +487,7 @@ function render(){
   if(aid){const el=document.getElementById(aid);if(el&&el.focus)el.focus()}
   afterRender();
 }
-function afterRender(){const c=$('#sigPad');if(c&&!c.dataset.on)sigInit(c)}
+function afterRender(){const c=$('#sigPad');if(c&&!c.dataset.on)sigInit(c);carregaFotos()}
 function gate(){
   const card=(t,body)=>`<div class="gate"><div class="card stack" style="align-items:center;max-width:420px;width:100%">${braidMark(56)}<div><div class="brand-name" style="font-size:1.5rem">Stéfany Medeiros</div><div class="brand-sub">Trancista</div></div><h2 class="page-title" style="font-size:1.4rem">${t}</h2>${body}</div></div>`;
   if(ROLE==='config')return card('Falta configurar o Firebase',`<p class="muted" style="margin:0">Abra o arquivo <b>public/firebase-config.js</b> e cole os dados do seu projeto, como explicado no guia (LEIA-ME.md). Depois publique de novo.</p>`);
@@ -514,6 +536,7 @@ function vInicio(){
     <div class="kpi"><div class="l">Limite MEI ${ano}</div><div class="v">${pct(recAno/lim)}</div><div class="bar thin" style="margin-top:6px"><span style="width:${Math.min(100,recAno/lim*100)}%;background:${recAno/lim>.9?'var(--bad)':recAno/lim>.75?'var(--warn)':'var(--accent)'}"></span></div></div>
     <div class="kpi"><div class="l">A receber (30 dias)</div><div class="v">${cnt(soma(aReceber().filter(r=>r.data>=t&&r.data<=addDays(t,30)).map(r=>({valor:r.liquido}))))}</div><div class="d">cartões, já sem taxa</div></div></section>`}
   const amanha=arr('agenda').filter(a=>a.data===addDays(t,1)&&a.status==='agendado').sort((a,b)=>a.hora<b.hora?-1:1);
+  out+=avisosPortal();
   if(amanha.length)out+=`<section class="card"><h3>Confirmar amanhã <small>${amanha.length} sem confirmação</small></h3><div class="list">${amanha.map(confirmarRow).join('')}</div></section>`;
   const ret=retornos().slice(0,6);
   if(ret.length)out+=`<section class="card"><h3>Hora da manutenção ou retirada <small>sem horário marcado</small></h3><div class="list">${ret.map(retornoRow).join('')}</div><p class="small muted" style="margin-bottom:0">Baseado no tempo máximo recomendado na política (${pol().campos.semanasMax} semanas).</p></section>`;
@@ -545,10 +568,10 @@ function vAgenda(){
   let out=head('Agenda',esc(cap(dataLonga(d))),`${ativos.length} atendimento${ativos.length===1?'':'s'} · previsto ${BRL(soma(ativos))}`,
    `<button class="icon-btn" data-act="agNav" data-n="-7" aria-label="Semana anterior">${ic('left')}</button><button class="btn sm soft" data-act="agHoje">Hoje</button><button class="icon-btn" data-act="agNav" data-n="7" aria-label="Próxima semana">${ic('right')}</button><button class="btn soft" data-act="divulgar">${ic('image')}Divulgar</button><button class="btn primary" data-act="novoAg">${ic('plus')}Agendar</button>`);
   out+=`<div class="week">${dias.map(x=>{const n=ag.filter(a=>a.data===x&&a.status!=='cancelado').length;const dd=parse(x);
-    return `<button class="day ${x===t?'today':''}" data-act="agDia" data-d="${x}" aria-pressed="${x===d}"><span class="w">${SEM[dd.getDay()]}</span><span class="n">${dd.getDate()}</span><span class="c">${'<i></i>'.repeat(Math.min(n,4))}</span></button>`}).join('')}</div>`;
+    const fe=diaFechado(x);return `<button class="day ${x===t?'today':''} ${fe?'fechado':''}" data-act="agDia" data-d="${x}" aria-pressed="${x===d}" title="${esc(fe)}"><span class="w">${SEM[dd.getDay()]}</span><span class="n">${dd.getDate()}</span><span class="c">${fe&&!n?'<span class="fx">fechado</span>':'<i></i>'.repeat(Math.min(n,4))}</span></button>`}).join('')}</div>`;
   out+=`<section class="card" style="padding:14px 16px">${linhaTempo(d)}</section>`;
   out+=`<div class="grid g2"><section class="stack" style="gap:10px">${doDia.length?doDia.map(apptCard).join(''):`<div class="card empty">Nenhum atendimento neste dia.<br><button class="btn soft" style="margin-top:10px" data-act="novoAg" data-d="${d}">${ic('plus')}Marcar horário</button></div>`}</section>
-  <section class="stack"><div class="card"><h3>Horários livres <small>${esc(pb.abre)}–${esc(pb.fecha)}</small></h3>${livres.length?`<div class="row">${livres.map(([a,b])=>`<button class="free" data-act="novoAg" data-d="${d}" data-h="${min2hm(a)}">${min2hm(a)} às ${min2hm(b)}</button>`).join('')}</div>`:`<div class="empty">Dia cheio.</div>`}</div>
+  <section class="stack"><div class="card"><h3>Horários livres <small>${esc(pb.abre)}–${esc(pb.fecha)}${intervalo()?` · pausa ${esc(pb.intervaloIni)}–${esc(pb.intervaloFim)}`:''}</small></h3>${diaFechado(d)?`<div class="empty">${esc(diaFechado(d))}.<br><button class="btn sm ghost" style="margin-top:6px" data-act="novoAg" data-d="${d}">Agendar mesmo assim</button></div>`:d<today()?'<div class="empty">Dia que já passou.</div>':livres.length?`<div class="row">${livres.map(([a,b])=>`<button class="free" data-act="novoAg" data-d="${d}" data-h="${min2hm(a)}">${min2hm(a)} às ${min2hm(b)}</button>`).join('')}</div>`:`<div class="empty">Dia cheio.</div>`}</div>
   <div class="card"><h3>Lista de espera <button class="btn sm soft" data-act="novaEspera">${ic('plus')}Adicionar</button></h3>${esp.length?`<div class="list">${esp.map(esperaRow).join('')}</div><p class="small muted" style="margin-bottom:0">O botão Avisar já sugere o primeiro horário livre que comporta o serviço.</p>`:'<div class="empty">Ninguém aguardando. Quando a agenda lotar, anote aqui quem quer um encaixe.</div>'}</div>
   <div class="card"><h3>Próximos 7 dias</h3><div class="list">${ag.filter(a=>a.data>d&&a.data<=addDays(d,7)&&a.status!=='cancelado').sort((a,b)=>(a.data+a.hora)<(b.data+b.hora)?-1:1).slice(0,6).map(a=>`<button class="item" data-act="agDia" data-d="${a.data}"><span class="time">${dataCurta(a.data)}</span><div class="grow"><div class="t">${esc(nomeCli(a.clienteId))}</div><div class="s">${esc(a.hora)} · ${esc(nomeServ(a.servicoId))}</div></div></button>`).join('')||'<div class="empty">Nada marcado.</div>'}</div></div></section></div>`;
   return out;
@@ -561,8 +584,8 @@ function apptCard(a){
   const anTag=pode('anamnese')?(!an?`<span class="badge warn">sem anamnese</span>`:anamVencida(an)?`<span class="badge warn">anamnese vencida</span>`:al.length?`<span class="badge bad" title="${esc(al.map(x=>x.q+(x.det?': '+x.det:'')).join(' | '))}">atenção: ${esc(al.map(x=>x.k==='alergia'?'alergia':x.k==='quimica'?'química recente':x.k==='couro'?'sensibilidade':x.k).join(', '))}</span>`:`<span class="badge good">anamnese ok</span>`):'';
   return `<article class="appt" style="--st:${st.c}"><div><div class="time">${esc(a.hora)}</div><div class="small muted num">${fim}</div></div>
    <div style="min-width:0"><div class="row between"><b>${esc(nomeCli(a.clienteId))}</b><span class="badge">${st.n}</span></div><div class="small muted">${esc(nomeServ(a.servicoId))} · ${a.pacoteId?'sessão de pacote':BRL(a.valor)}${pago?` · recebido ${BRL(pago)}`:''}</div>
-   <div class="row" style="gap:6px;margin-top:6px">${anTag}</div>${a.obs?`<div class="small" style="margin-top:4px">${esc(a.obs)}</div>`:''}</div>
-   <div class="actions">${aberto?`<button class="btn sm primary" data-act="concluir" data-id="${a.id}">${ic('check')}Concluir</button>`:''}${a.status==='agendado'?`<button class="btn sm soft" data-act="stAg" data-id="${a.id}" data-s="confirmado">Confirmada</button>`:''}${l&&aberto?`<a class="btn sm soft" href="${l}" target="_blank" rel="noopener">${ic('chat')}Lembrete</a>`:''}${a.status==='concluido'?`<button class="btn sm soft" data-act="recibo" data-id="${a.id}">${ic('receipt')}Recibo</button><button class="btn sm ghost" data-act="retorno" data-id="${a.id}">${ic('repeat')}Agendar retorno</button>`:''}<button class="btn sm ghost" data-act="editAg" data-id="${a.id}">${ic('edit')}Editar</button></div></article>`;
+   <div class="row" style="gap:6px;margin-top:6px">${anTag}${contratoTag(a)}${a.canceladoPor?`<span class="badge">cancelado pela cliente</span>`:''}</div>${a.obs?`<div class="small" style="margin-top:4px">${esc(a.obs)}</div>`:''}</div>
+   <div class="actions">${aberto?`<button class="btn sm primary" data-act="concluir" data-id="${a.id}">${ic('check')}Concluir</button>`:''}${a.status==='agendado'?`<button class="btn sm soft" data-act="stAg" data-id="${a.id}" data-s="confirmado">Confirmada</button>`:''}${l&&aberto?`<a class="btn sm soft" href="${l}" target="_blank" rel="noopener">${ic('chat')}Lembrete</a>`:''}${aberto&&!contratoDoAg(a.id)?`<button class="btn sm ghost" data-act="linkContrato" data-c="${a.clienteId}" data-a="${a.id}">${ic('file')}Enviar contrato</button>`:''}${a.status==='concluido'?`<button class="btn sm soft" data-act="recibo" data-id="${a.id}">${ic('receipt')}Recibo</button><button class="btn sm ghost" data-act="retorno" data-id="${a.id}">${ic('repeat')}Agendar retorno</button>`:''}<button class="btn sm ghost" data-act="editAg" data-id="${a.id}">${ic('edit')}Editar</button></div></article>`;
 }
 
 /* ================= CLIENTES ================= */
@@ -712,10 +735,10 @@ function finServ(){
 
 /* ================= CONTRATOS ================= */
 function vContratos(){
-  const tabs=[['emitir','Emitir documento'],['aceites','Aceites registrados'],['politica','Política da empresa']];const P=pol();
-  return head('Contratos','Contratos e <em>termos</em>',`Política versão ${P.versao||'—'}${P.pend?` · ${P.pend} itens a revisar`:' · revisada'}`)+
+  const tabs=[['links','Enviar por link'],['emitir','Emitir documento'],['aceites','Aceites registrados'],['politica','Política da empresa']];const P=pol();
+  return head('Contratos','Contratos e <em>termos</em>',`${P.versao?`Política versão ${P.versao}`:'Política ainda não salva'}${P.pend?` · ${P.pend} itens a revisar`:' · revisada'}`)+
   `<div class="alert info">${ic('shield')}<div>Os modelos seguem o Código de Defesa do Consumidor, o Código Civil e a LGPD, mas são um ponto de partida. <b>Peça a um(a) advogado(a) para revisar</b> antes de usar. Trechos em destaque amarelo ainda não foram revisados na política da empresa.</div></div>`+
-  `<div style="overflow-x:auto">${seg('ctTab',UI.ctTab,tabs)}</div>`+({emitir:ctEmitir,aceites:ctAceites,politica:ctPolitica}[UI.ctTab]||ctEmitir)();
+  `<div style="overflow-x:auto">${seg('ctTab',UI.ctTab,tabs)}</div>`+({links:ctLinks,emitir:ctEmitir,aceites:ctAceites,politica:ctPolitica}[UI.ctTab]||ctLinks)();
 }
 function ctTipos(){const t=[['servico','Contrato de serviço'],['politica','Política do ateliê']];if(pode('anamnese'))t.splice(1,0,['anamnese','Anamnese e consentimento']);return t}
 function ctEmitir(){
@@ -811,11 +834,14 @@ function vAjustes(){
    (pode('contratos')?`<section class="card"><h3>Política do ateliê</h3><button class="btn soft" data-act="ctTab" data-t="politica">${ic('file')}Abrir política</button></section>`:'');
   const pb=pub(),c=priv();const nEx=ALL_COLS.reduce((s,k)=>s+arr(k).filter(r=>r.exemplo).length,0);
   const ped=arr('pedidos'),eq=arr('equipe');
+  const donas=(ACESSO&&ACESSO.donas)||[];const dinfo=(ACESSO&&ACESSO.donasInfo)||{};
   return head('Ajustes','Seu <em>negócio</em>')+contaCard()+
-  `<section class="card"><h3>Equipe e acessos <small>${eq.filter(e=>e.ativo!==false).length} ativa(s)</small></h3>
+  `<section class="card"><h3>Proprietárias <small>${donas.length} com acesso total</small></h3><div class="list">${donas.map(u=>{const i=dinfo[u]||{};return `<div class="item"><div class="avatar" style="--lv:var(--lv-perola)">${ic('shield')}</div><div class="grow"><div class="t">${esc(i.nome||i.email||'Proprietária')}${u===ME?' <span class="badge">você</span>':''}</div><div class="s">${esc(i.email||'e-mail aparece no próximo acesso dela')}</div></div>${u!==ME&&donas.length>1?`<button class="btn sm ghost danger" data-act="removerDona" data-id="${u}">Remover</button>`:''}</div>`}).join('')}</div><p class="small muted" style="margin-bottom:0">Para dar acesso total a alguém da equipe, use "Tornar proprietária" na lista abaixo.</p></section>
+  ${folgasCard()}
+  <section class="card"><h3>Equipe e acessos <small>${eq.filter(e=>e.ativo!==false).length} ativa(s)</small></h3>
    <ol class="small muted" style="margin-top:0;padding-left:18px"><li>No <a href="https://console.firebase.google.com" target="_blank" rel="noopener">console do Firebase</a>, abra <b>Authentication › Usuários › Adicionar usuário</b> e crie o e-mail da pessoa com uma senha provisória.</li><li>Ela entra no sistema com esse e-mail e aparece aqui como pedido.</li><li>Você escolhe o perfil. As regras do servidor só liberam os dados daquele perfil.</li></ol>
-   ${ped.length?`<div class="eyebrow" style="margin:10px 0 4px">Pedidos de acesso</div><div class="list">${ped.map(p=>`<div class="item"><div class="avatar">${iniciais(p.nome||p.email)}</div><div class="grow"><div class="t">${esc(p.nome||p.email)}</div><div class="s">${esc(p.email)} · pediu em ${dataBR((p.pedidoEm||'').slice(0,10))}</div></div><button class="btn sm primary" data-act="aprovar" data-id="${p.id}">Definir perfil</button><button class="btn sm ghost danger" data-act="recusar" data-id="${p.id}">Recusar</button></div>`).join('')}</div>`:''}
-   ${eq.length?`<div class="eyebrow" style="margin:10px 0 4px">Equipe</div><div class="list">${eq.map(e=>`<div class="item"><div class="avatar">${iniciais(e.apelido||e.email)}</div><div class="grow"><div class="t">${esc(e.apelido||e.email)}</div><div class="s">${PAPEIS[e.papel]||e.papel}${e.ativo===false?' · desativada':''} · ${esc(e.email||'')}</div></div><button class="btn sm soft" data-act="aprovar" data-id="${e.id}">Alterar</button></div>`).join('')}</div>`:''}
+   ${ped.length?`<div class="eyebrow" style="margin:10px 0 4px">Pedidos de acesso</div><div class="list">${ped.map(p=>`<div class="item"><div class="avatar">${iniciais(p.nome||p.email)}</div><div class="grow"><div class="t">${esc(p.nome||p.email)}</div><div class="s">${esc(p.email)} · pediu em ${dataBR((p.pedidoEm||'').slice(0,10))}</div></div><button class="btn sm primary" data-act="aprovar" data-id="${p.id}">Definir perfil</button><button class="btn sm ghost" data-act="tornarDona" data-id="${p.id}">Tornar proprietária</button><button class="btn sm ghost danger" data-act="recusar" data-id="${p.id}">Recusar</button></div>`).join('')}</div>`:''}
+   ${eq.length?`<div class="eyebrow" style="margin:10px 0 4px">Equipe</div><div class="list">${eq.map(e=>`<div class="item"><div class="avatar">${iniciais(e.apelido||e.email)}</div><div class="grow"><div class="t">${esc(e.apelido||e.email)}</div><div class="s">${PAPEIS[e.papel]||e.papel}${e.ativo===false?' · desativada':''} · ${esc(e.email||'')}</div></div><button class="btn sm soft" data-act="aprovar" data-id="${e.id}">Alterar</button><button class="btn sm ghost" data-act="tornarDona" data-id="${e.id}">${ic('shield')}Tornar proprietária</button></div>`).join('')}</div>`:''}
    ${!ped.length&&!eq.length?'<div class="empty">Ninguém da equipe ainda.</div>':''}
    <details class="how" style="margin-top:10px"><summary>O que cada perfil acessa</summary><table>
     <tr><td><b>Proprietária</b></td><td>Tudo, incluindo finanças, contas, relatórios, política da empresa e equipe.</td></tr>
@@ -826,7 +852,10 @@ function vAjustes(){
   <form class="card form" id="fCfg"><h3>Dados do negócio</h3>
    <div class="f2"><label class="fld">Nome empresarial<input id="gNome" value="${esc(pb.nome)}"></label><label class="fld">Responsável<input id="gResp" value="${esc(pb.responsavel)}"></label><label class="fld">CNPJ<input id="gCnpj" inputmode="numeric" value="${esc(pb.cnpj)}" placeholder="00.000.000/0001-00"></label></div>
    <div class="f2"><label class="fld">Endereço do ateliê<input id="gEnd" value="${esc(pb.endereco)}"></label><label class="fld">Município<input id="gMun" value="${esc(pb.municipio)}"></label><label class="fld">WhatsApp do ateliê<input id="gWa" inputmode="tel" value="${esc(pb.whatsapp)}"></label></div>
-   <div class="f2"><label class="fld">Início do expediente<input id="gAbre" type="time" value="${esc(pb.abre)}"></label><label class="fld">Fim do expediente<input id="gFecha" type="time" value="${esc(pb.fecha)}"></label><label class="fld">Desconto de aniversário (%)<input id="gAniv" type="number" min="0" max="50" value="${pb.descAniv}"></label></div>
+   <h3 style="margin-top:8px">Horário de atendimento</h3>
+   <div><div class="small muted" style="margin-bottom:6px">Dias em que você atende</div><div class="chips" id="gDias">${SEM.map((n,i)=>`<button type="button" class="chip" data-dia="${i}" aria-pressed="${diasTrabalho().includes(i)}">${cap(n)}</button>`).join('')}</div></div>
+   <div class="f2"><label class="fld">Início do expediente<input id="gAbre" type="time" value="${esc(pb.abre)}"></label><label class="fld">Fim do expediente<input id="gFecha" type="time" value="${esc(pb.fecha)}"></label><label class="fld">Pausa (início)<input id="gIvI" type="time" value="${esc(pb.intervaloIni)}"></label><label class="fld">Pausa (fim)<input id="gIvF" type="time" value="${esc(pb.intervaloFim)}"></label></div>
+   <div class="f2"><label class="fld">Instagram do ateliê<input id="gIg" placeholder="@stefanytrancista" value="${esc(pb.instagram)}"></label><label class="fld">Desconto de aniversário (%)<input id="gAniv" type="number" min="0" max="50" value="${pb.descAniv}"></label></div>
    <h3 style="margin-top:8px">Finanças e MEI <small>visível só para você e a contabilidade</small></h3>
    <div class="f2"><label class="fld">Abertura do MEI<input id="gIni" type="month" value="${esc(c.inicioMei)}"></label><label class="fld">Limite anual (R$)<input id="gLim" type="number" step="0.01" value="${c.limite}"></label><label class="fld">Valor do DAS (R$)<input id="gDas" type="number" step="0.01" value="${c.das}"></label><label class="fld">Meta mensal (R$)<input id="gMeta" type="number" step="50" value="${c.meta}"></label></div>
    <div class="f2"><label class="fld">Taxa débito (%)<input id="gTd" type="number" step="0.01" value="${c.taxaDebito}"></label><label class="fld">Taxa crédito à vista (%)<input id="gTc" type="number" step="0.01" value="${c.taxaCredito}"></label><label class="fld">Taxa crédito parcelado (%)<input id="gTp" type="number" step="0.01" value="${c.taxaParcelado}"></label></div>
@@ -876,7 +905,8 @@ function abrirCliente(id){
    <div class="small">${c.telefone?`<div><b>Telefone:</b> ${esc(c.telefone)}</div>`:''}${c.cpf?`<div><b>CPF:</b> ${esc(c.cpf)}</div>`:''}${c.instagram?`<div><b>Instagram:</b> ${esc(c.instagram)}</div>`:''}${c.aniversario?`<div><b>Aniversário:</b> ${dataCurta(c.aniversario)}</div>`:''}${c.cabelo?`<div><b>Cabelo:</b> ${esc(c.cabelo)}</div>`:''}${c.origem?`<div><b>Como conheceu:</b> ${esc(c.origem)}</div>`:''}${ind?`<div><b>Indicada por:</b> ${esc(ind.nome)}</div>`:''}${f.ind?`<div><b>Indicou:</b> ${f.ind} cliente${f.ind>1?'s':''}</div>`:''}${c.obs?`<div><b>Notas:</b> ${esc(c.obs)}</div>`:''}</div>
    ${pks.length?`<div class="small"><b>Pacotes ativos:</b> ${pks.map(p=>`${esc(p.nome)} (${pacoteSaldo(p)} sessão(ões) disponível(is))`).join(', ')}</div>`:''}
    ${acs.length?`<div class="small"><b>Documentos aceitos:</b> ${acs.map(a=>`${a.tipo==='servico'?'contrato':a.tipo} em ${dataBR(a.aceitoEm.slice(0,10))}`).join(', ')}</div>`:''}
-   <div class="row"><button class="btn primary" data-act="novoAg" data-c="${id}">${ic('cal')}Agendar</button>${l?`<a class="btn soft" href="${l}" target="_blank" rel="noopener">${ic('chat')}WhatsApp</a>`:''}<button class="btn soft" data-act="docCli" data-id="${id}">${ic('file')}Contrato</button><button class="btn ghost" data-act="editCli" data-id="${id}">${ic('edit')}Editar</button></div>
+   ${pode('portal')?portalBloco(c):''}
+   <div class="row"><button class="btn primary" data-act="novoAg" data-c="${id}">${ic('cal')}Agendar</button>${l?`<a class="btn soft" href="${l}" target="_blank" rel="noopener">${ic('chat')}WhatsApp</a>`:''}<button class="btn soft" data-act="linkContrato" data-c="${id}">${ic('file')}Enviar contrato</button><button class="btn ghost" data-act="editCli" data-id="${id}">${ic('edit')}Editar</button></div>
    <div><div class="eyebrow" style="margin-bottom:6px">Histórico</div>${hist.length?`<div class="list">${hist.map(a=>`<div class="item"><span class="time">${dataCurta(a.data)}</span><div class="grow"><div class="t">${esc(nomeServ(a.servicoId))}</div><div class="s">${a.data.slice(0,4)} · ${a.pacoteId?'pacote':BRL(a.valor)}</div></div><span class="badge">${STATUS[a.status]?.n||''}</span></div>`).join('')}</div>`:'<div class="empty">Sem atendimentos ainda.</div>'}</div></div>`);
 }
 function formCliente(id){
@@ -975,7 +1005,11 @@ function formAgenda(id,pre={}){
   srv.onchange=()=>{const s=S.servicos.get(srv.value);if(s){$('#aVal').value=s.preco;$('#aDur').value=s.duracao}sinalSug();checkConf()};$('#aVal').oninput=sinalSug;sinalSug();
   const checkConf=()=>{const d=$('#aData').value,h=hm2min($('#aHora').value),du=+$('#aDur').value||120;
     const c=arr('agenda').filter(x=>x.id!==id&&x.data===d&&x.status!=='cancelado'&&x.status!=='faltou'&&hm2min(x.hora)<h+du&&h<hm2min(x.hora)+(+x.duracao||120));
-    $('#aConf').innerHTML=c.length?`<div class="alert warn">${ic('alert')}<div>Conflita com ${c.map(x=>`${esc(nomeCli(x.clienteId))} (${x.hora})`).join(', ')}.</div></div>`:''};
+    const av=[];if(c.length)av.push(`Conflita com ${c.map(x=>`${esc(nomeCli(x.clienteId))} (${x.hora})`).join(', ')}.`);
+    const fe=d&&diaFechado(d);if(fe)av.push(`${esc(fe)} neste dia.`);const pb=pub();
+    if(!fe&&(h<hm2min(pb.abre)||h+du>hm2min(pb.fecha)))av.push(`Fora do expediente (${esc(pb.abre)}–${esc(pb.fecha)}).`);
+    const iv=intervalo();if(!fe&&iv&&h<iv[1]&&h+du>iv[0])av.push(`Passa pela pausa das ${esc(pb.intervaloIni)} às ${esc(pb.intervaloFim)}.`);
+    $('#aConf').innerHTML=av.length?`<div class="alert warn">${ic('alert')}<div>${av.join('<br>')}</div></div>`:''};
   ['aData','aHora','aDur'].forEach(i=>$('#'+i).addEventListener('change',checkConf));checkConf();if(!id&&pre.s)srv.onchange();
   $('#fAg').onsubmit=async e=>{e.preventDefault();let cid=sel.value;
     if(cid==='__nova'){const n=$('#aNovaNome').value.trim();if(!n){toast('Informe o nome da nova cliente');return}cid=await save('clientes',null,{nome:n,telefone:$('#aNovaTel').value.trim(),criadoEm:today()})}
@@ -1228,6 +1262,8 @@ async function seed(ex){
     ops.push(['ideias',uid(),{titulo:'Sorteio de uma manutenção no Instagram',tipo:'Promoção',data:addDays(t,10),notas:'Regra: seguir, curtir e marcar 2 amigas.',...X}]);
     ops.push(['ideias',uid(),{titulo:'Parceria com loja de acessórios para tranças',tipo:'Parceria',data:'',notas:'Cupom cruzado: minhas clientes ganham 10% na loja.',...X}]);
   }
+  if(ex){[['Box braids','4 a 6 horas','Tranças soltas e versáteis, do comprimento que você escolher. Duram de 6 a 8 semanas com os cuidados certos.','Tranças soltas',280],['Nagô','1 a 2 horas','Tranças rentes ao couro cabeludo, em desenhos retos ou criativos. Ótimas para o dia a dia e para o calor.','Nagô',120],['Fulani braids','4 a 5 horas','Combinação de nagô na frente com tranças soltas atrás, com miçangas e anéis.','Tranças soltas',260]]
+      .forEach(([nome,tempo,descricao,categoria,preco],i)=>ops.push(['catalogo',uid(),{nome,tempo,descricao,categoria,preco,mostrarPreco:true,link:'',botao:'Quero este modelo',ativo:true,ordem:i,fotos:[],exemplo:true}]))}
   ops.push(['publico','config',{...pub(),started:true}]);
   ops.push(['privado','config',{...priv(),dasPagos:pagos}]);
   ops.forEach(([c,id,d])=>{S[c].set(id,{id,...d})});touch();
@@ -1329,7 +1365,8 @@ function linhaTempo(d){const pb=pub();const ini=hm2min(pb.abre),fim=Math.max(ini
   const agora=new Date();const nm=agora.getHours()*60+agora.getMinutes();const mostraAgora=d===today()&&nm>=ini&&nm<=fim;
   const blocos=ags.map(a=>{const s=hm2min(a.hora),e=s+(+a.duracao||120);const st=STATUS[a.status]||STATUS.agendado;
     return `<button class="tl-b" data-act="agDia" data-d="${a.data}" style="left:${pos(s)}%;width:${Math.max(2,pos(e)-pos(s))}%;--st:${st.c}" title="${esc(a.hora)} · ${esc(nomeCli(a.clienteId))} · ${esc(nomeServ(a.servicoId))}"><span>${esc(primeiro(nomeCli(a.clienteId)))}</span></button>`}).join('');
-  return `<div class="tl" role="img" aria-label="Linha do tempo de ${esc(dataLonga(d))}"><div class="tl-track">${blocos}${mostraAgora?`<i class="tl-now" style="left:${pos(nm)}%"><b>agora</b></i>`:''}</div><div class="tl-h">${horas.map(h=>`<span style="left:${pos(h*60)}%">${pad(h)}h</span>`).join('')}</div></div>`}
+  const iv=intervalo();const pausa=iv?`<i class="tl-pausa" style="left:${pos(iv[0])}%;width:${pos(iv[1])-pos(iv[0])}%" title="Pausa"></i>`:'';const fe=diaFechado(d);
+  return `<div class="tl ${fe?'tl-fechado':''}" role="img" aria-label="Linha do tempo de ${esc(dataLonga(d))}"><div class="tl-track">${pausa}${fe&&!ags.length?`<span class="tl-msg">${esc(fe)}</span>`:''}${blocos}${mostraAgora?`<i class="tl-now" style="left:${pos(nm)}%"><b>agora</b></i>`:''}</div><div class="tl-h">${horas.map(h=>`<span style="left:${pos(h*60)}%">${pad(h)}h</span>`).join('')}</div></div>`}
 
 /* fechar folha arrastando para baixo (celular) */
 (function(){let y0=null,dy=0,el=null;
@@ -1337,6 +1374,191 @@ function linhaTempo(d){const pb=pub();const ini=hm2min(pb.abre),fim=Math.max(ini
   document.addEventListener('touchmove',e=>{if(y0==null||!el)return;dy=e.touches[0].clientY-y0;if(dy>0){el.style.transform=`translateY(${dy}px)`;el.style.transition='none'}},{passive:true});
   document.addEventListener('touchend',()=>{if(!el)return;el.style.transition='';if(dy>110){closeSheet()}else{el.style.transform=''}y0=null;el=null;dy=0});
 })();
+
+
+/* ================= v5: catálogo, contrato por link, espaço da cliente ================= */
+const toMs=x=>!x?0:typeof x.toMillis==='function'?x.toMillis():x.seconds?x.seconds*1000:Date.parse(x)||0;
+function gerarToken(n=24){const b=new Uint8Array(n);crypto.getRandomValues(b);return btoa(String.fromCharCode(...b)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')}
+const urlPublica=(pag,token)=>`${location.origin}/${pag}${token?'#'+token:''}`;
+function hashStr(t){let h=5381;for(let i=0;i<t.length;i++)h=((h<<5)+h+t.charCodeAt(i))|0;return (h>>>0).toString(36)}
+function saveRaw(col,id,data){id=id||uid();const rec={...data,atualizadoEm:nowIso(),atualizadoPor:ME||''};delete rec.id;S[col].set(id,{id,...rec});touch();setDoc(doc(FS,col,id),rec).catch(dbErr);return id}
+function htmlParaTexto(html){const t=document.createElement('div');t.innerHTML=html.replace(/<br\s*\/?>/gi,'\n').replace(/<\/(h1|h2|p|li|div|tr)>/gi,'\n').replace(/<li>/gi,'• ').replace(/<\/td>/gi,'  ');return t.textContent.replace(/[ \t]+\n/g,'\n').replace(/\n{3,}/g,'\n\n').trim()}
+const semRevisao=html=>html.replace(/<span class="rev"[^>]*>([\s\S]*?)<\/span>/g,'$1');
+const mascaraCpf=c=>{const d=digits(c);return d.length===11?`***.${d.slice(3,6)}.${d.slice(6,9)}-**`:''};
+function salvarVitrine(){if(!isOwner())return;const pb=pub();setDoc(doc(FS,'vitrine','config'),{nome:pb.nome,responsavel:pb.responsavel,whatsapp:pb.whatsapp,instagram:pb.instagram||'',municipio:pb.municipio,atualizadoEm:nowIso()}).catch(()=>{})}
+
+/* ---------- folgas ---------- */
+function folgasCard(){const f=(pub().folgas||[]).map((x,i)=>({...x,i})).filter(x=>(x.fim||x.ini)>=today());
+  return `<section class="card"><h3>Folgas e bloqueios <small>férias, feriados, cursos</small></h3>
+   <form class="f2" id="fFolga"><label class="fld">De<input type="date" id="fgIni" required></label><label class="fld">Até (opcional)<input type="date" id="fgFim"></label><label class="fld">Motivo<input id="fgMot" placeholder="Ex.: férias"></label><div class="fld" style="justify-content:flex-end"><button class="btn soft">${ic('lock')}Bloquear agenda</button></div></form>
+   ${f.length?`<div class="list" style="margin-top:10px">${f.map(x=>`<div class="item"><div class="avatar" style="--lv:var(--lv-prata)">${ic('lock')}</div><div class="grow"><div class="t">${esc(x.motivo||'Agenda bloqueada')}</div><div class="s">${dataBR(x.ini)}${x.fim&&x.fim!==x.ini?` até ${dataBR(x.fim)}`:''}</div></div><button class="btn sm ghost danger" data-act="folgaRem" data-i="${x.i}">Remover</button></div>`).join('')}</div>`:'<p class="small muted" style="margin-bottom:0">Nenhum bloqueio futuro. Dias bloqueados não aparecem como livres nem na divulgação de horários.</p>'}</section>`}
+
+/* ---------- catálogo ---------- */
+const FOTOS=new Map(),FOTO_PEND=new Set();
+function fotoImg(id,cls='',alt=''){return id?`<img class="${cls}" data-foto="${id}" alt="${esc(alt)}" loading="lazy" ${FOTOS.has(id)?`src="${FOTOS.get(id)}"`:''}>`:`<div class="${cls} foto-vazia" role="img" aria-label="Sem foto">${braidMark(42)}</div>`}
+function carregaFotos(){if(!FS)return;$$('img[data-foto]:not([src])').forEach(async img=>{const id=img.dataset.foto;if(FOTOS.has(id)){img.src=FOTOS.get(id);return}if(FOTO_PEND.has(id))return;FOTO_PEND.add(id);
+  try{const s=await getDoc(doc(FS,'catalogoFotos',id));if(s.exists()){FOTOS.set(id,s.data().data);$$(`img[data-foto="${id}"]`).forEach(i=>i.src=FOTOS.get(id))}}catch(e){}FOTO_PEND.delete(id)})}
+async function comprimeFoto(file){const url=URL.createObjectURL(file);try{const img=await new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=()=>rej(new Error('formato'));i.src=url});
+  const max=1100;let w=img.naturalWidth,h=img.naturalHeight;const k=Math.min(1,max/Math.max(w,h));w=Math.round(w*k);h=Math.round(h*k);
+  const c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,w,h);x.drawImage(img,0,0,w,h);
+  let q=.82,d=c.toDataURL('image/jpeg',q);while(d.length>650000&&q>.4){q-=.1;d=c.toDataURL('image/jpeg',q)}return d}finally{URL.revokeObjectURL(url)}}
+const catOrdenado=()=>arr('catalogo').sort((a,b)=>(a.ordem??99)-(b.ordem??99)||String(a.nome).localeCompare(b.nome));
+function vCatalogo(){const own=pode('catalogoEdit');const L=catOrdenado();const vis=L.filter(x=>x.ativo!==false).length;
+  return head('Catálogo','Catálogo de <em>serviços</em>',`${vis} modelo${vis===1?'':'s'} visível${vis===1?'':'is'} para as clientes`,
+    `<button class="btn soft" data-act="copiarCatalogo">${ic('copy')}Copiar link</button><a class="btn soft" href="${urlPublica('catalogo')}" target="_blank" rel="noopener">${ic('right')}Ver como cliente</a>${own?`<button class="btn primary" data-act="novoCat">${ic('plus')}Novo modelo</button>`:''}`)+
+  (L.length?`<div class="cat-grid">${L.map(x=>`<button class="cat-card" data-act="editCat" data-id="${x.id}">${fotoImg((x.fotos||[])[0],'cat-img',x.nome)}<div class="cat-body"><div class="row between"><b>${esc(x.nome)}</b>${x.tempo?`<span class="badge">${ic('clock')}${esc(x.tempo)}</span>`:''}</div><p>${esc(x.descricao||'')}</p><div class="row" style="gap:6px">${x.ativo===false?'<span class="badge">oculto</span>':''}${!x.link?'<span class="badge warn">botão usa o WhatsApp do ateliê</span>':'<span class="badge good">botão configurado</span>'}${(x.fotos||[]).length>1?`<span class="badge">${x.fotos.length} fotos</span>`:''}${x.exemplo?'<span class="badge">exemplo</span>':''}</div></div></button>`).join('')}</div>`
+   :`<section class="card empty">Nenhum modelo no catálogo ainda.${own?`<br><button class="btn primary" style="margin-top:10px" data-act="novoCat">${ic('plus')}Adicionar o primeiro</button>`:''}</section>`)+
+  `<div class="alert info">${ic('info')}<div>As clientes veem o catálogo pelo link público e pelo espaço delas. O botão de cada modelo abre o link que ${own?'você definir':'a proprietária definir'}; o endereço não aparece na tela.${own?'':' Só a proprietária altera o catálogo.'}</div></div>`}
+function verCatalogo(id){const x=S.catalogo.get(id);if(!x)return;
+  sheet(esc(x.nome),`<div class="stack"><div class="cat-carrossel">${(x.fotos||[null]).map(f=>fotoImg(f,'cat-foto',x.nome)).join('')}</div>${x.tempo?`<div><span class="badge">${ic('clock')}Tempo médio: ${esc(x.tempo)}</span></div>`:''}<p style="margin:0">${esc(x.descricao||'')}</p>${x.preco&&x.mostrarPreco?`<p class="small muted" style="margin:0">A partir de ${BRL(x.preco)}</p>`:''}<button class="btn soft" data-act="copiarCatalogo">${ic('copy')}Copiar link do catálogo</button></div>`)}
+function formCatalogo(id){const novo=!id;id=id||uid();const x=S.catalogo.get(id)||{ativo:true,botao:'Quero este modelo',mostrarPreco:false,ordem:arr('catalogo').length,fotos:[]};
+  let fotos=(x.fotos||[]).map(f=>({id:f}));const removidas=[];
+  const cats=[...new Set(arr('catalogo').map(c=>c.categoria).filter(Boolean))];
+  sheet(novo?'Novo modelo':'Editar modelo',`<form class="form" id="fCat">
+   <div><div class="small muted" style="margin-bottom:6px">Fotos (até 6; a primeira é a capa)</div><div class="cat-fotos" id="cfFotos"></div><label class="btn soft" style="margin-top:8px">${ic('image')}Adicionar fotos<input type="file" id="cfFile" accept="image/*" multiple hidden></label></div>
+   <label class="fld">Nome do serviço<input id="cfNome" required value="${esc(x.nome)}" placeholder="Ex.: Box braids médias"></label>
+   <div class="f2"><label class="fld">Tempo médio de aplicação<input id="cfTempo" value="${esc(x.tempo)}" placeholder="Ex.: 4 a 6 horas"></label><label class="fld">Categoria<input id="cfCat" list="cfCats" value="${esc(x.categoria)}" placeholder="Ex.: Tranças soltas"><datalist id="cfCats">${cats.map(c=>`<option value="${esc(c)}">`).join('')}</datalist></label></div>
+   <label class="fld">Serviço da agenda (opcional, preenche o tempo)<select id="cfServ">${optServ(x.servicoId,{preco:false,vazio:'Nenhum'})}</select></label>
+   <label class="fld">Descrição<textarea id="cfDesc" placeholder="Como fica, quanto dura, para quem é indicado">${esc(x.descricao)}</textarea></label>
+   <div class="f2"><label class="fld">Preço a partir de (R$, opcional)<input id="cfPreco" type="number" step="0.01" min="0" value="${esc(x.preco??'')}"></label><label class="check" style="align-self:end"><input type="checkbox" id="cfMostra" ${x.mostrarPreco?'checked':''}>Mostrar o preço às clientes</label></div>
+   <div class="card" style="box-shadow:none;background:var(--surface-2);border:0"><h3 style="margin-bottom:8px"><span class="row" style="gap:8px">${ic('lock')}Botão do modelo</span><small>só a proprietária altera</small></h3>
+    <div class="f2"><label class="fld">Texto do botão<input id="cfBotao" value="${esc(x.botao||'Quero este modelo')}"></label><label class="fld">Link do botão<input id="cfLink" type="text" inputmode="url" autocapitalize="off" spellcheck="false" value="${esc(x.link)}" placeholder="https://wa.me/55..."></label></div>
+    <p class="small muted" style="margin:6px 0 0">Sem link, o botão abre o WhatsApp do ateliê com o nome do modelo na mensagem. A cliente vê só o botão, nunca o endereço.</p></div>
+   <label class="check"><input type="checkbox" id="cfAtivo" ${x.ativo!==false?'checked':''}>Visível no catálogo</label>
+   <div class="form-actions">${!novo?`<button type="button" class="btn danger ghost" id="cfDel">${ic('trash')}Excluir</button>`:''}<button class="btn primary" type="submit">${ic('check')}Salvar</button></div></form>`);
+  const desenha=()=>{$('#cfFotos').innerHTML=fotos.length?fotos.map((f,i)=>`<div class="cf-item">${f.data?`<img src="${f.data}" alt="">`:fotoImg(f.id,'','')}<div class="cf-acoes">${i>0?`<button type="button" class="icon-btn" data-mv="${i}" aria-label="Mover para a esquerda">${ic('left')}</button>`:'<span class="badge">capa</span>'}<button type="button" class="icon-btn" data-rm="${i}" aria-label="Remover foto">${ic('x')}</button></div></div>`).join(''):'<div class="small muted">Nenhuma foto ainda.</div>';carregaFotos()};
+  desenha();
+  $('#cfFotos').onclick=e=>{const mv=e.target.closest('[data-mv]'),rm=e.target.closest('[data-rm]');
+    if(mv){const i=+mv.dataset.mv;[fotos[i-1],fotos[i]]=[fotos[i],fotos[i-1]];desenha()}
+    if(rm){const [f]=fotos.splice(+rm.dataset.rm,1);if(f.id)removidas.push(f.id);desenha()}};
+  $('#cfFile').onchange=async e=>{const fs=[...e.target.files].slice(0,Math.max(0,6-fotos.length));if(!fs.length){toast('Limite de 6 fotos por modelo.','erro');return}
+    toast('Preparando fotos…');for(const f of fs){try{fotos.push({data:await comprimeFoto(f)})}catch(err){toast('Não foi possível ler uma das fotos. Use JPG ou PNG.','erro')}}desenha();e.target.value=''};
+  $('#cfServ').onchange=e=>{const s=S.servicos.get(e.target.value);if(s&&!$('#cfTempo').value)$('#cfTempo').value=`cerca de ${durTxt(s.duracao)}`};
+  if(!novo)$('#cfDel').onclick=()=>confirmar('Excluir este modelo e as fotos dele?',async()=>{for(const f of x.fotos||[])deleteDoc(doc(FS,'catalogoFotos',f)).catch(()=>{});await del('catalogo',id);toast('Modelo excluído')});
+  $('#fCat').onsubmit=async e=>{e.preventDefault();const bt=$('#fCat button[type=submit]');bt.disabled=true;
+    let link=$('#cfLink').value.trim();if(link&&!/^https?:\/\//i.test(link))link='https://'+link;
+    if(link&&!/^https:\/\//i.test(link)){toast('Use um link que comece com https://','erro');bt.disabled=false;return}
+    try{const ids=[];for(const f of fotos){if(f.id){ids.push(f.id);continue}const fid=uid();await setDoc(doc(FS,'catalogoFotos',fid),{itemId:id,data:f.data,criadoEm:nowIso()});FOTOS.set(fid,f.data);ids.push(fid)}
+      removidas.forEach(f=>deleteDoc(doc(FS,'catalogoFotos',f)).catch(()=>{}));
+      await save('catalogo',id,{...x,nome:$('#cfNome').value.trim(),tempo:$('#cfTempo').value.trim(),categoria:$('#cfCat').value.trim(),servicoId:$('#cfServ').value,descricao:$('#cfDesc').value.trim(),preco:+$('#cfPreco').value||0,mostrarPreco:$('#cfMostra').checked,botao:$('#cfBotao').value.trim()||'Quero este modelo',link,ativo:$('#cfAtivo').checked,fotos:ids});
+      salvarVitrine();closeSheet();toast('Modelo salvo')}catch(err){bt.disabled=false;dbErr(err)}};
+}
+
+/* ---------- contrato por link ---------- */
+const linkExpirado=l=>l.status!=='aceito'&&toMs(l.expiraEm)&&toMs(l.expiraEm)<Date.now();
+const linkStatus=l=>l.status==='aceito'?'aceito':linkExpirado(l)?'expirado':'pendente';
+const LINK_BADGE={aceito:['good','contrato aceito'],pendente:['warn','aguardando aceite'],expirado:['bad','link expirado']};
+function contratoDoAg(agId){return arr('contratosLink').filter(l=>l.agendaId===agId).sort((a,b)=>a.criadoEm<b.criadoEm?1:-1)[0]}
+function contratoTag(a){const l=contratoDoAg(a.id);if(!l)return '';const [cl,tx]=LINK_BADGE[linkStatus(l)];return `<button class="badge ${cl}" data-act="verLink" data-id="${l.id}">${ic('file')}${tx}</button>`}
+function ctLinks(){const L=arr('contratosLink').sort((a,b)=>a.criadoEm<b.criadoEm?1:-1);const P=pol();
+  return `<section class="card"><h3>Contrato antes do pagamento</h3><ol class="passos"><li><b>Gere o link</b> com os dados da cliente e do atendimento.</li><li><b>A cliente lê e aceita</b>: assina com o dedo ou marca "Li e concordo", e pode baixar o PDF.</li><li><b>Você recebe o aviso</b> e envia o link de pagamento do sinal pelo banco.</li></ol>
+   ${P.pend?`<div class="alert warn">${ic('alert')}<div>${P.pend} itens da política ainda não foram revisados. Eles entram no contrato do jeito que estão. <button class="btn sm ghost" data-act="ctTab" data-t="politica">Revisar</button></div></div>`:''}
+   <button class="btn primary" data-act="linkContrato">${ic('file')}Gerar link de contrato</button></section>
+   <section class="card" style="padding:8px 14px"><h3 style="padding:8px 4px 0">Links enviados <small>últimos 120 dias</small></h3>${L.length?`<div class="list">${L.map(l=>{const st=linkStatus(l);const [cl,tx]=LINK_BADGE[st];return `<button class="item" data-act="verLink" data-id="${l.id}"><div class="avatar">${iniciais(l.nome)}</div><div class="grow"><div class="t">${esc(l.nome)}</div><div class="s">${esc(l.servico||'Contrato de serviço')}${l.data?` · ${dataBR(l.data)} ${esc(l.hora||'')}`:''} · enviado ${dataBR(String(l.criadoEm).slice(0,10))}</div></div><span class="badge ${cl}">${tx}</span></button>`}).join('')}</div>`:'<div class="empty">Nenhum link enviado ainda.</div>'}</section>`}
+function formLinkContrato(pre={}){
+  const futuros=cid=>arr('agenda').filter(a=>a.clienteId===cid&&a.data>=today()&&(a.status==='agendado'||a.status==='confirmado')).sort((a,b)=>(a.data+a.hora)<(b.data+b.hora)?-1:1);
+  sheet('Enviar contrato por link',`<form class="form" id="fLk">
+   <label class="fld">Cliente<select id="lkCli">${optCli(pre.c||'','<option value="__nova">+ Nova cliente</option>')}</select></label>
+   <div class="f2" id="lkNova" hidden><label class="fld">Nome completo<input id="lkNome"></label><label class="fld">WhatsApp<input id="lkTel" inputmode="tel"></label></div>
+   <label class="fld">CPF da cliente (aparece no contrato)<input id="lkCpf" inputmode="numeric" placeholder="000.000.000-00"></label>
+   <label class="fld">Atendimento<select id="lkAg"></select></label>
+   <div class="f2" id="lkManual"><label class="fld">Serviço<select id="lkServ">${optServ('')}</select></label><label class="fld">Data<input id="lkData" type="date"></label><label class="fld">Hora<input id="lkHora" type="time"></label><label class="fld">Valor (R$)<input id="lkVal" type="number" step="0.01" min="0"></label></div>
+   <label class="fld">O link vale por<select id="lkDias"><option value="3">3 dias</option><option value="7" selected>7 dias</option><option value="15">15 dias</option><option value="30">30 dias</option></select></label>
+   <div class="form-actions"><button class="btn primary" type="submit">${ic('file')}Gerar link</button></div></form>`);
+  const sel=$('#lkCli'),ag=$('#lkAg');
+  const up=()=>{const cid=sel.value;$('#lkNova').hidden=cid!=='__nova';const c=S.clientes.get(cid);$('#lkCpf').value=c?.cpf||'';
+    const fs=c?futuros(c.id):[];ag.innerHTML=fs.map(a=>`<option value="${a.id}" ${a.id===pre.a?'selected':''}>${dataBR(a.data)} ${esc(a.hora)} · ${esc(nomeServ(a.servicoId))}${a.pacoteId?'':` · ${BRL(a.valor)}`}</option>`).join('')+'<option value="">Ainda não marcado: informar abaixo</option>';
+    if(pre.a&&fs.some(a=>a.id===pre.a))ag.value=pre.a;upAg()};
+  const upAg=()=>{$('#lkManual').hidden=!!ag.value};
+  sel.onchange=up;ag.onchange=upAg;$('#lkServ').onchange=e=>{const s=S.servicos.get(e.target.value);if(s)$('#lkVal').value=s.preco};up();
+  $('#fLk').onsubmit=async e=>{e.preventDefault();let cid=sel.value;const bt=$('#fLk button[type=submit]');
+    if(cid==='__nova'){const n=$('#lkNome').value.trim();if(!n){toast('Informe o nome da cliente.','erro');return}cid=await save('clientes',null,{nome:n,telefone:$('#lkTel').value.trim(),cpf:$('#lkCpf').value.trim(),criadoEm:today()})}
+    if(!cid){toast('Escolha a cliente.','erro');return}
+    let cli=S.clientes.get(cid);const cpf=$('#lkCpf').value.trim();if(cpf&&cpf!==cli.cpf){await save('clientes',cid,{...cli,cpf});cli=S.clientes.get(cid)}
+    let a=ag.value?S.agenda.get(ag.value):null;
+    if(!a){const sid=$('#lkServ').value;if(!sid){toast('Escolha o serviço do contrato.','erro');return}const s=S.servicos.get(sid);a={servicoId:sid,data:$('#lkData').value,hora:$('#lkHora').value,duracao:s?.duracao||120,valor:+$('#lkVal').value||0}}
+    bt.disabled=true;
+    const html=semRevisao(docServico(cli,a));const texto=htmlParaTexto(html);const pb=pub();
+    const token=gerarToken();const ptok=await portalCriar(cid,false,true);
+    saveRaw('contratosLink',token,{tipo:'servico',clienteId:cid,agendaId:a.id||'',nome:cli.nome,cpf:cli.cpf||'',telefone:cli.telefone||'',servico:nomeServ(a.servicoId),data:a.data||'',hora:a.hora||'',valor:+a.valor||0,html,texto,versao:pol().versao||0,hash:await hashTexto(texto),status:'pendente',criadoEm:nowIso(),criadoPor:ME||'',expiraEm:Timestamp.fromDate(new Date(Date.now()+(+$('#lkDias').value||7)*864e5)),portalToken:ptok||'',atelie:{nome:pb.nome,responsavel:pb.responsavel,whatsapp:pb.whatsapp}});
+    closeSheet(true);verLinkContrato(token)};
+}
+function msgLink(l){const pb=pub();return `Oi, ${primeiro(l.nome)}! 💕 Antes de confirmar seu horário de ${l.servico}${l.data?` em ${dataBR(l.data)}${l.hora?` às ${l.hora}`:''}`:''}, leia o contrato e confirme por este link:\n${urlPublica('contrato',l.id)}\n\nAssim que você aceitar, eu te envio o link de pagamento do sinal para garantir o horário. Beijos, ${primeiro(pb.responsavel)}`}
+function verLinkContrato(id){const l=S.contratosLink.get(id);if(!l){toast('Link não encontrado.','erro');return}const st=linkStatus(l);const [cl,tx]=LINK_BADGE[st];const url=urlPublica('contrato',id);const ac=l.aceite||{};
+  const w=waLink(l.telefone,msgLink(l));const wPg=waLink(l.telefone,`Oi, ${primeiro(l.nome)}! Recebi o seu aceite do contrato, obrigada 💕 Segue o link para o pagamento do sinal: `);
+  sheet('Contrato por link',`<div class="stack"><div class="row between"><div><b>${esc(l.nome)}</b><div class="small muted">${esc(l.servico)}${l.data?` · ${dataBR(l.data)} ${esc(l.hora||'')}`:''}${l.valor?` · ${BRL(l.valor)}`:''}</div></div><span class="badge ${cl}">${tx}</span></div>
+   ${st==='aceito'?`<div class="alert info">${ic('check')}<div><b>Aceito em ${new Date(toMs(ac.em)).toLocaleString('pt-BR')}</b> por ${esc(ac.nome||'')}${ac.cpf?` (CPF ${esc(ac.cpf)})`:''}, ${ac.meio==='assinatura'?'com assinatura':'marcando "Li e concordo"'}. Agora envie o link de pagamento do sinal.</div></div>${wPg?`<a class="btn primary" href="${wPg}" target="_blank" rel="noopener">${ic('chat')}Enviar link de pagamento no WhatsApp</a>`:''}`
+     :st==='expirado'?`<div class="alert warn">${ic('alert')}<div>O link expirou em ${new Date(toMs(l.expiraEm)).toLocaleDateString('pt-BR')} sem aceite. Gere um novo.</div></div><button class="btn primary" data-act="linkContrato" data-c="${l.clienteId}" data-a="${l.agendaId}">${ic('file')}Gerar novo link</button>`
+     :`<div class="small muted">Vale até ${new Date(toMs(l.expiraEm)).toLocaleDateString('pt-BR')}. Você recebe um aviso aqui quando ela aceitar.</div>`}
+   <label class="fld">Link do contrato<input readonly value="${esc(url)}" onclick="this.select()"></label>
+   <div class="row">${st==='pendente'&&w?`<a class="btn primary" href="${w}" target="_blank" rel="noopener">${ic('chat')}Enviar no WhatsApp</a>`:''}<button class="btn soft" id="lkCopy">${ic('copy')}Copiar link</button><a class="btn ghost" href="${url}" target="_blank" rel="noopener">${ic('right')}Abrir</a>${st==='aceito'&&S.aceites.has('link-'+id)?`<button class="btn ghost" data-act="verAceite" data-id="link-${id}">${ic('file')}Ver registro</button>`:''}${st!=='aceito'&&isOwner()?`<button class="btn ghost danger" data-act="cancelarLink" data-id="${id}">${ic('trash')}Cancelar link</button>`:''}</div></div>`);
+  $('#lkCopy').onclick=()=>copiar(st==='pendente'?msgLink(l):url,st==='pendente'?'Mensagem com o link copiada':'Link copiado')}
+
+/* ---------- espaço da cliente ---------- */
+function portalBloco(c){const t=c.portalToken;
+  if(!t)return `<div class="alert info">${ic('users')}<div><b>Espaço da cliente:</b> por um link pessoal, ela acompanha o nível, os atendimentos e os contratos, e cancela dentro do prazo. <button class="btn sm soft" data-act="portalCriar" data-id="${c.id}">Criar acesso</button></div></div>`;
+  const pb=pub();const w=waLink(c.telefone,`Oi, ${primeiro(c.nome)}! 💕 Este é o seu espaço no ateliê: lá você vê seu nível de fidelidade, seus horários e contratos. O link é pessoal, não compartilhe:\n${urlPublica('cliente',t)}\n\nBeijos, ${primeiro(pb.responsavel)}`);
+  return `<div class="portal-box"><div class="row between"><b>${ic('users')}Espaço da cliente</b><span class="badge good">ativo</span></div><p class="small muted" style="margin:4px 0 10px">Link pessoal: quem tiver o link vê os dados desta cliente. Se vazar, gere um novo.</p>
+   <div class="row">${w?`<a class="btn sm primary" href="${w}" target="_blank" rel="noopener">${ic('chat')}Enviar</a>`:''}<button class="btn sm soft" data-act="portalCopiar" data-id="${c.id}">${ic('copy')}Copiar link</button><a class="btn sm ghost" href="${urlPublica('cliente',t)}" target="_blank" rel="noopener">${ic('right')}Abrir</a><button class="btn sm ghost" data-act="portalNovo" data-id="${c.id}">${ic('repeat')}Novo link</button></div></div>`}
+async function portalCriar(cid,novo=false,silencioso=false){const c=S.clientes.get(cid);if(!c)return '';if(c.portalToken&&!novo)return c.portalToken;
+  if(novo&&c.portalToken){const old=c.portalToken;Object.keys((c.portalSync&&c.portalSync.prox)||{}).forEach(a=>deleteDoc(doc(FS,'portal',old,'proximos',a)).catch(()=>{}));deleteDoc(doc(FS,'portal',old)).catch(()=>{})}
+  const t=gerarToken();await save('clientes',cid,{...c,portalToken:t,portalSync:null});agendaProcessar();
+  if(!silencioso){toast(novo?'Novo link criado. O anterior parou de funcionar.':'Acesso da cliente criado');abrirCliente(cid)}return t}
+function proximoNivel(score,nivel){if(nivel==='nova')return {nome:'Bronze',faltam:0,texto:'Depois do primeiro atendimento você ganha seu nível.'};
+  const alvo=[['Prata',25],['Ouro Rosé',50],['Pérola',75]].find(([,m])=>m>score);return alvo?{nome:alvo[0],faltam:alvo[1]-score}:null}
+function portalSnapshot(c,P,pb){const f=fidelidade(c);const nv=NIVEIS[f.nivel];const t=today();
+  const ultimos=arr('agenda').filter(a=>a.clienteId===c.id&&(a.status==='concluido'||a.status==='faltou')&&a.data<=t).sort((a,b)=>(a.data+a.hora)<(b.data+b.hora)?1:-1).slice(0,6).map(a=>({data:a.data,servico:nomeServ(a.servicoId),status:a.status,pacote:!!a.pacoteId}));
+  const contratos=[];const vistos=new Set();
+  arr('contratosLink').filter(l=>l.clienteId===c.id).sort((a,b)=>a.criadoEm<b.criadoEm?1:-1).forEach(l=>{vistos.add(l.id);contratos.push({token:l.id,servico:l.servico||'',data:l.data||'',status:linkStatus(l),criadoEm:String(l.criadoEm).slice(0,10)})});
+  arr('aceites').filter(a=>a.clienteId===c.id&&a.tipo==='servico'&&!vistos.has(a.linkToken)).forEach(a=>contratos.push({token:a.linkToken||'',servico:'Contrato de serviço',data:'',status:'aceito',criadoEm:String(a.aceitoEm).slice(0,10),presencial:!a.linkToken}));
+  const pacotes=arr('pacotes').filter(p=>p.clienteId===c.id&&pacoteAtivo(p)).map(p=>({nome:p.nome,saldo:pacoteSaldo(p),validade:p.validade||''}));
+  const main={v:1,nome:c.nome,nivel:{chave:f.nivel,nome:nv.n,score:f.score,beneficio:nv.b,prox:proximoNivel(f.score,f.nivel)},visitas:f.visitas,
+    cadastro:{nome:c.nome,telefone:c.telefone||'',instagram:c.instagram||'',aniversario:c.aniversario?dataCurta(c.aniversario):'',cpf:mascaraCpf(c.cpf)},
+    ultimos,contratos:contratos.slice(0,12),pacotes,
+    regras:{prazoCancel:+P.campos.prazoCancel||48,tolerancia:+P.campos.tolerancia||0,sinalCancel:String(P.campos.sinalCancel||''),falta:String(P.campos.falta||''),preparo:String(P.campos.preparo||'')},
+    atelie:{nome:pb.nome,responsavel:pb.responsavel,whatsapp:pb.whatsapp||'',instagram:pb.instagram||'',endereco:pb.endereco||'',municipio:pb.municipio||''}};
+  const prazo=(+P.campos.prazoCancel||48)*3600e3;const pend=new Set(arr('solicitacoes').filter(q=>!q.processado).map(q=>q.agendaId));const prox={};
+  arr('agenda').filter(a=>a.clienteId===c.id&&a.data>=t&&(a.status==='agendado'||a.status==='confirmado'||(a.status==='cancelado'&&a.canceladoPor==='cliente'))).forEach(a=>{
+    const [y,m,d]=a.data.split('-').map(Number);const [hh,mm]=String(a.hora||'00:00').split(':').map(Number);const ini=new Date(y,m-1,d,hh||0,mm||0).getTime();
+    const sinal=soma((a.pagamentos||[]).filter(p=>p.tipo==='sinal'));
+    const o={data:a.data,hora:a.hora||'',servico:nomeServ(a.servicoId),duracao:+a.duracao||0,status:a.status,pacote:!!a.pacoteId,sinal,limiteMs:ini-prazo};
+    if(a.status==='cancelado')o.cancelado=true;else if(!pend.has(a.id))o.cancelado=false;
+    prox[a.id]=o});
+  return {main,prox}}
+async function sincronizarPortais(){const P=pol(),pb=pub();
+  for(const c of arr('clientes').filter(x=>x.portalToken)){const {main,prox}=portalSnapshot(c,P,pb);const h=hashStr(JSON.stringify(main));const sync=c.portalSync||{};const old=sync.prox||{};let mudou=false;const novoProx={};
+    if(sync.h!==h){await setDoc(doc(FS,'portal',c.portalToken),{...main,atualizadoEm:nowIso()});mudou=true}
+    for(const [agId,d] of Object.entries(prox)){const hh=hashStr(JSON.stringify(d));novoProx[agId]=hh;if(old[agId]===hh)continue;
+      const dados={...d,limiteCancelamento:Timestamp.fromMillis(d.limiteMs)};delete dados.limiteMs;if(!(agId in old)&&dados.cancelado===undefined)dados.cancelado=false;
+      await setDoc(doc(FS,'portal',c.portalToken,'proximos',agId),dados,{merge:true});mudou=true}
+    for(const agId of Object.keys(old))if(!(agId in prox)){await deleteDoc(doc(FS,'portal',c.portalToken,'proximos',agId)).catch(()=>{});mudou=true}
+    if(mudou)await save('clientes',c.id,{...S.clientes.get(c.id),portalSync:{h,prox:novoProx}},{quiet:true})}}
+async function registrarContratos(){for(const l of arr('contratosLink').filter(x=>x.status==='aceito'&&!x.registrado)){const ac=l.aceite||{};const em=toMs(ac.em)||Date.now();
+  await save('aceites','link-'+l.id,{tipo:'servico',clienteId:l.clienteId,agendaId:l.agendaId||'',versao:l.versao||0,texto:l.texto||'',hash:l.hash||'',nomeAssinante:ac.nome||l.nome,cpf:ac.cpf||'',meio:ac.meio==='assinatura'?'Assinatura pelo link':'Aceite pelo link ("Li e concordo")',aceitoEm:new Date(em).toISOString(),registradoPor:'link',assinatura:ac.assinatura||'',linkToken:l.id,dispositivo:String(ac.dispositivo||'').slice(0,200)},{quiet:true});
+  await updateDoc(doc(FS,'contratosLink',l.id),{registrado:true}).catch(()=>{});S.contratosLink.set(l.id,{...l,registrado:true});
+  const c=S.clientes.get(l.clienteId);if(c&&!c.cpf&&ac.cpf)await save('clientes',c.id,{...c,cpf:ac.cpf},{quiet:true})}}
+async function processarSolicitacoes(){for(const q of arr('solicitacoes').filter(x=>!x.processado)){const a=S.agenda.get(q.agendaId);const c=a&&S.clientes.get(a.clienteId);let resultado='ignorado';
+  if(a&&c&&c.portalToken===q.token&&(a.status==='agendado'||a.status==='confirmado')){const quando=new Date(toMs(q.criadoEm)||Date.now());
+    await save('agenda',a.id,{...a,status:'cancelado',canceladoPor:'cliente',canceladoEm:quando.toISOString(),obs:[a.obs,`Cancelado pela cliente no espaço dela em ${quando.toLocaleString('pt-BR')}${q.motivo?`. Motivo: ${q.motivo}`:''}`].filter(Boolean).join(' · ')},{quiet:true});resultado='cancelado'}
+  await updateDoc(doc(FS,'solicitacoes',q.id),{processado:true,resultado,processadoEm:nowIso()}).catch(()=>{});S.solicitacoes.set(q.id,{...q,processado:true,resultado})}}
+let procT=0,processando=false;
+function agendaProcessar(){clearTimeout(procT);procT=setTimeout(processar,1500)}
+async function processar(){if(processando||!FS||!pode('portal')||[...NEED].some(c=>!loaded.has(c))||navigator.onLine===false)return;processando=true;
+  try{await registrarContratos()}catch(e){console.error(e)}
+  try{await processarSolicitacoes()}catch(e){console.error(e)}
+  try{await sincronizarPortais()}catch(e){console.error('portal',e)}
+  if(isOwner()&&!processar.vit){processar.vit=true;salvarVitrine()}
+  processando=false}
+function avisosPortal(){if(!pode('portal'))return '';const lim=Date.now()-14*864e5;
+  const canc=arr('solicitacoes').filter(q=>q.processado&&q.resultado==='cancelado'&&!q.visto&&toMs(q.criadoEm)>lim);
+  const acc=arr('contratosLink').filter(l=>l.status==='aceito'&&!l.visto);
+  if(!canc.length&&!acc.length)return '';
+  const rows=[...canc.map(q=>{const a=S.agenda.get(q.agendaId);const sinal=a?soma((a.pagamentos||[]).filter(p=>p.tipo==='sinal')):0;
+      return `<div class="item"><div class="avatar" style="--lv:var(--lv-bronze)">${ic('x')}</div><div class="grow"><div class="t" style="white-space:normal">${esc(primeiro(nomeCli(a?.clienteId)))} cancelou ${a?`${esc(nomeServ(a.servicoId))} de ${dataCurta(a.data)} às ${esc(a.hora)}`:'um atendimento'}</div><div class="s" style="white-space:normal">pelo espaço da cliente, dentro do prazo${sinal?` · sinal de ${BRL(sinal)}: veja o que a política define para cancelamento no prazo`:''}${q.motivo?` · "${esc(q.motivo)}"`:''}</div></div>${a?`<button class="btn sm soft" data-act="avisoEspera" data-id="${a.id}">${ic('list')}Lista de espera</button>`:''}<button class="btn sm ghost" data-act="avisoVisto" data-k="sol" data-id="${q.id}">Ok</button></div>`}),
+    ...acc.map(l=>{const w=waLink(l.telefone,`Oi, ${primeiro(l.nome)}! Recebi o seu aceite do contrato, obrigada 💕 Segue o link para o pagamento do sinal: `);
+      return `<div class="item"><div class="avatar" style="--lv:var(--lv-perola)">${ic('check')}</div><div class="grow"><div class="t" style="white-space:normal">${esc(primeiro(l.nome))} aceitou o contrato</div><div class="s" style="white-space:normal">${esc(l.servico)}${l.data?` · ${dataCurta(l.data)} ${esc(l.hora||'')}`:''} · agora envie o link de pagamento do sinal</div></div>${w?`<a class="btn sm primary" href="${w}" target="_blank" rel="noopener">${ic('chat')}Pagamento</a>`:''}<button class="btn sm ghost" data-act="avisoVisto" data-k="link" data-id="${l.id}">Ok</button></div>`})];
+  return `<section class="card aviso-portal"><h3>Novidades das clientes <small>${rows.length}</small></h3><div class="list">${rows.join('')}</div></section>`}
+async function avisoVisto(k,id){const col=k==='sol'?'solicitacoes':'contratosLink';const x=S[col].get(id);if(x)S[col].set(id,{...x,visto:true});touch();updateDoc(doc(FS,col,id),{visto:true}).catch(dbErr)}
 
 /* ================= ações ================= */
 const ACT={
@@ -1397,24 +1619,40 @@ const ACT={
  trocarSenha:async()=>{try{await sendPasswordResetEmail(AUTH,EMAIL);toast('Link para trocar a senha enviado para '+EMAIL)}catch(e){toast('Não foi possível enviar o e-mail')}},
  imprimirDoc:()=>window.print(),
  backup:()=>{const o={versao:3,gerado:nowIso()};ALL_COLS.filter(c=>c!=='pedidos').forEach(c=>o[c]=arr(c));baixar(`backup-stefany-trancista-${today()}.json`,JSON.stringify(o,null,1))},
- limparEx:()=>confirmar('Apagar todos os registros marcados como exemplo?',limparEx)
+ limparEx:()=>confirmar('Apagar todos os registros marcados como exemplo?',limparEx),
+ tornarDona:t=>{const id=t.dataset.id;const e=S.equipe.get(id)||S.pedidos.get(id)||{};confirmar(`Dar acesso total de proprietária para <b>${esc(e.apelido||e.nome||e.email||'esta pessoa')}</b>? Ela passa a ver finanças, contratos, equipe e configurações.`,()=>tornarDona(id))},
+ removerDona:t=>confirmar('Remover o acesso de proprietária desta conta? Ela deixará de entrar no sistema até receber um perfil.',()=>removerDona(t.dataset.id)),
+ folgaRem:t=>{const i=+t.dataset.i;const f=[...(pub().folgas||[])];f.splice(i,1);save('publico','config',{...pub(),folgas:f});toast('Bloqueio removido')},
+ novoCat:()=>formCatalogo(),editCat:t=>pode('catalogoEdit')?formCatalogo(t.dataset.id):verCatalogo(t.dataset.id),
+ copiarCatalogo:()=>copiar(urlPublica('catalogo'),'Link do catálogo copiado'),
+ linkContrato:t=>formLinkContrato({c:t.dataset.c,a:t.dataset.a}),verLink:t=>verLinkContrato(t.dataset.id),
+ cancelarLink:t=>confirmar('Cancelar este link? A cliente não conseguirá mais abrir o contrato.',async()=>{await del('contratosLink',t.dataset.id);toast('Link cancelado')}),
+ portalCriar:t=>portalCriar(t.dataset.id),portalNovo:t=>confirmar('Gerar um novo link? O link antigo para de funcionar na hora.',()=>portalCriar(t.dataset.id,true)),
+ portalCopiar:t=>copiar(urlPublica('cliente',S.clientes.get(t.dataset.id)?.portalToken),'Link da cliente copiado'),
+ avisoVisto:t=>avisoVisto(t.dataset.k,t.dataset.id),avisoEspera:t=>{const a=S.agenda.get(t.dataset.id);if(a)sugerirEspera(a)},
 };
 document.addEventListener('click',e=>{const t=e.target.closest('[data-act]');if(!t)return;
   if(t.dataset.act==='closeBack'){if(e.target===t)closeSheet();return}
   const f=ACT[t.dataset.act];if(!f)return;if(t.tagName!=='A')e.preventDefault();if(t.disabled)return;f(t,e)});
+document.addEventListener('click',e=>{const b=e.target.closest('#gDias [data-dia]');if(b){e.preventDefault();b.setAttribute('aria-pressed',b.getAttribute('aria-pressed')==='true'?'false':'true')}});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeSheet();const tag=(e.target.tagName||'').toLowerCase();const digitando=tag==='input'||tag==='textarea'||tag==='select'||e.target.isContentEditable;if(!digitando&&pode('base')&&!$('.sheet-back')&&(e.key==='/'||((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'))){e.preventDefault();busca()}});
 let buscaT;document.addEventListener('input',e=>{if(e.target.id==='cliBusca'){UI.cliBusca=e.target.value;clearTimeout(buscaT);buscaT=setTimeout(()=>{const pos=e.target.selectionStart;render();const i=$('#cliBusca');if(i){i.focus();try{i.setSelectionRange(pos,pos)}catch(_){}}},200)}});
 document.addEventListener('change',e=>{const id=e.target.id;
   if(id==='ctTipo'){UI.ctTipo=e.target.value;render()}else if(id==='ctCli'){UI.ctCli=e.target.value;UI.ctAg='';render()}else if(id==='ctAg'){UI.ctAg=e.target.value;render()}
   else if(id==='restFile'&&e.target.files[0]){const fr=new FileReader();fr.onload=()=>{let o;try{o=JSON.parse(fr.result)}catch(_){toast('Arquivo inválido');return}
-    confirmar('Restaurar esta cópia? Registros com o mesmo identificador serão substituídos.',async()=>{const ops=[];ALL_COLS.filter(c=>c!=='equipe'&&c!=='pedidos').forEach(c=>(o[c]||[]).forEach(r=>{if(r&&r.id)ops.push([c,r.id,r])}));await pool(ops.map(([c,id,r])=>()=>save(c,id,r,{quiet:true})),8);toast(`${ops.length} registros restaurados`)})};fr.readAsText(e.target.files[0])}});
+    confirmar('Restaurar esta cópia? Registros com o mesmo identificador serão substituídos.',async()=>{const ops=[];ALL_COLS.filter(c=>!['equipe','pedidos','contratosLink','solicitacoes'].includes(c)).forEach(c=>(o[c]||[]).forEach(r=>{if(r&&r.id)ops.push([c,r.id,r])}));await pool(ops.map(([c,id,r])=>()=>save(c,id,r,{quiet:true})),8);toast(`${ops.length} registros restaurados`)})};fr.readAsText(e.target.files[0])}});
 document.addEventListener('submit',async e=>{
   if(e.target.id==='fLogin'){e.preventDefault();const m=$('#lgMsg');m.style.color='var(--bad)';m.textContent='Entrando…';
     try{await signInWithEmailAndPassword(AUTH,$('#lgEmail').value.trim(),$('#lgSenha').value)}catch(err){const c=err.code||'';m.textContent=/invalid-credential|wrong-password|user-not-found|invalid-email/.test(c)?'E-mail ou senha incorretos.':/too-many-requests/.test(c)?'Muitas tentativas. Aguarde alguns minutos.':/network/.test(c)?'Sem internet. Tente de novo.':'Não foi possível entrar.'}
     return}
   if(e.target.id==='fCfg'){e.preventDefault();const v=i=>$('#'+i).value.trim();
-    await save('publico','config',{...pub(),nome:v('gNome')||DEF_PUB.nome,responsavel:v('gResp'),cnpj:v('gCnpj'),endereco:v('gEnd'),municipio:v('gMun'),whatsapp:v('gWa'),abre:v('gAbre')||'08:00',fecha:v('gFecha')||'20:00',descAniv:+v('gAniv')||0,started:true});
+    const dias=$$('#gDias [data-dia]').filter(b=>b.getAttribute('aria-pressed')==='true').map(b=>+b.dataset.dia);if(!dias.length){toast('Escolha pelo menos um dia de atendimento.','erro');return}
+    const ivI=v('gIvI'),ivF=v('gIvF');if((ivI||ivF)&&!(ivI&&ivF&&ivF>ivI)){toast('Confira a pausa: o fim precisa ser depois do início.','erro');return}
+    await save('publico','config',{...pub(),nome:v('gNome')||DEF_PUB.nome,responsavel:v('gResp'),cnpj:v('gCnpj'),endereco:v('gEnd'),municipio:v('gMun'),whatsapp:v('gWa'),instagram:v('gIg'),abre:v('gAbre')||'08:00',fecha:v('gFecha')||'20:00',dias,intervaloIni:ivI,intervaloFim:ivF,descAniv:+v('gAniv')||0,started:true});
+    salvarVitrine();
     await save('privado','config',{...priv(),inicioMei:v('gIni'),limite:+v('gLim')||81000,das:+v('gDas')||DEF_PRIV.das,meta:+v('gMeta')||0,taxaDebito:+v('gTd')||0,taxaCredito:+v('gTc')||0,taxaParcelado:+v('gTp')||0});toast('Ajustes salvos')}
+  else if(e.target.id==='fFolga'){e.preventDefault();const ini=$('#fgIni').value,fim=$('#fgFim').value||ini,motivo=$('#fgMot').value.trim();if(!ini){toast('Escolha a data.','erro');return}if(fim<ini){toast('A data final precisa ser depois da inicial.','erro');return}
+    const f=[...(pub().folgas||[]),{ini,fim,motivo}].sort((a,b)=>a.ini<b.ini?-1:1);await save('publico','config',{...pub(),folgas:f});toast('Agenda bloqueada')}
   else if(e.target.id==='fPol'){e.preventDefault();const P=pol();const campos={},rev={};
     POL_CAMPOS.forEach(f=>{const el=$('#pol_'+f.k);campos[f.k]=f.t==='num'?+el.value||0:el.value.trim();const r=$('#rev_'+f.k);if(r&&r.checked)rev[f.k]=true});
     await save('publico','politica',{campos,revisados:rev,versao:P.versao+1,atualizadaEm:nowIso()});toast(`Política salva (versão ${P.versao+1})`);window.scrollTo({top:0,behavior:'smooth'})}

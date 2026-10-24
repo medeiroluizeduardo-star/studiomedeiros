@@ -164,3 +164,21 @@ stefany-trancista/
 | "E-mail ou senha incorretos" | Confira o usuário em Authentication › Usuários. Use "Esqueci minha senha". |
 | `Error: Failed to get Firebase project` | O `projectId` em `.firebaserc` está errado, ou o `firebase login` foi feito com outra conta Google. |
 | Mudanças não aparecem no celular | Feche e abra o app de novo; ele busca a versão nova ao abrir. |
+
+---
+
+## Novidades (versão 5)
+
+Páginas abertas às clientes, no mesmo endereço do sistema:
+
+| Página | Para quê |
+|---|---|
+| `/catalogo` | Catálogo público de modelos, com fotos, tempo médio e botão para agendar |
+| `/contrato#código` | Contrato enviado por link: a cliente lê, assina ou marca "Li e concordo" e baixa o PDF |
+| `/cliente#código` | Espaço pessoal da cliente: nível, dados, últimos e próximos horários, contratos e cancelamento dentro do prazo |
+
+Os links de contrato e do espaço da cliente usam um código secreto e longo. Quem não tem o link não consegue abrir nem listar esses dados.
+
+**Importante:** depois de publicar esta versão, atualize as regras do Firestore (Firestore Database › Regras) colando o conteúdo do arquivo `firestore.rules`. Sem isso, o catálogo, os links de contrato e o espaço da cliente não abrem.
+
+As fotos do catálogo ficam no próprio Firestore (comprimidas no aparelho antes do envio), porque o Cloud Storage do Firebase exige o plano pago Blaze.

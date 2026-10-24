@@ -108,6 +108,75 @@ service cloud.firestore {
     match /contas/{id}      { allow read: if financas(); allow write: if dona(); }
     match /privado/{id}     { allow read: if financas(); allow write: if dona(); }
 
+    // ===== Catálogo e vitrine: públicos para leitura, só a proprietária altera =====
+    match /catalogo/{id} { allow read: if true; allow write: if dona(); }
+    match /catalogoFotos/{id} {
+      allow read: if true;
+      allow create, update: if dona() && request.resource.data.data is string && request.resource.data.data.size() < 900000;
+      allow delete: if dona();
+    }
+    match /vitrine/{id} { allow read: if true; allow write: if dona(); }
+
+    // ===== Contrato por link =====
+    // Quem tem o link lê o contrato. A cliente só pode aceitar uma vez, dentro da validade,
+    // sem alterar nenhum outro campo. Depois do aceite, a equipe só marca "registrado" e "visto".
+    match /contratosLink/{token} {
+      allow get: if true;
+      allow list: if atendimento();
+      allow create: if atendimento() && request.resource.data.status == 'pendente';
+      allow update: if (atendimento() && (resource.data.status == 'pendente'
+            ? request.resource.data.status == 'pendente'
+            : request.resource.data.diff(resource.data).affectedKeys().hasOnly(['registrado', 'visto'])))
+        || (resource.data.status == 'pendente'
+            && request.time < resource.data.expiraEm
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'aceite'])
+            && request.resource.data.status == 'aceito'
+            && request.resource.data.aceite.keys().hasOnly(['nome', 'cpf', 'meio', 'assinatura', 'em', 'dispositivo'])
+            && request.resource.data.aceite.em == request.time
+            && request.resource.data.aceite.nome is string
+            && request.resource.data.aceite.nome.size() >= 3 && request.resource.data.aceite.nome.size() <= 120
+            && request.resource.data.aceite.cpf is string && request.resource.data.aceite.cpf.size() <= 20
+            && request.resource.data.aceite.dispositivo is string && request.resource.data.aceite.dispositivo.size() <= 200
+            && request.resource.data.aceite.meio in ['assinatura', 'concordo']
+            && (request.resource.data.aceite.meio == 'concordo'
+                || (request.resource.data.aceite.assinatura is string && request.resource.data.aceite.assinatura.size() < 250000)));
+      allow delete: if dona();
+    }
+
+    // ===== Espaço da cliente =====
+    // O documento só é lido por quem tem o link (token secreto). Não é possível listar os espaços.
+    match /portal/{token} {
+      allow get: if true;
+      allow list: if false;
+      allow create, update, delete: if atendimento();
+      match /proximos/{agId} {
+        allow read: if true;
+        allow create, delete: if atendimento();
+        // A cliente só cancela antes do prazo, e só altera o campo de cancelamento.
+        allow update: if atendimento()
+          || (resource.data.cancelado == false
+              && request.time < resource.data.limiteCancelamento
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['cancelado', 'canceladoEm'])
+              && request.resource.data.cancelado == true
+              && request.resource.data.canceladoEm == request.time);
+      }
+    }
+
+    // Pedidos de cancelamento feitos pela cliente, conferidos contra o prazo no servidor.
+    match /solicitacoes/{id} {
+      allow create: if request.resource.data.keys().hasOnly(['token', 'agendaId', 'tipo', 'criadoEm', 'motivo'])
+        && request.resource.data.tipo == 'cancelamento'
+        && request.resource.data.criadoEm == request.time
+        && request.resource.data.token is string && request.resource.data.token.size() <= 64
+        && request.resource.data.agendaId is string && request.resource.data.agendaId.size() <= 64
+        && request.resource.data.motivo is string && request.resource.data.motivo.size() <= 300
+        && exists(/databases/$(database)/documents/portal/$(request.resource.data.token)/proximos/$(request.resource.data.agendaId))
+        && get(/databases/$(database)/documents/portal/$(request.resource.data.token)/proximos/$(request.resource.data.agendaId)).data.cancelado == false
+        && request.time < get(/databases/$(database)/documents/portal/$(request.resource.data.token)/proximos/$(request.resource.data.agendaId)).data.limiteCancelamento;
+      allow read, update: if atendimento();
+      allow delete: if dona();
+    }
+
     // Qualquer outro caminho é bloqueado.
     match /{documento=**} { allow read, write: if false; }
   }
