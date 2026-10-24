@@ -25,6 +25,19 @@ jobs:
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
           set -o pipefail
           npx -y firebase-tools@13.29.1 deploy --only hosting --project stefany-medeiros-trancista --non-interactive 2>&1 | tee deploy.log
+      - name: Publicar regras de segurança do Firestore
+        id: regras
+        if: env.FIREBASE_SA != ''
+        continue-on-error: true
+        run: |
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
+          set -o pipefail
+          npx -y firebase-tools@13.29.1 deploy --only firestore:rules --project stefany-medeiros-trancista --non-interactive 2>&1 | tee regras.log
+      - name: Avisar se as regras não foram publicadas
+        if: steps.regras.outcome == 'failure'
+        run: |
+          msg=$( (tail -n 20 regras.log 2>/dev/null; tail -n 20 firebase-debug.log 2>/dev/null) | sed -e 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g')
+          echo "::warning title=Regras não publicadas (falta permissão?)::$msg"
       - name: Mostrar o motivo da falha
         if: failure()
         run: |
