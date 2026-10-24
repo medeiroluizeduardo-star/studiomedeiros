@@ -1408,22 +1408,38 @@ async function comprimeFoto(file){const url=URL.createObjectURL(file);try{const 
   const c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,w,h);x.drawImage(img,0,0,w,h);
   let q=.82,d=c.toDataURL('image/jpeg',q);while(d.length>650000&&q>.4){q-=.1;d=c.toDataURL('image/jpeg',q)}return d}finally{URL.revokeObjectURL(url)}}
 const catOrdenado=()=>arr('catalogo').sort((a,b)=>(a.ordem??99)-(b.ordem??99)||String(a.nome).localeCompare(b.nome));
+const normNome=t=>String(t||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim();
+function duracaoDoTempo(t){const s=normNome(t);const ns=(s.match(/\d+(?:[.,]\d+)?/g)||[]).map(x=>+x.replace(',','.'));if(!ns.length)return 0;const n=Math.max(...ns);
+  const m=/min/.test(s)&&!/hora|\bh\b|\dh/.test(s)?n:n*60;return Math.round(m/15)*15}
+async function servicoDoModelo(x,{nome,preco,duracao,servicoId}){let sid=servicoId||x.servicoId;
+  if(sid&&!S.servicos.has(sid))sid='';
+  if(!sid){const ex=arr('servicos').find(s=>normNome(s.nome)===normNome(nome));sid=ex?ex.id:uid()}
+  const sv=S.servicos.get(sid)||{custo:0,consumo:[]};
+  const novo={...sv,nome,duracao:duracao||sv.duracao||120,preco:preco||sv.preco||0,catalogoId:x.id||sv.catalogoId||''};
+  if(JSON.stringify([sv.nome,sv.duracao,sv.preco,sv.catalogoId])!==JSON.stringify([novo.nome,novo.duracao,novo.preco,novo.catalogoId]))await save('servicos',sid,novo,{quiet:true});
+  return sid}
+async function sincronizarCatalogo(){if(!pode('catalogoEdit'))return;for(const x of arr('catalogo').filter(c=>!c.servicoId||!S.servicos.has(c.servicoId))){
+  const sid=await servicoDoModelo(x,{nome:x.nome,preco:+x.preco||0,duracao:duracaoDoTempo(x.tempo)});await save('catalogo',x.id,{...x,servicoId:sid},{quiet:true})}}
 function vCatalogo(){const own=pode('catalogoEdit');const L=catOrdenado();const vis=L.filter(x=>x.ativo!==false).length;
   return head('Catálogo','Catálogo de <em>serviços</em>',`${vis} modelo${vis===1?'':'s'} visível${vis===1?'':'is'} para as clientes`,
     `<button class="btn soft" data-act="copiarCatalogo">${ic('copy')}Copiar link</button><a class="btn soft" href="${urlPublica('catalogo')}" target="_blank" rel="noopener">${ic('right')}Ver como cliente</a>${own?`<button class="btn primary" data-act="novoCat">${ic('plus')}Novo modelo</button>`:''}`)+
   (L.length?`<div class="cat-grid">${L.map(x=>`<button class="cat-card" data-act="editCat" data-id="${x.id}">${fotoImg((x.fotos||[])[0],'cat-img',x.nome)}<div class="cat-body"><div class="row between"><b>${esc(x.nome)}</b>${x.tempo?`<span class="badge">${ic('clock')}${esc(x.tempo)}</span>`:''}</div><p>${esc(x.descricao||'')}</p><div class="row" style="gap:6px">${x.ativo===false?'<span class="badge">oculto</span>':''}${!x.link?'<span class="badge warn">botão usa o WhatsApp do ateliê</span>':'<span class="badge good">botão configurado</span>'}${(x.fotos||[]).length>1?`<span class="badge">${x.fotos.length} fotos</span>`:''}${x.exemplo?'<span class="badge">exemplo</span>':''}</div></div></button>`).join('')}</div>`
    :`<section class="card empty">Nenhum modelo no catálogo ainda.${own?`<br><button class="btn primary" style="margin-top:10px" data-act="novoCat">${ic('plus')}Adicionar o primeiro</button>`:''}</section>`)+
+  (own?(()=>{const lig=new Set(L.map(x=>x.servicoId));const fora=arr('servicos').filter(s=>!lig.has(s.id)).sort((a,b)=>a.nome.localeCompare(b.nome));
+    return fora.length?`<section class="card"><h3>Serviços sem modelo no catálogo <small>${fora.length}</small></h3><p class="small muted" style="margin-top:0">Eles já aparecem na agenda e nos contratos. Toque para criar o modelo com fotos e descrição.</p><div class="chips" style="flex-wrap:wrap">${fora.map(s=>`<button class="chip" data-act="novoCat" data-s="${s.id}">${ic('plus')} ${esc(s.nome)}</button>`).join('')}</div></section>`:''})():'')+
   `<div class="alert info">${ic('info')}<div>As clientes veem o catálogo pelo link público e pelo espaço delas. O botão de cada modelo abre o link que ${own?'você definir':'a proprietária definir'}; o endereço não aparece na tela.${own?'':' Só a proprietária altera o catálogo.'}</div></div>`}
 function verCatalogo(id){const x=S.catalogo.get(id);if(!x)return;
   sheet(esc(x.nome),`<div class="stack"><div class="cat-carrossel">${(x.fotos||[null]).map(f=>fotoImg(f,'cat-foto',x.nome)).join('')}</div>${x.tempo?`<div><span class="badge">${ic('clock')}Tempo médio: ${esc(x.tempo)}</span></div>`:''}<p style="margin:0">${esc(x.descricao||'')}</p>${x.preco&&x.mostrarPreco?`<p class="small muted" style="margin:0">A partir de ${BRL(x.preco)}</p>`:''}<button class="btn soft" data-act="copiarCatalogo">${ic('copy')}Copiar link do catálogo</button></div>`)}
-function formCatalogo(id){const novo=!id;id=id||uid();const x=S.catalogo.get(id)||{ativo:true,botao:'Quero este modelo',mostrarPreco:false,ordem:arr('catalogo').length,fotos:[]};
+function formCatalogo(id,pre={}){const novo=!id;id=id||uid();const sv0=pre.s?S.servicos.get(pre.s):null;const x=S.catalogo.get(id)||{ativo:true,botao:'Quero este modelo',mostrarPreco:false,ordem:arr('catalogo').length,fotos:[],...(sv0?{nome:sv0.nome,servicoId:sv0.id,preco:sv0.preco,tempo:`cerca de ${durTxt(sv0.duracao)}`}:{})};
   let fotos=(x.fotos||[]).map(f=>({id:f}));const removidas=[];
   const cats=[...new Set(arr('catalogo').map(c=>c.categoria).filter(Boolean))];
   sheet(novo?'Novo modelo':'Editar modelo',`<form class="form" id="fCat">
    <div><div class="small muted" style="margin-bottom:6px">Fotos (até 6; a primeira é a capa)</div><div class="cat-fotos" id="cfFotos"></div><label class="btn soft" style="margin-top:8px">${ic('image')}Adicionar fotos<input type="file" id="cfFile" accept="image/*" multiple hidden></label></div>
    <label class="fld">Nome do serviço<input id="cfNome" required value="${esc(x.nome)}" placeholder="Ex.: Box braids médias"></label>
    <div class="f2"><label class="fld">Tempo médio de aplicação<input id="cfTempo" value="${esc(x.tempo)}" placeholder="Ex.: 4 a 6 horas"></label><label class="fld">Categoria<input id="cfCat" list="cfCats" value="${esc(x.categoria)}" placeholder="Ex.: Tranças soltas"><datalist id="cfCats">${cats.map(c=>`<option value="${esc(c)}">`).join('')}</datalist></label></div>
-   <label class="fld">Serviço da agenda (opcional, preenche o tempo)<select id="cfServ">${optServ(x.servicoId,{preco:false,vazio:'Nenhum'})}</select></label>
+   <div class="f2"><label class="fld">Duração na agenda (min)<input id="cfDur" type="number" min="15" step="15" value="${esc(S.servicos.get(x.servicoId)?.duracao||duracaoDoTempo(x.tempo)||'')}" placeholder="Ex.: 300"></label>
+    <label class="fld">Vincular a um serviço já cadastrado<select id="cfServ">${optServ(x.servicoId,{preco:false,vazio:'Criar automaticamente'})}</select></label></div>
+   <p class="small muted" style="margin:-4px 0 0">Este modelo vira um serviço da agenda e aparece para escolha no contrato. Nome, duração e preço ficam sincronizados.</p>
    <label class="fld">Descrição<textarea id="cfDesc" placeholder="Como fica, quanto dura, para quem é indicado">${esc(x.descricao)}</textarea></label>
    <div class="f2"><label class="fld">Preço a partir de (R$, opcional)<input id="cfPreco" type="number" step="0.01" min="0" value="${esc(x.preco??'')}"></label><label class="check" style="align-self:end"><input type="checkbox" id="cfMostra" ${x.mostrarPreco?'checked':''}>Mostrar o preço às clientes</label></div>
    <div class="card" style="box-shadow:none;background:var(--surface-2);border:0"><h3 style="margin-bottom:8px"><span class="row" style="gap:8px">${ic('lock')}Botão do modelo</span><small>só a proprietária altera</small></h3>
@@ -1438,14 +1454,17 @@ function formCatalogo(id){const novo=!id;id=id||uid();const x=S.catalogo.get(id)
     if(rm){const [f]=fotos.splice(+rm.dataset.rm,1);if(f.id)removidas.push(f.id);desenha()}};
   $('#cfFile').onchange=async e=>{const fs=[...e.target.files].slice(0,Math.max(0,6-fotos.length));if(!fs.length){toast('Limite de 6 fotos por modelo.','erro');return}
     toast('Preparando fotos…');for(const f of fs){try{fotos.push({data:await comprimeFoto(f)})}catch(err){toast('Não foi possível ler uma das fotos. Use JPG ou PNG.','erro')}}desenha();e.target.value=''};
-  $('#cfServ').onchange=e=>{const s=S.servicos.get(e.target.value);if(s&&!$('#cfTempo').value)$('#cfTempo').value=`cerca de ${durTxt(s.duracao)}`};
+  $('#cfServ').onchange=e=>{const s=S.servicos.get(e.target.value);if(!s)return;if(!$('#cfTempo').value)$('#cfTempo').value=`cerca de ${durTxt(s.duracao)}`;$('#cfDur').value=s.duracao;if(!$('#cfPreco').value&&s.preco)$('#cfPreco').value=s.preco;if(!$('#cfNome').value)$('#cfNome').value=s.nome};
+  $('#cfTempo').addEventListener('change',()=>{const d=duracaoDoTempo($('#cfTempo').value);if(d&&!$('#cfDur').value)$('#cfDur').value=d});
   if(!novo)$('#cfDel').onclick=()=>confirmar('Excluir este modelo e as fotos dele?',async()=>{for(const f of x.fotos||[])deleteDoc(doc(FS,'catalogoFotos',f)).catch(()=>{});await del('catalogo',id);toast('Modelo excluído')});
   $('#fCat').onsubmit=async e=>{e.preventDefault();const bt=$('#fCat button[type=submit]');bt.disabled=true;
     let link=$('#cfLink').value.trim();if(link&&!/^https?:\/\//i.test(link))link='https://'+link;
     if(link&&!/^https:\/\//i.test(link)){toast('Use um link que comece com https://','erro');bt.disabled=false;return}
     try{const ids=[];for(const f of fotos){if(f.id){ids.push(f.id);continue}const fid=uid();await setDoc(doc(FS,'catalogoFotos',fid),{itemId:id,data:f.data,criadoEm:nowIso()});FOTOS.set(fid,f.data);ids.push(fid)}
       removidas.forEach(f=>deleteDoc(doc(FS,'catalogoFotos',f)).catch(()=>{}));
-      await save('catalogo',id,{...x,nome:$('#cfNome').value.trim(),tempo:$('#cfTempo').value.trim(),categoria:$('#cfCat').value.trim(),servicoId:$('#cfServ').value,descricao:$('#cfDesc').value.trim(),preco:+$('#cfPreco').value||0,mostrarPreco:$('#cfMostra').checked,botao:$('#cfBotao').value.trim()||'Quero este modelo',link,ativo:$('#cfAtivo').checked,fotos:ids});
+      const nomeM=$('#cfNome').value.trim();if(!nomeM){toast('Informe o nome do serviço.','erro');bt.disabled=false;return}
+      const sidM=await servicoDoModelo({...x,id},{nome:nomeM,preco:+$('#cfPreco').value||0,duracao:+$('#cfDur').value||duracaoDoTempo($('#cfTempo').value),servicoId:$('#cfServ').value});
+      await save('catalogo',id,{...x,nome:nomeM,tempo:$('#cfTempo').value.trim(),categoria:$('#cfCat').value.trim(),servicoId:sidM,descricao:$('#cfDesc').value.trim(),preco:+$('#cfPreco').value||0,mostrarPreco:$('#cfMostra').checked,botao:$('#cfBotao').value.trim()||'Quero este modelo',link,ativo:$('#cfAtivo').checked,fotos:ids});
       salvarVitrine();closeSheet();toast('Modelo salvo')}catch(err){bt.disabled=false;dbErr(err)}};
 }
 
@@ -1460,6 +1479,9 @@ function ctLinks(){const L=arr('contratosLink').sort((a,b)=>a.criadoEm<b.criadoE
    ${P.pend?`<div class="alert warn">${ic('alert')}<div>${P.pend} itens da política ainda não foram revisados. Eles entram no contrato do jeito que estão. <button class="btn sm ghost" data-act="ctTab" data-t="politica">Revisar</button></div></div>`:''}
    <button class="btn primary" data-act="linkContrato">${ic('file')}Gerar link de contrato</button></section>
    <section class="card" style="padding:8px 14px"><h3 style="padding:8px 4px 0">Links enviados <small>últimos 120 dias</small></h3>${L.length?`<div class="list">${L.map(l=>{const st=linkStatus(l);const [cl,tx]=LINK_BADGE[st];return `<button class="item" data-act="verLink" data-id="${l.id}"><div class="avatar">${iniciais(l.nome)}</div><div class="grow"><div class="t">${esc(l.nome)}</div><div class="s">${esc(l.servico||'Contrato de serviço')}${l.data?` · ${dataBR(l.data)} ${esc(l.hora||'')}`:''} · enviado ${dataBR(String(l.criadoEm).slice(0,10))}</div></div><span class="badge ${cl}">${tx}</span></button>`}).join('')}</div>`:'<div class="empty">Nenhum link enviado ainda.</div>'}</section>`}
+function optServCat(){const cat=new Set(arr('catalogo').map(c=>c.servicoId).filter(Boolean));const sv=arr('servicos').sort((a,b)=>a.nome.localeCompare(b.nome));
+  const op=s=>`<option value="${s.id}">${esc(s.nome)} · ${BRL(s.preco)}</option>`;const a=sv.filter(s=>cat.has(s.id)),b=sv.filter(s=>!cat.has(s.id));
+  return `<option value="">Selecione…</option>${a.length?`<optgroup label="Catálogo">${a.map(op).join('')}</optgroup>`:''}${b.length?`<optgroup label="${a.length?'Outros serviços':'Serviços'}">${b.map(op).join('')}</optgroup>`:''}`}
 function formLinkContrato(pre={}){
   const futuros=cid=>arr('agenda').filter(a=>a.clienteId===cid&&a.data>=today()&&(a.status==='agendado'||a.status==='confirmado')).sort((a,b)=>(a.data+a.hora)<(b.data+b.hora)?-1:1);
   sheet('Enviar contrato por link',`<form class="form" id="fLk">
@@ -1468,7 +1490,7 @@ function formLinkContrato(pre={}){
    <label class="fld">CPF da cliente (aparece no contrato)<input id="lkCpf" inputmode="numeric" placeholder="000.000.000-00"></label>
    <label class="fld">Atendimento<select id="lkAg"></select></label>
    ${S.servicos.size?'':`<div class="alert warn">${ic('alert')}<div>Nenhum serviço cadastrado ainda. Digite o nome do serviço abaixo${pode('precos')?` ou <button type="button" class="btn sm ghost" data-act="servSug">adicione os serviços sugeridos</button>`:''}.</div></div>`}
-   <div class="f2" id="lkManual"><label class="fld">Serviço<select id="lkServ">${optServ('')}<option value="__outro">Outro: digitar o nome</option></select></label><label class="fld" id="lkOutroBox" hidden>Nome do serviço<input id="lkOutro" placeholder="Ex.: Box braids longas"></label><label class="fld" id="lkDurBox" hidden>Duração (min)<input id="lkDur" type="number" step="15" min="15" value="180"></label><label class="fld">Data<input id="lkData" type="date"></label><label class="fld">Hora<input id="lkHora" type="time"></label><label class="fld">Valor (R$)<input id="lkVal" type="number" step="0.01" min="0"></label></div>
+   <div class="f2" id="lkManual"><label class="fld">Serviço<select id="lkServ">${optServCat()}<option value="__outro">Outro: digitar o nome</option></select></label><label class="fld" id="lkOutroBox" hidden>Nome do serviço<input id="lkOutro" placeholder="Ex.: Box braids longas"></label><label class="fld" id="lkDurBox" hidden>Duração (min)<input id="lkDur" type="number" step="15" min="15" value="180"></label><label class="fld">Data<input id="lkData" type="date"></label><label class="fld">Hora<input id="lkHora" type="time"></label><label class="fld">Valor (R$)<input id="lkVal" type="number" step="0.01" min="0"></label></div>
    <label class="fld">O link vale por<select id="lkDias"><option value="3">3 dias</option><option value="7" selected>7 dias</option><option value="15">15 dias</option><option value="30">30 dias</option></select></label>
    <div class="form-actions"><button class="btn primary" type="submit">${ic('file')}Gerar link</button></div></form>`);
   const sel=$('#lkCli'),ag=$('#lkAg');
@@ -1556,7 +1578,7 @@ async function processar(){if(processando||!FS||!pode('portal')||[...NEED].some(
   try{await registrarContratos()}catch(e){console.error(e)}
   try{await processarSolicitacoes()}catch(e){console.error(e)}
   try{await sincronizarPortais()}catch(e){console.error('portal',e)}
-  if(isOwner()&&!processar.vit){processar.vit=true;salvarVitrine()}
+  if(isOwner()&&!processar.vit){processar.vit=true;salvarVitrine();try{await sincronizarCatalogo()}catch(e){console.error('catalogo',e)}}
   processando=false}
 function avisosPortal(){if(!pode('portal'))return '';const lim=Date.now()-14*864e5;
   const canc=arr('solicitacoes').filter(q=>q.processado&&q.resultado==='cancelado'&&!q.visto&&toMs(q.criadoEm)>lim);
@@ -1631,9 +1653,9 @@ const ACT={
  limparEx:()=>confirmar('Apagar todos os registros marcados como exemplo?',limparEx),
  tornarDona:t=>{const id=t.dataset.id;const e=S.equipe.get(id)||S.pedidos.get(id)||{};confirmar(`Dar acesso total de proprietária para <b>${esc(e.apelido||e.nome||e.email||'esta pessoa')}</b>? Ela passa a ver finanças, contratos, equipe e configurações.`,()=>tornarDona(id))},
  removerDona:t=>confirmar('Remover o acesso de proprietária desta conta? Ela deixará de entrar no sistema até receber um perfil.',()=>removerDona(t.dataset.id)),
- servSug:async()=>{await servicosSugeridos();const f=$('#fLk')||$('#fAg');if(f){const sel=f.querySelector('#lkServ,#aServ');if(sel){const v=sel.value;sel.innerHTML=optServ('')+(sel.id==='lkServ'?'<option value="__outro">Outro: digitar o nome</option>':'');sel.value=v==='__outro'?'':v;sel.dispatchEvent(new Event('change'))}const al=f.querySelector('.alert.warn');if(al&&/Nenhum serviço/.test(al.textContent))al.remove()}},
+ servSug:async()=>{await servicosSugeridos();const f=$('#fLk')||$('#fAg');if(f){const sel=f.querySelector('#lkServ,#aServ');if(sel){const v=sel.value;sel.innerHTML=(sel.id==='lkServ'?optServCat():optServ(''))+(sel.id==='lkServ'?'<option value="__outro">Outro: digitar o nome</option>':'');sel.value=v==='__outro'?'':v;sel.dispatchEvent(new Event('change'))}const al=f.querySelector('.alert.warn');if(al&&/Nenhum serviço/.test(al.textContent))al.remove()}},
  folgaRem:t=>{const i=+t.dataset.i;const f=[...(pub().folgas||[])];f.splice(i,1);save('publico','config',{...pub(),folgas:f});toast('Bloqueio removido')},
- novoCat:()=>formCatalogo(),editCat:t=>pode('catalogoEdit')?formCatalogo(t.dataset.id):verCatalogo(t.dataset.id),
+ novoCat:t=>formCatalogo(null,{s:t.dataset.s}),editCat:t=>pode('catalogoEdit')?formCatalogo(t.dataset.id):verCatalogo(t.dataset.id),
  copiarCatalogo:()=>copiar(urlPublica('catalogo'),'Link do catálogo copiado'),
  linkContrato:t=>formLinkContrato({c:t.dataset.c,a:t.dataset.a}),verLink:t=>verLinkContrato(t.dataset.id),
  cancelarLink:t=>confirmar('Cancelar este link? A cliente não conseguirá mais abrir o contrato.',async()=>{await del('contratosLink',t.dataset.id);toast('Link cancelado')}),
