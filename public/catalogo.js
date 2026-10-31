@@ -19,7 +19,7 @@ const obs = 'IntersectionObserver' in window ? new IntersectionObserver(es => es
 function render() {
   const cats = [...new Set(itens.map(i => i.categoria).filter(Boolean))];
   const lista = itens.filter(i => filtro === 'todos' || i.categoria === filtro);
-  main.innerHTML = `<img class="pub-hero" src="/img/logo.webp" width="1200" height="800" alt="Stéfany Medeiros">
+  main.innerHTML = `<img class="cat-capa" src="/img/faixa.webp" width="1200" height="552" alt="Stéfany Medeiros" fetchpriority="high">
   <section><div class="eyebrow">Catálogo</div><h1 class="page-title">Escolha seu <em>modelo</em></h1><p class="lede">Veja o tempo médio de cada trança e toque no botão para agendar.</p></section>
   ${cats.length > 1 ? `<div class="cat-filtros">${[['todos', 'Todos'], ...cats.map(c => [c, c])].map(([k, n]) => `<button class="chip" data-f="${esc(k)}" aria-pressed="${filtro === k}">${esc(n)}</button>`).join('')}</div>` : ''}
   ${lista.length ? `<div class="pub-cat">${lista.map((x, i) => `<article class="pub-item" data-id="${x.id}" style="animation-delay:${Math.min(i, 8) * 50}ms">

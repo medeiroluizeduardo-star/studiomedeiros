@@ -34,6 +34,6 @@
 .aceite .seg{align-self:flex-start}
 .doc-wrap{max-height:none}
 @media print{.pub-top,.aceite,.pub-foot,.no-print{display:none!important}.doc{border:0;box-shadow:none}}
-.pub-hero{width:100%;height:auto;aspect-ratio:3/2;max-height:420px;object-fit:cover;object-position:30% 40%;border-radius:24px;box-shadow:var(--shadow);display:block}
-@media (max-width:600px){.pub-hero{aspect-ratio:4/3;border-radius:18px}}
+.cat-capa{width:100%;height:auto;aspect-ratio:1200/552;object-fit:cover;border-radius:22px;box-shadow:var(--shadow);display:block}
+@media (max-width:600px){.cat-capa{border-radius:16px}}
 .pub-top .brand-name{font-size:1.5rem}

@@ -16,9 +16,30 @@
 <link rel="stylesheet" href="styles.css">
 <link rel="stylesheet" href="publico.css">
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<script>try{var t=localStorage.getItem('smt-tema');if(t==='claro')document.documentElement.setAttribute('data-theme','light');else if(t==='escuro')document.documentElement.setAttribute('data-theme','dark')}catch(e){}</script>
+<style id="splashCss">
+.splash{--sb:#F8EFE6;--sb2:#EFD9C4;--sf:#7A4123;--sm:#86685A;--sa:#C8895E;position:fixed;inset:0;z-index:40;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:24px;text-align:center;overflow:hidden;
+  background:radial-gradient(120% 80% at 50% 38%,var(--sb) 0%,var(--sb) 45%,var(--sb2) 100%);font-family:"Figtree",system-ui,sans-serif;animation:spIn .5s ease both}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .splash{--sb:#241812;--sb2:#140D09;--sf:#EDBF98;--sm:#C2A391;--sa:#D9A27A}}
+:root[data-theme="dark"] .splash{--sb:#241812;--sb2:#140D09;--sf:#EDBF98;--sm:#C2A391;--sa:#D9A27A}
+.splash::before,.splash::after{content:"";position:absolute;border-radius:50%;background:var(--sa);opacity:.18;filter:blur(2px)}
+.splash::before{width:62vmax;height:62vmax;right:-34vmax;top:-30vmax}
+.splash::after{width:48vmax;height:48vmax;left:-30vmax;bottom:-28vmax;opacity:.12}
+.sp-anel{position:relative;width:132px;height:132px;display:grid;place-items:center;margin-bottom:14px}
+.sp-anel::before{content:"";position:absolute;inset:0;border-radius:50%;background:conic-gradient(from 0deg,transparent 0 55%,var(--sa) 85%,var(--sf));-webkit-mask:radial-gradient(circle,transparent 62px,#000 63px);mask:radial-gradient(circle,transparent 62px,#000 63px);animation:spGira 1.6s linear infinite}
+.sp-anel img{width:112px;height:112px;border-radius:50%;object-fit:cover;box-shadow:0 10px 30px rgba(122,65,35,.25);animation:spRespira 2.6s ease-in-out infinite}
+.sp-nome{font-family:"Cormorant Garamond",Georgia,serif;font-weight:500;font-size:2.1rem;letter-spacing:.14em;text-transform:uppercase;color:var(--sf);line-height:1}
+.sp-sub{font-size:.7rem;letter-spacing:.34em;text-transform:uppercase;color:var(--sm)}
+.sp-onda{width:210px;height:34px;margin-top:6px;color:var(--sa)}
+.sp-onda path{stroke-dasharray:260;stroke-dashoffset:260;animation:spOnda 2.4s ease-in-out infinite}
+.sp-msg{margin-top:4px;font-size:.92rem;color:var(--sm);position:relative}
+@keyframes spGira{to{transform:rotate(1turn)}}@keyframes spRespira{50%{transform:scale(1.035)}}
+@keyframes spOnda{0%{stroke-dashoffset:260}55%{stroke-dashoffset:0}100%{stroke-dashoffset:-260}}@keyframes spIn{from{opacity:0}}
+@media (prefers-reduced-motion:reduce){.splash *,.splash *::before{animation:none!important}.sp-onda path{stroke-dashoffset:0}}
+</style>
 </head>
 <body>
-<main class="pub" id="pub"><div class="loading"><div>Carregando…</div></div></main>
+<main class="pub" id="pub"><div class="splash" role="status" aria-label="Separando os modelos para você…"><div class="sp-anel"><img src="/img/marca.webp" width="112" height="112" alt=""></div><div class="sp-nome">Stéfany</div><div class="sp-sub">Medeiros · Trancista</div><svg class="sp-onda" viewBox="0 0 210 34" aria-hidden="true"><path d="M4 22C40 34 70 6 105 14s62 22 101 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><div class="sp-msg">Separando os modelos para você…</div></div></main>
 <script type="module" src="catalogo.js"></script>
 </body>
 </html>

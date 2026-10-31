@@ -168,7 +168,6 @@ function vigiarEquipe(user){
   },()=>virarPapel('pendente'));
 }
 async function boot(){
-  $('#loadMark').innerHTML=braidMark(56,true);
   if(configPendente()){ROLE='config';render();return}
   APP=initializeApp(firebaseConfig);AUTH=getAuth(APP);
   try{FS=initializeFirestore(APP,{ignoreUndefinedProperties:true,localCache:persistentLocalCache({tabManager:persistentMultipleTabManager()})})}
@@ -492,7 +491,7 @@ function render(){
   const main=$('#main');
   if(['config','login','primeiro','pendente','erro'].includes(ROLE)){$('#tabbar').innerHTML='';$('#navSide').innerHTML='';$('#syncSide').innerHTML='';if(!main.dataset.gate||main.dataset.gate!==ROLE){main.dataset.gate=ROLE;main.innerHTML=gate()}return}
   main.dataset.gate='';
-  if(ROLE==='carregando'||[...NEED].some(c=>!loaded.has(c))){if(!$('#loadMark')){main.innerHTML=`<div class="sk-wrap" aria-busy="true" aria-label="Carregando"><div id="loadMark" class="row" style="gap:12px">${braidMark(40,true)}<div class="sk" style="width:180px;height:28px"></div></div><div class="sk" style="height:96px"></div><div class="kpis">${'<div class="sk" style="height:84px"></div>'.repeat(4)}</div><div class="grid g2"><div class="sk" style="height:220px"></div><div class="sk" style="height:220px"></div></div></div>`}return}
+  if(ROLE==='carregando'||[...NEED].some(c=>!loaded.has(c))){if(!$('#loadMark')){main.innerHTML=`<div class="sk-wrap" aria-busy="true" aria-label="Carregando"><div id="loadMark" class="row" style="gap:12px">${marcaImg(40)}<div class="sk" style="width:180px;height:28px"></div></div><div class="sk" style="height:96px"></div><div class="kpis">${'<div class="sk" style="height:84px"></div>'.repeat(4)}</div><div class="grid g2"><div class="sk" style="height:220px"></div><div class="sk" style="height:220px"></div></div></div>`}return}
   if(!visiveis().some(v=>v[0]===UI.view))UI.view=visiveis()[0][0];
   const top=shell();
   const fn={inicio:vInicio,agenda:vAgenda,clientes:vClientes,catalogo:vCatalogo,financeiro:vFinanceiro,contratos:vContratos,pacotes:vPacotes,estoque:vEstoque,calendario:vCalendario,ajustes:vAjustes}[UI.view]||vInicio;

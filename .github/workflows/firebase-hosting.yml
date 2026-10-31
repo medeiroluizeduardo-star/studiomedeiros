@@ -31,6 +31,11 @@ jobs:
           done
           cp "$RUNNER_TEMP"/min/* public/
           echo "Arquivos compactados:"; ls -la public/*.js public/*.css
+      - name: Marcar versão nos arquivos (evita visual antigo no celular)
+        run: |
+          V=$(echo "$GITHUB_SHA" | cut -c1-8)
+          sed -i -E "s#(href|src)=\"(/?)(styles|publico|app|catalogo|cliente|contrato|cadastro)\.(css|js)\"#\1=\"\2\3.\4?v=$V\"#g" public/*.html
+          grep -ho 'v=[0-9a-f]*' public/*.html | sort | uniq -c
       - name: Publicar site no Firebase Hosting
         if: env.FIREBASE_SA != ''
         run: |
