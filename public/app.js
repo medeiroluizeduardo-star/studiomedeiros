@@ -62,8 +62,10 @@ const I={
  sun:'M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM12 1.5v2M12 20.5v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1.5 12h2M20.5 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4',moon:'M20.5 14.5A8.5 8.5 0 1 1 9.5 3.5a7 7 0 0 0 11 11z',auto:'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 3v18M12 7h4.5M12 11h6M12 15h5.5M12 19h2.5',receipt:'M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6M9 16h3',repeat:'M17 2l4 4-4 4M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4M21 13v2a3 3 0 0 1-3 3H3'
 };
 const ic=(n,cls='')=>`<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${I[n]}"/></svg>`;
+const marcaImg=(n=34)=>`<img class="marca" src="/img/marca.webp" width="${n}" height="${n}" alt="" decoding="async">`;
+const MARCA_TXT='<div><div class="brand-name">Stéfany</div><div class="brand-sub">Medeiros · Trancista</div></div>';
 function braidMark(size=34,spin=false){
-  const cols=['var(--accent)','var(--accent-ink)','var(--lv-perola)'];let paths='';
+  const cols=['var(--accent)','var(--accent-ink)','var(--gold)'];let paths='';
   for(let k=0;k<3;k++){let d='';for(let i=0;i<=28;i++){const y=3+i*(34/28);const x=14+7*Math.sin(i/28*Math.PI*3+k*2*Math.PI/3);d+=(i?'L':'M')+x.toFixed(2)+' '+y.toFixed(2)}
     paths+=`<path d="${d}" stroke="${cols[k]}" stroke-width="3.2" fill="none" stroke-linecap="round"/>`}
   return `<svg class="${spin?'braid-spin':''}" width="${size*.7}" height="${size}" viewBox="0 0 28 40" aria-hidden="true">${paths}</svg>`;
@@ -476,7 +478,7 @@ function go(v){if(!visiveis().some(x=>x[0]===v))v=visiveis()[0][0];UI.view=v;try
 
 function shell(){
   const vs=visiveis();
-  $('#brandSide').innerHTML=`${braidMark(36)}<div><div class="brand-name">Stéfany Medeiros</div><div class="brand-sub">Trancista</div></div>`;
+  $('#brandSide').innerHTML=`${marcaImg(46)}${MARCA_TXT}`;
   const GR=[['Atendimento',['inicio','agenda','clientes','contratos']],['Vitrine e marketing',['catalogo','pacotes','calendario']],['Gestão',['financeiro','estoque']],['',['ajustes']]];
   const bt=([k,n,i])=>`<button class="nav" data-act="go" data-v="${k}" ${UI.view===k?'aria-current="page"':''}>${ic(i)}${n}</button>`;
   $('#navSide').innerHTML=GR.map(([g,ks])=>{const it=ks.map(k=>vs.find(v=>v[0]===k)).filter(Boolean);return it.length?`${g?`<div class="nav-grupo">${g}</div>`:'<div class="nav-sep"></div>'}${it.map(bt).join('')}`:''}).join('');
@@ -484,7 +486,7 @@ function shell(){
   const inTabs=tabs.some(t=>t[0]===UI.view);
   $('#tabbar').innerHTML=tabs.map(([k,n,i])=>`<button class="tab" data-act="go" data-v="${k}" ${UI.view===k?'aria-current="page"':''}>${ic(i)}<span>${k==='financeiro'?'Finanças':n}</span></button>`).join('')+`<button class="tab" data-act="mais" ${!inTabs?'aria-current="page"':''}>${ic('grid')}<span>Mais</span></button>`;
   const on=navigator.onLine!==false;$('#syncSide').innerHTML=`<i></i>${on?'Sincronizado':'Sem internet · salvando no aparelho'} · ${PAPEIS[ROLE]||''}`;$('#syncSide').classList.toggle('local',!on);
-  return `<div class="topbar"><div class="brand">${braidMark(30)}<div><div class="brand-name">Stéfany Medeiros</div><div class="brand-sub">Trancista</div></div></div><div class="row">${navigator.onLine===false?'<span class="sync local"><i></i>Sem internet</span>':''}<span class="role">${esc(PAPEIS[ROLE]||'')}</span>${pode('base')?`<button class="icon-btn" data-act="busca" aria-label="Buscar (atalho /)" title="Buscar (atalho /)">${ic('search')}</button>`:''}<button class="icon-btn" data-act="tema" aria-label="Tema: ${{sistema:'automático',claro:'claro',escuro:'escuro'}[temaAtual()]}" title="Tema: ${{sistema:'automático',claro:'claro',escuro:'escuro'}[temaAtual()]}">${ic({sistema:'auto',claro:'sun',escuro:'moon'}[temaAtual()])}</button></div></div>`;
+  return `<div class="topbar"><div class="brand">${marcaImg(38)}${MARCA_TXT}</div><div class="row">${navigator.onLine===false?'<span class="sync local"><i></i>Sem internet</span>':''}<span class="role">${esc(PAPEIS[ROLE]||'')}</span>${pode('base')?`<button class="icon-btn" data-act="busca" aria-label="Buscar (atalho /)" title="Buscar (atalho /)">${ic('search')}</button>`:''}<button class="icon-btn" data-act="tema" aria-label="Tema: ${{sistema:'automático',claro:'claro',escuro:'escuro'}[temaAtual()]}" title="Tema: ${{sistema:'automático',claro:'claro',escuro:'escuro'}[temaAtual()]}">${ic({sistema:'auto',claro:'sun',escuro:'moon'}[temaAtual()])}</button></div></div>`;
 }
 function render(){
   const main=$('#main');
@@ -503,7 +505,7 @@ function render(){
 }
 function afterRender(){const c=$('#sigPad');if(c&&!c.dataset.on)sigInit(c);carregaFotos()}
 function gate(){
-  const card=(t,body)=>`<div class="gate"><div class="card stack" style="align-items:center;max-width:420px;width:100%">${braidMark(56)}<div><div class="brand-name" style="font-size:1.5rem">Stéfany Medeiros</div><div class="brand-sub">Trancista</div></div><h2 class="page-title" style="font-size:1.4rem">${t}</h2>${body}</div></div>`;
+  const card=(t,body)=>`<div class="gate"><div class="stack" style="align-items:stretch;max-width:420px;width:100%"><img class="gate-logo" src="/img/logo.webp" width="420" height="280" alt="Stéfany Medeiros"><div class="card stack" style="align-items:center;width:100%"><h2 class="page-title" style="font-size:1.6rem">${t}</h2>${body}</div></div></div>`;
   if(ROLE==='config')return card('Falta configurar o Firebase',`<p class="muted" style="margin:0">Abra o arquivo <b>public/firebase-config.js</b> e cole os dados do seu projeto, como explicado no guia (LEIA-ME.md). Depois publique de novo.</p>`);
   if(ROLE==='erro')return card('Não foi possível conectar',`<p class="muted" style="margin:0">Confira se o Firestore foi criado no console do Firebase e se as regras foram publicadas. Depois recarregue a página.</p><button class="btn soft" data-act="sair">Sair</button>`);
   if(ROLE==='login')return card('Entrar',`<form class="form" id="fLogin" style="width:100%;text-align:left"><label class="fld">E-mail<input id="lgEmail" type="email" autocomplete="username" required></label><label class="fld">Senha<input id="lgSenha" type="password" autocomplete="current-password" required></label><div id="lgMsg" class="small" style="color:var(--bad)"></div><button class="btn primary" style="justify-content:center">Entrar</button><button type="button" class="btn ghost" data-act="esqueci" style="justify-content:center">Esqueci minha senha</button></form><p class="small muted" style="margin:0">Não tem acesso? Peça para a proprietária criar seu usuário.</p>`);
@@ -988,7 +990,7 @@ function coletarAceite(tipo,cid,agid){
     const P=pol();const d={tipo,clienteId:cid||'',agendaId:agid||'',versao:P.versao,texto,hash:await hashTexto(texto),nomeAssinante:$('#acNome').value.trim(),cpf:$('#acCpf').value.trim(),meio,aceitoEm:nowIso(),registradoPor:ME||'',assinatura:meio==='Assinatura no aparelho'?pad.toDataURL('image/png'):''};
     await save('aceites',null,d);closeSheet();toast('Aceite registrado')};
 }
-function sigInit(c){c.dataset.on='1';const r=c.getBoundingClientRect();const dpr=window.devicePixelRatio||1;c.width=Math.max(300,r.width)*dpr;c.height=170*dpr;const x=c.getContext('2d');x.scale(dpr,dpr);x.lineWidth=2.2;x.lineCap='round';x.lineJoin='round';x.strokeStyle='#432B33';
+function sigInit(c){c.dataset.on='1';const r=c.getBoundingClientRect();const dpr=window.devicePixelRatio||1;c.width=Math.max(300,r.width)*dpr;c.height=170*dpr;const x=c.getContext('2d');x.scale(dpr,dpr);x.lineWidth=2.2;x.lineCap='round';x.lineJoin='round';x.strokeStyle='#3B2216';
   let on=false;const pos=e=>{const b=c.getBoundingClientRect();return [e.clientX-b.left,e.clientY-b.top]};
   c.addEventListener('pointerdown',e=>{on=true;c.setPointerCapture(e.pointerId);const[a,b]=pos(e);x.beginPath();x.moveTo(a,b)});
   c.addEventListener('pointermove',e=>{if(!on)return;const[a,b]=pos(e);x.lineTo(a,b);x.stroke();c.dataset.ink='1'});
@@ -1102,15 +1104,15 @@ function divulgar(){
   $('#dvImg').onclick=()=>$('#dvCanvas').toBlob(b=>b&&baixar(`horarios-${today()}.png`,b),'image/png');
 }
 function desenhaStory(dias,pb){const c=$('#dvCanvas');if(!c)return;const x=c.getContext('2d');const W=1080,H=1920;
-  const g=x.createLinearGradient(0,0,0,H);g.addColorStop(0,'#FDF1F4');g.addColorStop(1,'#F6D3DD');x.fillStyle=g;x.fillRect(0,0,W,H);
-  x.strokeStyle='rgba(169,79,108,.18)';x.lineWidth=10;for(let k=0;k<3;k++){x.beginPath();for(let i=0;i<=60;i++){const y=i*(H/60);const xx=W-90+40*Math.sin(i/60*Math.PI*8+k*2.1);i?x.lineTo(xx,y):x.moveTo(xx,y)}x.stroke()}
-  x.fillStyle='#A94F6C';x.textAlign='left';x.font='italic 500 92px "Bodoni Moda", Georgia, serif';x.fillText('Horários',90,260);x.fillText('disponíveis',90,370);
-  x.fillStyle='#8C6F78';x.font='600 34px Figtree, sans-serif';x.fillText(pb.nome.toUpperCase(),90,440);
+  const g=x.createLinearGradient(0,0,0,H);g.addColorStop(0,'#FBF3EB');g.addColorStop(1,'#EFD3BC');x.fillStyle=g;x.fillRect(0,0,W,H);
+  x.strokeStyle='rgba(122,65,35,.16)';x.lineWidth=10;for(let k=0;k<3;k++){x.beginPath();for(let i=0;i<=60;i++){const y=i*(H/60);const xx=W-90+40*Math.sin(i/60*Math.PI*8+k*2.1);i?x.lineTo(xx,y):x.moveTo(xx,y)}x.stroke()}
+  x.fillStyle='#7A4123';x.textAlign='left';x.font='italic 600 104px "Cormorant Garamond", Georgia, serif';x.fillText('Horários',90,260);x.fillText('disponíveis',90,370);
+  x.fillStyle='#86685A';x.font='600 34px Figtree, sans-serif';x.fillText(pb.nome.toUpperCase(),90,440);
   let y=560;x.font='700 46px Figtree, sans-serif';
-  if(!dias.length){x.fillStyle='#432B33';x.fillText('Agenda cheia no período.',90,y);x.font='400 40px Figtree, sans-serif';x.fillText('Peça para entrar na lista de espera!',90,y+70)}
-  dias.slice(0,9).forEach(d=>{x.fillStyle='#432B33';x.font='700 44px Figtree, sans-serif';x.fillText(`${cap(SEMX[parse(d.d).getDay()])} ${dataCurta(d.d)}`,90,y);
-    x.fillStyle='#A94F6C';x.font='500 40px Figtree, sans-serif';x.fillText(d.l.map(([a,b])=>`${min2hm(a)}–${min2hm(b)}`).join('   '),90,y+56);y+=140});
-  x.fillStyle='#A94F6C';x.beginPath();x.roundRect?x.roundRect(90,H-260,W-180,120,60):x.rect(90,H-260,W-180,120);x.fill();
+  if(!dias.length){x.fillStyle='#3B2216';x.fillText('Agenda cheia no período.',90,y);x.font='400 40px Figtree, sans-serif';x.fillText('Peça para entrar na lista de espera!',90,y+70)}
+  dias.slice(0,9).forEach(d=>{x.fillStyle='#3B2216';x.font='700 44px Figtree, sans-serif';x.fillText(`${cap(SEMX[parse(d.d).getDay()])} ${dataCurta(d.d)}`,90,y);
+    x.fillStyle='#7A4123';x.font='500 40px Figtree, sans-serif';x.fillText(d.l.map(([a,b])=>`${min2hm(a)}–${min2hm(b)}`).join('   '),90,y+56);y+=140});
+  x.fillStyle='#7A4123';x.beginPath();x.roundRect?x.roundRect(90,H-260,W-180,120,60):x.rect(90,H-260,W-180,120);x.fill();
   x.fillStyle='#fff';x.textAlign='center';x.font='700 42px Figtree, sans-serif';x.fillText(pb.whatsapp?`Agende: ${pb.whatsapp}`:'Agende pelo WhatsApp',W/2,H-185)}
 
 /* ---------- finanças ---------- */

@@ -81,17 +81,17 @@ async function baixarPdf() {
     const { jsPDF } = await carregaJsPdf(); const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
     const M = 18, W = 174, H = 297; let y = 20; const ac = L.aceite || {};
     const linha = (txt, size = 10, bold = false, gap = 4.6) => { pdf.setFont('helvetica', bold ? 'bold' : 'normal'); pdf.setFontSize(size); for (const l of pdf.splitTextToSize(latin(txt), W)) { if (y > H - 22) { pdf.addPage(); y = 20; } pdf.text(l, M, y); y += gap; } };
-    pdf.setTextColor(169, 79, 108); linha((L.atelie && L.atelie.nome) || 'Stéfany Medeiros Trancista', 11, true, 6); pdf.setTextColor(40, 30, 34);
+    pdf.setTextColor(122, 65, 35); linha((L.atelie && L.atelie.nome) || 'Stéfany Medeiros Trancista', 11, true, 6); pdf.setTextColor(59, 34, 22);
     for (const par of String(L.texto || '').split('\n')) { if (!par.trim()) { y += 2; continue; } const titulo = /^(Contrato|Cláusula|Partes)/i.test(par.trim()); linha(par, titulo ? 11 : 10, titulo, titulo ? 5.6 : 4.6); }
     if (y > H - 70) { pdf.addPage(); y = 20; }
-    y += 4; pdf.setDrawColor(227, 160, 180); pdf.line(M, y, M + W, y); y += 7;
+    y += 4; pdf.setDrawColor(200, 137, 94); pdf.line(M, y, M + W, y); y += 7;
     linha('Aceite eletrônico', 12, true, 6);
     linha(`Nome: ${ac.nome || ''}`); linha(`CPF: ${ac.cpf || ''}`);
     linha(`Forma: ${ac.meio === 'assinatura' ? 'assinatura no aparelho' : 'confirmação "Li e concordo"'}`);
     linha(`Data e hora: ${new Date(toMs(ac.em)).toLocaleString('pt-BR')}`);
     linha(`Código do documento: ${L.hash || token}`); linha(`Endereço do contrato: ${location.origin}/contrato#${token}`, 8);
     if (ac.assinatura) { y += 2; if (y > H - 40) { pdf.addPage(); y = 20; } pdf.addImage(ac.assinatura, 'PNG', M, y, 70, 22); y += 24; pdf.setFontSize(8); pdf.text(latin(ac.nome || ''), M, y); }
-    const n = pdf.getNumberOfPages(); for (let i = 1; i <= n; i++) { pdf.setPage(i); pdf.setFontSize(8); pdf.setTextColor(140, 111, 120); pdf.text(`Página ${i} de ${n}`, M + W, H - 10, { align: 'right' }); }
+    const n = pdf.getNumberOfPages(); for (let i = 1; i <= n; i++) { pdf.setPage(i); pdf.setFontSize(8); pdf.setTextColor(134, 104, 90); pdf.text(`Página ${i} de ${n}`, M + W, H - 10, { align: 'right' }); }
     pdf.save(`contrato-${latin(primeiro(L.nome)).toLowerCase() || 'cliente'}-${(L.data || new Date().toISOString().slice(0, 10))}.pdf`);
   } catch (e) { console.error(e); toast('Não foi possível gerar o PDF. Tente de novo.', true); }
   bt.disabled = false; bt.innerHTML = `${ic('down')}Baixar contrato em PDF`;

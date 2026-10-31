@@ -27,10 +27,13 @@
 .pub-item .pontos i{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.65);box-shadow:0 0 0 1px rgba(0,0,0,.08)}
 .pub-item .pontos i.on{background:#fff;width:14px;border-radius:4px}
 .pub-item .corpo{padding:14px 16px 16px;display:flex;flex-direction:column;gap:8px;flex:1}
-.pub-item h2{margin:0;font-family:var(--f-display);font-weight:500;font-size:1.35rem}
+.pub-item h2{margin:0;font-family:var(--f-display);font-weight:600;font-size:1.55rem}
 .pub-item p{margin:0;font-size:.9rem;color:var(--muted)}
 .pub-item .btn{justify-content:center;margin-top:auto}
 .aceite{display:flex;flex-direction:column;gap:12px}
 .aceite .seg{align-self:flex-start}
 .doc-wrap{max-height:none}
 @media print{.pub-top,.aceite,.pub-foot,.no-print{display:none!important}.doc{border:0;box-shadow:none}}
+.pub-hero{width:100%;height:auto;aspect-ratio:3/2;max-height:420px;object-fit:cover;object-position:30% 40%;border-radius:24px;box-shadow:var(--shadow);display:block}
+@media (max-width:600px){.pub-hero{aspect-ratio:4/3;border-radius:18px}}
+.pub-top .brand-name{font-size:1.5rem}

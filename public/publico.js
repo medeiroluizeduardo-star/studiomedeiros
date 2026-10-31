@@ -33,14 +33,13 @@ const I = {
 };
 export const ic = n => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${I[n]}"/></svg>`;
 export function braidMark(size = 34) {
-  const cols = ['var(--accent)', 'var(--accent-ink)', 'var(--lv-perola)']; let paths = '';
+  const cols = ['var(--accent)', 'var(--accent-ink)', 'var(--gold)']; let paths = '';
   for (let k = 0; k < 3; k++) { let d = ''; for (let i = 0; i <= 28; i++) { const y = 3 + i * (34 / 28); const x = 14 + 7 * Math.sin(i / 28 * Math.PI * 3 + k * 2 * Math.PI / 3); d += (i ? 'L' : 'M') + x.toFixed(2) + ' ' + y.toFixed(2); } paths += `<path d="${d}" stroke="${cols[k]}" stroke-width="3.2" fill="none" stroke-linecap="round"/>`; }
   return `<svg width="${size * .7}" height="${size}" viewBox="0 0 28 40" aria-hidden="true">${paths}</svg>`;
 }
-export function marca(nome) {
-  const partes = String(nome || 'Stéfany Medeiros Trancista').replace(/\s+Trancista$/i, '');
-  return `<header class="pub-top">${braidMark(34)}<div><div class="brand-name">${esc(partes)}</div><div class="brand-sub">Trancista</div></div></header>`;
+export function marca() {
+  return `<header class="pub-top"><img class="marca" src="/img/marca.webp" width="46" height="46" alt="" decoding="async"><div><div class="brand-name">Stéfany</div><div class="brand-sub">Medeiros · Trancista</div></div></header>`;
 }
 export function toast(m, erro) { const t = document.createElement('div'); t.className = 'toast' + (erro ? ' erro' : ''); t.innerHTML = ic(erro ? 'alert' : 'check'); const sp = document.createElement('span'); sp.textContent = m; t.appendChild(sp); document.body.appendChild(t); setTimeout(() => t.remove(), erro ? 4200 : 2900); }
 export const NIVEL_COR = { perola: 'var(--lv-perola)', ouro: 'var(--lv-ouro)', prata: 'var(--lv-prata)', bronze: 'var(--lv-bronze)', nova: 'var(--lv-nova)' };
-export function estado(main, titulo, texto, extra = '') { main.innerHTML = `<div class="pub-estado card">${braidMark(52)}<h1 class="page-title" style="font-size:1.5rem">${titulo}</h1><p class="muted" style="margin:0">${texto}</p>${extra}</div>`; }
+export function estado(main, titulo, texto, extra = '') { main.innerHTML = `<div class="pub-estado card"><img class="marca" src="/img/marca.webp" width="72" height="72" alt=""><h1 class="page-title" style="font-size:1.5rem">${titulo}</h1><p class="muted" style="margin:0">${texto}</p>${extra}</div>`; }
