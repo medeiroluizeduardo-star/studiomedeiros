@@ -3,7 +3,8 @@ import { FS, $, $$, esc, BRL, ic, braidMark, marca, waLink, estado } from './pub
 
 const main = $('#pub');
 const fotos = new Map();
-let itens = [], vitrine = {}, filtro = 'todos';
+let itens = [], vitrine = {}, filtro = 'todos', depo = null;
+const IND = (new URLSearchParams(location.search).get('ind') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12);
 
 async function carregaFotosDo(el) {
   for (const img of $$('img[data-foto]:not([src])', el)) {
@@ -21,6 +22,8 @@ function render() {
   const lista = itens.filter(i => filtro === 'todos' || i.categoria === filtro);
   main.innerHTML = `<img class="cat-capa" src="/img/faixa.webp" width="1200" height="552" alt="Stéfany Medeiros" fetchpriority="high">
   <section><div class="eyebrow">Catálogo</div><h1 class="page-title">Escolha seu <em>modelo</em></h1><p class="lede">Veja o tempo médio de cada trança e toque no botão para agendar.</p></section>
+  ${IND ? `<div class="ind-banner">${ic('gift')}<div class="small">Você veio por indicação de uma cliente 💕 ${vitrine.indBenefNova ? `Ganhe <b>${esc(vitrine.indBenefNova)}</b>.` : ''} Seu código <b>${esc(IND)}</b> já vai junto na mensagem.</div></div>` : ''}
+  ${depo && (depo.lista || []).length ? `<section><div class="eyebrow">Quem fez, amou${depo.media ? ` · ${String(depo.media).replace('.', ',')} ★ em ${depo.total} avaliaç${depo.total === 1 ? 'ão' : 'ões'}` : ''}</div><div class="depo" style="margin-top:8px">${depo.lista.slice(0, 6).map(d => `<article><span class="estrelas">${'★'.repeat(d.nota)}${'☆'.repeat(5 - d.nota)}</span><p>"${esc(d.texto)}"</p><span class="small muted">${esc(d.nome)}${d.servico ? ` · ${esc(d.servico)}` : ''}</span></article>`).join('')}</div></section>` : ''}
   ${cats.length > 1 ? `<div class="cat-filtros">${[['todos', 'Todos'], ...cats.map(c => [c, c])].map(([k, n]) => `<button class="chip" data-f="${esc(k)}" aria-pressed="${filtro === k}">${esc(n)}</button>`).join('')}</div>` : ''}
   ${lista.length ? `<div class="pub-cat">${lista.map((x, i) => `<article class="pub-item" data-id="${x.id}" style="animation-delay:${Math.min(i, 8) * 50}ms">
       <div class="fotos" data-n="${(x.fotos || []).length}">${(x.fotos || []).length ? x.fotos.map(f => `<img data-foto="${esc(f)}" alt="${esc(x.nome)}" ${fotos.has(f) ? `src="${fotos.get(f)}"` : ''}>`).join('') : `<div class="foto-vazia">${braidMark(56)}</div>`}</div>
@@ -41,14 +44,16 @@ main.addEventListener('click', e => {
   const f = e.target.closest('[data-f]'); if (f) { filtro = f.dataset.f; render(); return; }
   const q = e.target.closest('[data-quero]'); if (!q) return;
   const x = itens.find(i => i.id === q.dataset.quero); if (!x) return;
-  const destino = x.link || waLink(vitrine.whatsapp, `Olá! Vi no catálogo o modelo "${x.nome}" e quero agendar 💕`);
+  let destino = x.link || waLink(vitrine.whatsapp, `Olá! Vi no catálogo o modelo "${x.nome}" e quero agendar 💕`);
+  if (destino && IND) { try { const u = new URL(destino); const t = u.searchParams.get('text') || `Olá! Vi no catálogo o modelo "${x.nome}" e quero agendar 💕`; u.searchParams.set('text', `${t}\nCódigo de indicação: ${IND}`); destino = u.toString(); } catch (e) { } }
   if (!destino) { q.textContent = 'Fale com o ateliê pelo Instagram'; return; }
   window.open(destino, '_blank', 'noopener');
 });
 
 (async () => {
   try {
-    const [v, snap] = await Promise.all([getDoc(doc(FS, 'vitrine', 'config')), getDocs(query(collection(FS, 'catalogo'), where('ativo', '==', true)))]);
+    const [v, snap, dp] = await Promise.all([getDoc(doc(FS, 'vitrine', 'config')), getDocs(query(collection(FS, 'catalogo'), where('ativo', '==', true))), getDoc(doc(FS, 'vitrine', 'depoimentos')).catch(() => null)]);
+    depo = dp && dp.exists() ? dp.data() : null;
     vitrine = v.exists() ? v.data() : {};
     itens = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.ordem ?? 99) - (b.ordem ?? 99) || String(a.nome).localeCompare(b.nome));
     render();

@@ -191,7 +191,7 @@ service cloud.firestore {
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'dados', 'enviadoEm'])
             && request.resource.data.status == 'enviado'
             && request.resource.data.enviadoEm == request.time
-            && request.resource.data.dados.keys().hasOnly(['nome', 'telefone', 'cpf', 'aniversario', 'instagram', 'origem', 'indicadaPor', 'cabelo', 'obs', 'imagem', 'consentimento'])
+            && request.resource.data.dados.keys().hasOnly(['nome', 'telefone', 'cpf', 'aniversario', 'instagram', 'origem', 'indicadaPor', 'codigoIndicacao', 'cabelo', 'obs', 'imagem', 'consentimento'])
             && request.resource.data.dados.consentimento == true
             && request.resource.data.dados.get('imagem', false) is bool
             && request.resource.data.dados.nome is string
@@ -204,8 +204,48 @@ service cloud.firestore {
             && txt(request.resource.data.dados, 'origem', 40)
             && txt(request.resource.data.dados, 'indicadaPor', 120)
             && txt(request.resource.data.dados, 'cabelo', 120)
-            && txt(request.resource.data.dados, 'obs', 300));
+            && txt(request.resource.data.dados, 'obs', 300)
+            && txt(request.resource.data.dados, 'codigoIndicacao', 12));
       allow delete: if atendimento();
+    }
+
+    // ===== Ficha de anamnese preenchida pela cliente no espaço dela =====
+    // Só quem tem o link do espaço envia. Dados de saúde: leitura apenas da proprietária e da trancista parceira.
+    match /anamnesePortal/{token} {
+      allow create, update: if exists(/databases/$(database)/documents/portal/$(token))
+        && request.resource.data.keys().hasOnly(['respostas', 'nome', 'cpf', 'menor', 'responsavel', 'imagem', 'declaracao', 'consentimento', 'em', 'dispositivo'])
+        && request.resource.data.declaracao == true
+        && request.resource.data.consentimento == true
+        && request.resource.data.em == request.time
+        && request.resource.data.nome is string && request.resource.data.nome.size() >= 3 && request.resource.data.nome.size() <= 120
+        && txt(request.resource.data, 'cpf', 20)
+        && txt(request.resource.data, 'dispositivo', 200)
+        && request.resource.data.respostas is map && request.resource.data.respostas.size() <= 20
+        && request.resource.data.menor is bool && request.resource.data.imagem is bool
+        && request.resource.data.responsavel is map && request.resource.data.responsavel.size() <= 3;
+      allow update: if saude()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['processado', 'resultado', 'clienteId', 'visto', 'processadoEm']);
+      allow read, delete: if saude();
+    }
+
+    // ===== Avaliações feitas pela cliente no espaço dela =====
+    // Uma por atendimento concluído (lista "avaliaveis" do espaço). Não pode ser alterada pela cliente.
+    match /avaliacoes/{id} {
+      allow create: if request.resource.data.keys().hasOnly(['token', 'agendaId', 'nota', 'texto', 'autorizaPublicar', 'nomeExibicao', 'servico', 'em'])
+        && request.resource.data.token is string && request.resource.data.token.size() <= 64
+        && request.resource.data.agendaId is string && request.resource.data.agendaId.size() <= 64
+        && id == request.resource.data.token + '_' + request.resource.data.agendaId
+        && exists(/databases/$(database)/documents/portal/$(request.resource.data.token))
+        && request.resource.data.agendaId in get(/databases/$(database)/documents/portal/$(request.resource.data.token)).data.avaliaveis
+        && request.resource.data.nota is int && request.resource.data.nota >= 1 && request.resource.data.nota <= 5
+        && request.resource.data.texto is string && request.resource.data.texto.size() <= 600
+        && request.resource.data.autorizaPublicar is bool
+        && request.resource.data.nomeExibicao is string && request.resource.data.nomeExibicao.size() <= 60
+        && request.resource.data.servico is string && request.resource.data.servico.size() <= 80
+        && request.resource.data.em == request.time;
+      allow read: if atendimento();
+      allow update: if atendimento() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['publicado', 'visto']);
+      allow delete: if dona();
     }
 
     // Qualquer outro caminho é bloqueado.

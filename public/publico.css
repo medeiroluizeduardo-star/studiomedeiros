@@ -37,3 +37,27 @@
 .cat-capa{width:100%;height:auto;aspect-ratio:1200/552;object-fit:cover;border-radius:22px;box-shadow:var(--shadow);display:block}
 @media (max-width:600px){.cat-capa{border-radius:16px}}
 .pub-top .brand-name{font-size:1.5rem}
+.anam-card h3{display:flex;align-items:center;gap:8px}.anam-card h3 svg{width:18px;height:18px;color:var(--accent-ink)}
+.anam-q{display:grid;gap:4px}
+.anam-q .qa{display:grid;grid-template-columns:1fr auto;gap:6px 12px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.anam-q .qa:first-child{border-top:0}
+.anam-q .fld-in{grid-column:1/-1;border:1px solid var(--line);border-radius:10px;padding:9px 11px;background:var(--surface);font:inherit;color:inherit}
+.anam-q .seg.falta{box-shadow:0 0 0 2px var(--bad)}
+.sheet-alta{max-height:94vh}
+@media (max-width:480px){.anam-q .qa{grid-template-columns:1fr}.anam-q .seg{justify-self:start}}
+.aval-card h3,.cuid-card h3,.ind-card h3{display:flex;align-items:center;gap:8px}.aval-card h3 svg,.cuid-card h3 svg,.ind-card h3 svg{width:18px;height:18px;color:var(--accent-ink)}
+.estrelas-in{display:flex;gap:6px}
+.estrelas-in button{border:0;background:none;font-size:2rem;line-height:1;color:var(--line);padding:2px;transition:transform .15s var(--spring),color .15s}
+.estrelas-in button:hover,.estrelas-in button.on{color:var(--gold);transform:scale(1.08)}
+.estrelas-in:hover button{color:var(--gold)}.estrelas-in button:hover~button{color:var(--line)}
+.estrelas-in.grande button{font-size:2.4rem}
+.ind-cod{display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:12px 14px;border:1.5px dashed var(--accent);border-radius:14px;background:color-mix(in srgb,var(--accent) 8%,transparent)}
+.ind-cod b{font-size:1.35rem;letter-spacing:.12em;color:var(--accent-ink)}
+.cuid-prazo .bar{margin-top:6px}
+.depo{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(240px,1fr))}
+.depo article{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:16px;display:grid;gap:6px}
+.depo .estrelas{color:var(--gold);letter-spacing:.1em}
+.depo p{margin:0;font-family:var(--f-display);font-size:1.15rem;line-height:1.35;font-style:italic}
+.ind-banner{display:flex;gap:10px;align-items:center;padding:12px 14px;border-radius:16px;background:color-mix(in srgb,var(--accent) 14%,var(--surface));border:1px solid color-mix(in srgb,var(--accent) 35%,transparent)}
+.ind-banner svg{width:22px;height:22px;color:var(--accent-ink);flex:none}
+.aval-card h3,.cuid-card h3,.ind-card h3{justify-content:flex-start}

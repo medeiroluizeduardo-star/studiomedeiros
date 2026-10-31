@@ -1,4 +1,4 @@
-import { doc, getDoc, getDocs, collection, writeBatch, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { doc, getDoc, getDocs, setDoc, collection, writeBatch, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 import { FS, $, $$, esc, BRL, ic, marca, waLink, estado, dataBR, dataLonga, parse, primeiro, toMs, tokenDaUrl, toast, NIVEL_COR } from './publico.js';
 
 const main = $('#pub');
@@ -40,10 +40,14 @@ function render() {
   <section class="card"><h3>Próximos horários <small>${prox.filter(a => !a.cancelado).length}</small></h3>
    ${prox.length ? `<div class="stack" style="gap:10px">${prox.map(proxCard).join('')}</div>` : `<div class="empty">Nenhum horário marcado.</div>`}
    <div class="row" style="margin-top:12px">${wAg ? `<a class="btn primary" href="${wAg}" target="_blank" rel="noopener">${ic('cal')}Agendar pelo WhatsApp</a>` : ''}<a class="btn soft" href="/catalogo">${ic('image')}Ver catálogo de modelos</a></div></section>
+  ${avaliarCard()}
+  ${cuidadosCard()}
+  ${anamCard()}
+  ${indicacaoCard()}
   ${(P.contratos || []).length ? `<section class="card"><h3>Meus contratos</h3><div class="list">${P.contratos.map(k => { const [cl, tx] = CT[k.status] || CT.aceito; const inner = `<div class="avatar" style="--lv:var(--rose)">${ic('file')}</div><div class="grow"><div class="t">${esc(k.servico || 'Contrato de serviço')}</div><div class="s">${k.data ? `atendimento em ${dataBR(k.data)} · ` : ''}${k.presencial ? 'assinado no ateliê' : `enviado em ${dataBR(k.criadoEm)}`}</div></div><span class="badge ${cl}">${tx}</span>`;
       return k.token ? `<a class="item" href="/contrato#${esc(k.token)}" style="text-decoration:none;color:inherit">${inner}</a>` : `<div class="item">${inner}</div>`; }).join('')}</div></section>` : ''}
   ${(P.pacotes || []).length ? `<section class="card"><h3>Meus pacotes</h3><div class="list">${P.pacotes.map(p => `<div class="item"><div class="avatar" style="--lv:var(--lv-ouro)">${ic('ticket')}</div><div class="grow"><div class="t">${esc(p.nome)}</div><div class="s">${p.saldo} sessão(ões) disponível(is)${p.validade ? ` · válido até ${dataBR(p.validade)}` : ''}</div></div></div>`).join('')}</div></section>` : ''}
-  <section class="card"><h3>Últimos atendimentos</h3>${(P.ultimos || []).length ? `<div class="list">${P.ultimos.map(u => { const [cl, tx] = ST[u.status] || ST.concluido; return `<div class="item"><span class="time">${dataBR(u.data).slice(0, 5)}</span><div class="grow"><div class="t">${esc(u.servico)}</div><div class="s">${u.data.slice(0, 4)}${u.pacote ? ' · pacote' : ''}</div></div><span class="badge ${cl}">${tx}</span></div>`; }).join('')}</div>` : '<div class="empty">Seu histórico aparece aqui depois do primeiro atendimento.</div>'}</section>
+  <section class="card"><h3>Últimos atendimentos</h3>${(P.ultimos || []).length ? `<div class="list">${P.ultimos.map(u => { const [cl, tx] = ST[u.status] || ST.concluido; return `<div class="item"><span class="time">${dataBR(u.data).slice(0, 5)}</span><div class="grow"><div class="t">${esc(u.servico)}</div><div class="s">${u.data.slice(0, 4)}${u.pacote ? ' · pacote' : ''}</div></div>${u.avaliar && !AVALIADOS.has(u.id) ? `<button class="btn sm soft" data-avaliar="${esc(u.id)}">${ic('star')}Avaliar</button>` : AVALIADOS.has(u.id) ? '<span class="badge good">avaliado</span>' : `<span class="badge ${cl}">${tx}</span>`}</div>`; }).join('')}</div>` : '<div class="empty">Seu histórico aparece aqui depois do primeiro atendimento.</div>'}</section>
   <section class="card"><h3>Meus dados</h3><div class="dados">
    <div><span>Nome</span>${esc(c.nome)}</div>${c.telefone ? `<div><span>WhatsApp</span>${esc(c.telefone)}</div>` : ''}${c.cpf ? `<div><span>CPF</span>${esc(c.cpf)}</div>` : ''}${c.aniversario ? `<div><span>Aniversário</span>${esc(c.aniversario)}</div>` : ''}${c.instagram ? `<div><span>Instagram</span>${esc(c.instagram)}</div>` : ''}</div>
    ${wa('') ? `<a class="btn sm ghost" style="margin-top:10px" href="${wa(`Oi! Aqui é ${P.nome}. Preciso corrigir meus dados de cadastro.`)}" target="_blank" rel="noopener">${ic('chat')}Corrigir meus dados</a>` : ''}</section>
@@ -51,6 +55,110 @@ function render() {
    <li>Cancelamento ou remarcação com pelo menos <b>${r.prazoCancel} horas</b> de antecedência. Nesse caso, o sinal ${esc(r.sinalCancel)}.</li>
    ${r.tolerancia ? `<li>Tolerância de atraso: <b>${r.tolerancia} minutos</b>.</li>` : ''}${r.preparo ? `<li>Venha ${esc(r.preparo)}.</li>` : ''}${r.falta ? `<li>Falta sem aviso: ${esc(r.falta)}.</li>` : ''}</ul></section>
   <p class="pub-foot">${ic('lock')} Este link é pessoal. Não compartilhe.<br>${esc((P.atelie && P.atelie.nome) || '')}${P.atelie && P.atelie.instagram ? ` · ${esc(P.atelie.instagram)}` : ''}</p>`;
+}
+
+
+function anamCard() {
+  const A = P.anamnese; if (!A || !(A.perguntas || []).length) return '';
+  const em = ANAM_ENVIADA || A.em; const idade = em ? Math.floor((Date.now() - parse(String(em).slice(0, 10)).getTime()) / 864e5) : null;
+  const vencida = idade !== null && idade > 180;
+  return `<section class="card anam-card"><div class="row between"><h3 style="margin:0">${ic('shield')} Ficha de saúde (anamnese)</h3>${em && !vencida ? `<span class="badge good">${ic('check')}em dia</span>` : `<span class="badge warn">${vencida ? 'atualize' : 'pendente'}</span>`}</div>
+   <p class="small muted" style="margin:6px 0 10px">${em ? (ANAM_ENVIADA ? 'Recebemos a sua ficha agora. Obrigada!' : `Última atualização em ${dataBR(String(em).slice(0, 10))}.`) + (vencida ? ' Já faz mais de 6 meses: atualize antes do próximo atendimento.' : ' Se algo mudou na sua saúde, atualize antes do próximo atendimento.') : 'Responda antes do seu atendimento. São perguntas rápidas que ajudam a cuidar do seu couro cabeludo com segurança.'}</p>
+   <button class="btn ${em && !vencida ? 'soft' : 'primary'}" data-anam>${ic('pen')}${em ? 'Atualizar minha ficha' : 'Preencher minha ficha'}</button></section>`;
+}
+let ANAM_ENVIADA = '';
+function abrirAnamnese() {
+  const A = P.anamnese; const c = P.cadastro || {};
+  const back = document.createElement('div'); back.className = 'sheet-back';
+  back.innerHTML = `<div class="sheet sheet-alta" role="dialog" aria-modal="true" aria-label="Ficha de anamnese"><div class="grab"></div><div class="sheet-head"><h2>Ficha de saúde</h2><button class="icon-btn" data-fechar aria-label="Fechar">${ic('x')}</button></div>
+   <form class="form" id="fAnam" novalidate>
+    <p class="small muted" style="margin:0">Marque <b>Sim</b> ou <b>Não</b>. Quando for sim, conte rapidinho o que é.</p>
+    <div class="anam-q">${A.perguntas.map(({ k, q }) => `<div class="qa"><span class="small">${esc(q)}</span><div class="seg" data-q="${esc(k)}"><button type="button" data-v="0" aria-pressed="false">Não</button><button type="button" data-v="1" aria-pressed="false">Sim</button></div><input class="fld-in" id="det_${esc(k)}" maxlength="300" placeholder="Qual? Desde quando?" hidden></div>`).join('')}</div>
+    <label class="check"><input type="checkbox" id="anMenor">Sou menor de 18 anos (o responsável preenche junto)</label>
+    <div class="f2" id="anResp" hidden><label class="fld">Nome do responsável<input id="rNome" maxlength="120"></label><label class="fld">CPF do responsável<input id="rCpf" inputmode="numeric" maxlength="14"></label><label class="fld">Parentesco<input id="rPar" maxlength="40"></label></div>
+    <label class="check"><input type="checkbox" id="anImg">Autorizo fotos e vídeos das minhas tranças para divulgação do ateliê</label>
+    <details class="how"><summary>Ler a declaração e o consentimento</summary><div class="small" style="white-space:pre-wrap">${esc(A.termo || '')}</div></details>
+    <div class="f2"><label class="fld">Seu nome completo<input id="anNome" required maxlength="120" value="${esc(c.nome || P.nome || '')}"></label><label class="fld">CPF<input id="anCpf" inputmode="numeric" maxlength="14" value="${esc(String(c.cpf || '').includes('*') ? '' : c.cpf || '')}"></label></div>
+    <label class="check"><input type="checkbox" id="anDecl">Declaro que as informações são verdadeiras e completas.</label>
+    <label class="check"><input type="checkbox" id="anLgpd">Autorizo o uso destes dados de saúde só para a segurança do meu atendimento (LGPD, art. 11).</label>
+    <div id="anMsg" class="small" style="color:var(--bad)" role="alert"></div>
+    <button class="btn primary" style="justify-content:center">${ic('check')}Enviar ficha</button>
+   </form></div>`;
+  document.body.appendChild(back); document.body.style.overflow = 'hidden';
+  const fechar = () => { back.remove(); document.body.style.overflow = ''; };
+  back.addEventListener('click', e => {
+    if (e.target === back || e.target.closest('[data-fechar]')) { fechar(); return; }
+    const b = e.target.closest('.seg[data-q] button'); if (b) { const sg = b.parentElement; $$('button', sg).forEach(x => x.setAttribute('aria-pressed', x === b)); sg.classList.remove('falta'); $('#det_' + sg.dataset.q, back).hidden = b.dataset.v !== '1'; }
+  });
+  $('#anMenor', back).onchange = e => { $('#anResp', back).hidden = !e.target.checked; };
+  $('#fAnam', back).onsubmit = async e => {
+    e.preventDefault(); const msg = $('#anMsg', back); msg.textContent = ''; const respostas = {}; let faltam = 0;
+    $$('.seg[data-q]', back).forEach(sg => { const sel = $('button[aria-pressed="true"]', sg); if (!sel) { faltam++; sg.classList.add('falta'); return; } const sim = sel.dataset.v === '1'; respostas[sg.dataset.q] = { sim, det: sim ? $('#det_' + sg.dataset.q, back).value.trim().slice(0, 300) : '' }; });
+    if (faltam) { msg.textContent = `Responda todas as perguntas (falta${faltam > 1 ? 'm' : ''} ${faltam}).`; $('.seg.falta', back).scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
+    const nome = $('#anNome', back).value.trim().replace(/\s+/g, ' ');
+    if (nome.length < 5 || !nome.includes(' ')) { msg.textContent = 'Digite seu nome e sobrenome.'; return; }
+    const menor = $('#anMenor', back).checked;
+    if (menor && $('#rNome', back).value.trim().length < 5) { msg.textContent = 'Informe o nome do responsável.'; return; }
+    if (!$('#anDecl', back).checked || !$('#anLgpd', back).checked) { msg.textContent = 'Para enviar, marque a declaração e a autorização.'; return; }
+    const bt = $('button.primary', back); bt.disabled = true; bt.textContent = 'Enviando…';
+    try {
+      await setDoc(doc(FS, 'anamnesePortal', token), { respostas, nome, cpf: $('#anCpf', back).value.trim().slice(0, 20), menor, responsavel: menor ? { nome: $('#rNome', back).value.trim(), cpf: $('#rCpf', back).value.trim(), parentesco: $('#rPar', back).value.trim() } : {}, imagem: $('#anImg', back).checked, declaracao: true, consentimento: true, em: serverTimestamp(), dispositivo: navigator.userAgent.slice(0, 200) });
+      ANAM_ENVIADA = new Date().toISOString(); fechar(); render(); toast('Ficha enviada. Obrigada!');
+    } catch (err) { console.error(err); bt.disabled = false; bt.innerHTML = `${ic('check')}Enviar ficha`; msg.textContent = 'Não foi possível enviar. Verifique a internet e tente de novo.'; }
+  };
+}
+
+
+const AVALIADOS = new Set();
+function avaliarCard() {
+  const u = (P.ultimos || []).find(x => x.avaliar && !AVALIADOS.has(x.id)); if (!u) return '';
+  return `<section class="card aval-card"><h3>${ic('star')} Como foi o seu atendimento?</h3><p class="small muted" style="margin:4px 0 10px">${esc(u.servico)} em ${dataBR(u.data)}. Sua opinião ajuda o ateliê a melhorar sempre.</p>
+   <div class="estrelas-in" role="radiogroup" aria-label="Nota">${[1, 2, 3, 4, 5].map(n => `<button type="button" role="radio" aria-checked="false" aria-label="${n} estrela${n > 1 ? 's' : ''}" data-nota="${n}" data-ag="${esc(u.id)}">★</button>`).join('')}</div></section>`;
+}
+function cuidadosCard() {
+  const c = P.cuidados; if (!c) return '';
+  const hj = new Date(); hj.setHours(0, 0, 0, 0); const ate = parse(c.manutAte); const dias = Math.round((ate - hj) / 864e5);
+  const ini = parse(c.data); const tot = Math.max(1, Math.round((ate - ini) / 864e5)); const pct = Math.max(0, Math.min(100, Math.round((tot - Math.max(0, dias)) / tot * 100)));
+  const w = wa(`Oi! Aqui é ${P.nome}. Quero agendar a manutenção da minha ${c.servico} 💕`);
+  return `<section class="card cuid-card"><h3>${ic('heart')} Cuidados com as suas tranças</h3>
+   <p class="small muted" style="margin:4px 0 10px">${esc(c.servico)} feita em ${dataBR(c.data)}.</p>
+   <div class="cuid-prazo"><div class="row between small"><span>Manutenção ideal até <b>${dataBR(c.manutAte)}</b></span><b style="color:${dias < 0 ? 'var(--bad)' : dias <= 7 ? 'var(--warn)' : 'var(--good)'}">${dias < 0 ? `vencida há ${-dias} dia${dias === -1 ? '' : 's'}` : dias === 0 ? 'é hoje' : `faltam ${dias} dia${dias === 1 ? '' : 's'}`}</b></div><div class="bar thin"><span style="width:${pct}%"></span></div></div>
+   <p class="small" style="white-space:pre-wrap;margin:12px 0">${esc(c.texto)}</p>
+   ${!c.temFuturo && w && dias <= 14 ? `<a class="btn primary" href="${w}" target="_blank" rel="noopener">${ic('cal')}Agendar manutenção</a>` : ''}</section>`;
+}
+function indicacaoCard() {
+  const i = P.indicacao; if (!i || !i.codigo) return '';
+  const link = `${location.origin}/catalogo?ind=${encodeURIComponent(i.codigo)}`;
+  const txt = `Amiga, conheça o ateliê da ${(P.atelie && primeiro(P.atelie.responsavel)) || 'Stéfany'} 💕 Usando o meu código ${i.codigo} você ganha ${i.beneficioNova}. Veja os modelos: ${link}`;
+  return `<section class="card ind-card"><h3>${ic('gift')} Indique e ganhe</h3>
+   <p class="small" style="margin:4px 0 10px">Cada amiga que vier pelo seu código e fizer o atendimento vale <b>${esc(i.beneficio)}</b>. Ela ganha <b>${esc(i.beneficioNova)}</b>.</p>
+   <div class="ind-cod"><span class="small muted">Seu código</span><b>${esc(i.codigo)}</b></div>
+   <div class="row" style="margin-top:10px"><a class="btn primary" href="https://wa.me/?text=${encodeURIComponent(txt)}" target="_blank" rel="noopener">${ic('chat')}Indicar pelo WhatsApp</a><button class="btn soft" data-copiar="${esc(txt)}">${ic('file')}Copiar convite</button></div>
+   ${i.indicadas ? `<p class="small muted" style="margin:10px 0 0">Você já indicou ${i.indicadas} amiga${i.indicadas > 1 ? 's' : ''}. Obrigada! 💕</p>` : ''}</section>`;
+}
+function abrirAvaliacao(agId, nota) {
+  const u = (P.ultimos || []).find(x => x.id === agId); if (!u) return;
+  const back = document.createElement('div'); back.className = 'sheet-back';
+  back.innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-label="Avaliar atendimento"><div class="grab"></div><div class="sheet-head"><h2>Avaliar atendimento</h2><button class="icon-btn" data-fechar aria-label="Fechar">${ic('x')}</button></div>
+   <form class="form" id="fAv"><p class="small muted" style="margin:0">${esc(u.servico)} em ${dataBR(u.data)}</p>
+    <div class="estrelas-in grande" role="radiogroup" aria-label="Nota">${[1, 2, 3, 4, 5].map(n => `<button type="button" role="radio" aria-checked="${n === nota}" data-n="${n}" class="${n <= nota ? 'on' : ''}">★</button>`).join('')}</div>
+    <label class="fld">Conte como foi (opcional)<textarea id="avTxt" maxlength="600" placeholder="O que você mais gostou? Algo que podemos melhorar?"></textarea></label>
+    <label class="check"><input type="checkbox" id="avPub">Autorizo mostrar meu comentário no catálogo do ateliê</label>
+    <label class="fld" id="avNomeBox" hidden>Nome que aparece<input id="avNome" maxlength="60" value="${esc(primeiro(P.nome))}"></label>
+    <div id="avMsg" class="small" style="color:var(--bad)"></div>
+    <button class="btn primary" style="justify-content:center">${ic('check')}Enviar avaliação</button></form></div>`;
+  document.body.appendChild(back); document.body.style.overflow = 'hidden'; let n = nota;
+  const fechar = () => { back.remove(); document.body.style.overflow = ''; };
+  back.addEventListener('click', e => { if (e.target === back || e.target.closest('[data-fechar]')) { fechar(); return; }
+    const b = e.target.closest('[data-n]'); if (b) { n = +b.dataset.n; $$('[data-n]', back).forEach(x => { x.classList.toggle('on', +x.dataset.n <= n); x.setAttribute('aria-checked', +x.dataset.n === n); }); } });
+  $('#avPub', back).onchange = e => { $('#avNomeBox', back).hidden = !e.target.checked; };
+  $('#fAv', back).onsubmit = async e => { e.preventDefault(); if (!n) { $('#avMsg', back).textContent = 'Escolha de 1 a 5 estrelas.'; return; }
+    const bt = $('button.primary', back); bt.disabled = true; bt.textContent = 'Enviando…'; const pub = $('#avPub', back).checked;
+    try {
+      await setDoc(doc(FS, 'avaliacoes', `${token}_${agId}`), { token, agendaId: agId, nota: n, texto: $('#avTxt', back).value.trim().slice(0, 600), autorizaPublicar: pub, nomeExibicao: pub ? ($('#avNome', back).value.trim().slice(0, 60) || primeiro(P.nome)) : '', servico: String(u.servico || '').slice(0, 80), em: serverTimestamp() });
+      AVALIADOS.add(agId); fechar(); render(); toast(n >= 4 ? 'Obrigada pelo carinho! 💕' : 'Obrigada! Vamos usar sua opinião para melhorar.');
+    } catch (err) { console.error(err); bt.disabled = false; bt.innerHTML = `${ic('check')}Enviar avaliação`; $('#avMsg', back).textContent = 'Não foi possível enviar. Talvez este atendimento já tenha sido avaliado.'; }
+  };
 }
 
 function pedirCancelamento(id) {
@@ -80,7 +188,10 @@ function pedirCancelamento(id) {
   };
 }
 
-main.addEventListener('click', e => { const b = e.target.closest('[data-cancelar]'); if (b) pedirCancelamento(b.dataset.cancelar); });
+main.addEventListener('click', e => { const b = e.target.closest('[data-cancelar]'); if (b) pedirCancelamento(b.dataset.cancelar); if (e.target.closest('[data-anam]')) abrirAnamnese();
+  const st = e.target.closest('[data-nota]'); if (st) abrirAvaliacao(st.dataset.ag, +st.dataset.nota);
+  const av = e.target.closest('[data-avaliar]'); if (av) abrirAvaliacao(av.dataset.avaliar, 0);
+  const cp = e.target.closest('[data-copiar]'); if (cp) navigator.clipboard.writeText(cp.dataset.copiar).then(() => toast('Convite copiado'), () => toast('Não foi possível copiar', true)); });
 
 async function carregar() {
   const s = await getDoc(doc(FS, 'portal', token));

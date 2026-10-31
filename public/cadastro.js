@@ -6,6 +6,7 @@ const token = tokenDaUrl();
 const ref = token ? doc(FS, 'cadastros', token) : null;
 const ORIGENS_PADRAO = ['Instagram', 'Indicação', 'TikTok', 'WhatsApp', 'Google', 'Passou no ateliê', 'Outro'];
 let X = null;
+const IND = (new URLSearchParams(location.search).get('ind') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12);
 
 const mascaraTel = v => { const d = digits(v).slice(0, 11); if (d.length <= 2) return d; if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`; if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`; return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`; };
 const mascaraCpf = v => { const d = digits(v).slice(0, 11); return d.replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})\.(\d{3})(\d)/, '$1.$2.$3').replace(/(\d{3})\.(\d{3})\.(\d{3})(\d)/, '$1.$2.$3-$4'); };
@@ -31,6 +32,7 @@ function render() {
     <label class="fld">Instagram<input id="ig" maxlength="60" placeholder="@seuusuario" autocapitalize="off" value="${esc(pv.instagram)}"></label></div>
    <div class="f2"><label class="fld">Como conheceu o ateliê<select id="orig"><option value="">Selecione…</option>${orig.map(o => `<option>${esc(o)}</option>`).join('')}</select></label>
     <label class="fld" id="indBox" hidden>Quem indicou?<input id="ind" maxlength="120" placeholder="Nome de quem indicou"></label></div>
+   <label class="fld" id="codBox" ${IND ? '' : 'hidden'}>Código de indicação <small class="muted">(se recebeu de uma amiga)</small><input id="cod" maxlength="12" autocapitalize="characters" style="text-transform:uppercase" value="${esc(IND)}"></label>
    <label class="fld">Seu cabelo hoje<input id="cab" maxlength="120" placeholder="Ex.: crespo, na altura do ombro" value="${esc(pv.cabelo)}"></label>
    <label class="fld">Algo que a gente deva saber?<textarea id="obs" maxlength="300" placeholder="Opcional. Ex.: preferência de horário, couro cabeludo sensível"></textarea></label>
    <label class="check"><input type="checkbox" id="img">Autorizo fotos e vídeos do meu cabelo para divulgação do ateliê</label>
@@ -42,7 +44,7 @@ function render() {
   ${wa ? `<p class="pub-foot">Dúvidas? <a href="${wa}" target="_blank" rel="noopener">Fale com o ateliê pelo WhatsApp</a></p>` : ''}`;
   $('#tel').addEventListener('input', e => { e.target.value = mascaraTel(e.target.value); });
   $('#cpf').addEventListener('input', e => { e.target.value = mascaraCpf(e.target.value); });
-  $('#orig').addEventListener('change', e => { $('#indBox').hidden = e.target.value !== 'Indicação'; });
+  $('#orig').addEventListener('change', e => { $('#indBox').hidden = $('#codBox').hidden = e.target.value !== 'Indicação' && !IND; });
   $('#fCad').addEventListener('submit', enviar);
 }
 
@@ -53,7 +55,7 @@ async function enviar(e) {
   if (digits(v('tel')).length < 10) { msg.textContent = 'Confira o número do WhatsApp com DDD.'; $('#tel').focus(); return; }
   if (v('cpf') && !cpfValido(v('cpf'))) { msg.textContent = 'O CPF parece incorreto. Confira ou deixe em branco.'; $('#cpf').focus(); return; }
   if (!$('#lgpd').checked) { msg.textContent = 'Para enviar, marque a concordância com o uso dos dados.'; return; }
-  const dados = { nome, telefone: v('tel'), cpf: v('cpf'), aniversario: v('aniv'), instagram: v('ig'), origem: v('orig'), indicadaPor: v('orig') === 'Indicação' ? v('ind') : '', cabelo: v('cab'), obs: v('obs'), imagem: $('#img').checked, consentimento: true };
+  const dados = { nome, telefone: v('tel'), cpf: v('cpf'), aniversario: v('aniv'), instagram: v('ig'), origem: v('orig'), indicadaPor: v('orig') === 'Indicação' ? v('ind') : '', codigoIndicacao: v('cod').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12), cabelo: v('cab'), obs: v('obs'), imagem: $('#img').checked, consentimento: true };
   const bt = $('#fCad button.primary'); bt.disabled = true; bt.textContent = 'Enviando…';
   try { await updateDoc(ref, { status: 'enviado', dados, enviadoEm: serverTimestamp() }); X.dados = dados; obrigado(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
   catch (err) { console.error(err); bt.disabled = false; bt.innerHTML = `${ic('check')}Enviar cadastro`; toast('Não foi possível enviar. Verifique a internet e tente de novo.', true); }
