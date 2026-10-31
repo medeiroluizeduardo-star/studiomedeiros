@@ -18,6 +18,19 @@ jobs:
       - name: Verificar chave do Firebase
         if: env.FIREBASE_SA == ''
         run: echo "::warning::Falta cadastrar o segredo FIREBASE_SERVICE_ACCOUNT em Settings > Secrets and variables > Actions."
+      - name: Compactar arquivos para abrir mais rápido
+        continue-on-error: true
+        run: |
+          set -e
+          mkdir -p "$RUNNER_TEMP/min"
+          for f in app.js publico.js catalogo.js cliente.js contrato.js cadastro.js styles.css publico.css; do
+            npx -y esbuild@0.23.1 "public/$f" --minify --log-level=warning --outfile="$RUNNER_TEMP/min/$f"
+          done
+          for f in app.js publico.js catalogo.js cliente.js contrato.js cadastro.js styles.css publico.css; do
+            test -s "$RUNNER_TEMP/min/$f"
+          done
+          cp "$RUNNER_TEMP"/min/* public/
+          echo "Arquivos compactados:"; ls -la public/*.js public/*.css
       - name: Publicar site no Firebase Hosting
         if: env.FIREBASE_SA != ''
         run: |

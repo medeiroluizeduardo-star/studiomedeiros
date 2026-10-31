@@ -177,6 +177,37 @@ service cloud.firestore {
       allow delete: if dona();
     }
 
+    // ===== Cadastro feito pela própria cliente =====
+    // A equipe cria um convite com token secreto. Quem tem o link preenche uma única vez,
+    // dentro da validade, e só os campos do formulário. A equipe revisa antes de virar ficha.
+    function txt(m, k, max) { return m.get(k, '') is string && m.get(k, '').size() <= max; }
+    match /cadastros/{token} {
+      allow get: if true;
+      allow list: if atendimento();
+      allow create: if atendimento() && request.resource.data.status == 'convite';
+      allow update: if atendimento()
+        || (resource.data.status == 'convite'
+            && request.time < resource.data.expiraEm
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'dados', 'enviadoEm'])
+            && request.resource.data.status == 'enviado'
+            && request.resource.data.enviadoEm == request.time
+            && request.resource.data.dados.keys().hasOnly(['nome', 'telefone', 'cpf', 'aniversario', 'instagram', 'origem', 'indicadaPor', 'cabelo', 'obs', 'imagem', 'consentimento'])
+            && request.resource.data.dados.consentimento == true
+            && request.resource.data.dados.get('imagem', false) is bool
+            && request.resource.data.dados.nome is string
+            && request.resource.data.dados.nome.size() >= 3 && request.resource.data.dados.nome.size() <= 120
+            && request.resource.data.dados.telefone is string
+            && request.resource.data.dados.telefone.size() >= 8 && request.resource.data.dados.telefone.size() <= 30
+            && txt(request.resource.data.dados, 'cpf', 20)
+            && txt(request.resource.data.dados, 'aniversario', 10)
+            && txt(request.resource.data.dados, 'instagram', 80)
+            && txt(request.resource.data.dados, 'origem', 40)
+            && txt(request.resource.data.dados, 'indicadaPor', 120)
+            && txt(request.resource.data.dados, 'cabelo', 120)
+            && txt(request.resource.data.dados, 'obs', 300));
+      allow delete: if atendimento();
+    }
+
     // Qualquer outro caminho é bloqueado.
     match /{documento=**} { allow read, write: if false; }
   }

@@ -51,7 +51,7 @@ const I={
  trash:'M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3',clock:'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 2',
  down:'M12 4v11M7 10l5 5 5-5M5 20h14',gift:'M4 11h16v9H4zM3 7h18v4H3zM12 7v13M12 7c-1.5-3-5-3.5-5-1s3 1 5 1zM12 7c1.5-3 5-3.5 5-1s-3 1-5 1z',
  alert:'M12 9v4M12 17h.01M10.3 3.9 2 18a2 2 0 0 0 1.7 3h16.6a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z',
- copy:'M9 9h11v11H9zM5 15H4V4h11v1',up:'M12 20V9M7 14l5-5 5 5M5 4h14',info:'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 11v6M12 7.5h.01',
+ send:'M21 3 10.5 13.5M21 3l-6.5 18-4-7.5L3 9.5z',copy:'M9 9h11v11H9zM5 15H4V4h11v1',up:'M12 20V9M7 14l5-5 5 5M5 4h14',info:'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 11v6M12 7.5h.01',
  file:'M14 3H6.5A1.5 1.5 0 0 0 5 4.5v15A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V8zM14 3v5h5M8.5 13h7M8.5 16.5h5',
  box:'M3.5 7.5 12 3l8.5 4.5v9L12 21l-8.5-4.5zM3.5 7.5 12 12l8.5-4.5M12 12v9',
  ticket:'M3 8a2 2 0 0 0 0 4v0a2 2 0 0 1 0 4v1a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1v-1a2 2 0 0 1 0-4 2 2 0 0 0 0-4V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1zM14 6v2M14 11v2M14 16v2',
@@ -59,7 +59,7 @@ const I={
  grid:'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z',chart:'M4 20V10M10 20V4M16 20v-7M22 20H2',
  list:'M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01',pen:'M3 21c3-1 5-3 7-6l7-7a2.1 2.1 0 0 0-3-3l-7 7c-3 2-5 4-6 7zM14 6l4 4',
  image:'M4 5h16v14H4zM4 15l5-5 4 4 3-3 4 4M15 9h.01',lock:'M6 11h12v10H6zM8.5 11V7.5a3.5 3.5 0 0 1 7 0V11',
- sun:'M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM12 1.5v2M12 20.5v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1.5 12h2M20.5 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4',moon:'M20.5 14.5A8.5 8.5 0 1 1 9.5 3.5a7 7 0 0 0 11 11z',auto:'M12 21a9 9 0 1 0 0-18v18z M12 3a9 9 0 0 1 0 18',receipt:'M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6M9 16h3',repeat:'M17 2l4 4-4 4M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4M21 13v2a3 3 0 0 1-3 3H3'
+ sun:'M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM12 1.5v2M12 20.5v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1.5 12h2M20.5 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4',moon:'M20.5 14.5A8.5 8.5 0 1 1 9.5 3.5a7 7 0 0 0 11 11z',auto:'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 3v18M12 7h4.5M12 11h6M12 15h5.5M12 19h2.5',receipt:'M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6M9 16h3',repeat:'M17 2l4 4-4 4M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4M21 13v2a3 3 0 0 1-3 3H3'
 };
 const ic=(n,cls='')=>`<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${I[n]}"/></svg>`;
 function braidMark(size=34,spin=false){
@@ -99,11 +99,11 @@ const ANAM_Q=[
 ];
 
 /* ================= armazenamento (Firestore) e perfis ================= */
-const ALL_COLS=['clientes','servicos','agenda','estoque','pacotes','vales','espera','anamneses','aceites','ideias','publico','equipe','pedidos','lancamentos','contas','privado','catalogo','contratosLink','solicitacoes'];
+const ALL_COLS=['clientes','servicos','agenda','estoque','pacotes','vales','espera','anamneses','aceites','ideias','publico','equipe','pedidos','lancamentos','contas','privado','catalogo','contratosLink','solicitacoes','cadastros'];
 const COLS_POR_PAPEL={
   owner:ALL_COLS,
-  parceira:['clientes','servicos','agenda','estoque','pacotes','vales','espera','anamneses','aceites','ideias','publico','catalogo','contratosLink','solicitacoes'],
-  recepcao:['clientes','servicos','agenda','pacotes','vales','espera','aceites','ideias','publico','catalogo','contratosLink','solicitacoes'],
+  parceira:['clientes','servicos','agenda','estoque','pacotes','vales','espera','anamneses','aceites','ideias','publico','catalogo','contratosLink','solicitacoes','cadastros'],
+  recepcao:['clientes','servicos','agenda','pacotes','vales','espera','aceites','ideias','publico','catalogo','contratosLink','solicitacoes','cadastros'],
   contador:['servicos','agenda','pacotes','vales','publico','lancamentos','contas','privado']
 };
 const S={};ALL_COLS.forEach(c=>S[c]=new Map());
@@ -147,6 +147,7 @@ function subscribe(cols){
     let q=collection(FS,c);
     if(c==='aceites'&&ROLE==='recepcao')q=query(q,where('tipo','in',['servico','politica']));
     if(c==='contratosLink')q=query(q,where('criadoEm','>=',addDays(today(),-120)));
+    if(c==='cadastros')q=query(q,where('criadoEm','>=',addDays(today(),-90)));
     const u=onSnapshot(q,snap=>{const m=new Map();snap.docs.forEach(d=>m.set(d.id,{id:d.id,...d.data()}));S[c]=m;loaded.add(c);touch();agendaProcessar()},
       err=>{console.error(c,err);loaded.add(c);touch();if(err.code==='permission-denied')toast('Seu acesso mudou. Entre novamente.')});
     unsubs.push(u);
@@ -209,15 +210,18 @@ const nomeServ=id=>S.servicos.get(id)?.nome||'Serviço';
 function catServ(sid){const n=nomeServ(sid);return /manuten/i.test(n)?'Manutenção':/retirada/i.test(n)?'Retirada':'Serviço de trança'}
 const ehComercio=l=>l.categoria==='Venda de produto';
 
-function fidelidade(cli,ref=today()){
+const agPorCli=()=>memo('agCli',()=>{const m=new Map();arr('agenda').forEach(a=>{if(!m.has(a.clienteId))m.set(a.clienteId,[]);m.get(a.clienteId).push(a)});return m});
+const indPorCli=()=>memo('indCli',()=>{const m=new Map();arr('clientes').forEach(c=>{if(c.indicadaPor)m.set(c.indicadaPor,(m.get(c.indicadaPor)||0)+1)});return m});
+function fidelidade(cli,ref=today()){const cache=memo('fid',()=>new Map());const k=cli.id+'|'+ref;if(cache.has(k))return cache.get(k);const r=calcFidelidade(cli,ref);cache.set(k,r);return r}
+function calcFidelidade(cli,ref){
   const umAno=addDays(ref,-365);
-  const ag=arr('agenda').filter(a=>a.clienteId===cli.id);
+  const ag=agPorCli().get(cli.id)||[];
   const concl=ag.filter(a=>a.status==='concluido'&&a.data<=ref).sort((a,b)=>a.data<b.data?1:-1);
   const conc12=concl.filter(a=>a.data>=umAno);
   const faltas=ag.filter(a=>a.status==='faltou'&&a.data>=umAno).length;
   const gasto=conc12.reduce((s,a)=>s+(+a.valor||0),0);
   const ult=concl[0]?.data||null;const dias=ult?diffDays(ult,ref):null;
-  const ind=arr('clientes').filter(c=>c.indicadaPor===cli.id).length;
+  const ind=indPorCli().get(cli.id)||0;
   const p={freq:Math.min(35,conc12.length*7),valor:Math.min(30,Math.round(gasto/1500*30)),rec:dias==null?0:dias<=45?20:dias<=90?12:dias<=180?5:0,ind:Math.min(15,ind*5),pen:faltas*10};
   const score=Math.max(0,Math.min(100,p.freq+p.valor+p.rec+p.ind-p.pen));
   const nivel=concl.length===0?'nova':score>=75?'perola':score>=50?'ouro':score>=25?'prata':'bronze';
@@ -266,15 +270,23 @@ const valeAtivo=v=>valeSaldo(v)>0&&(!v.validade||v.validade>=today())&&(v.pagame
 function novoCodigo(){const a='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';let s='SM-';for(let i=0;i<5;i++)s+=a[Math.floor(Math.random()*a.length)];return s}
 
 /* horários livres */
-const diasTrabalho=()=>{const d=pub().dias;return Array.isArray(d)&&d.length?d:[1,2,3,4,5,6]};
-function folgaDe(d){return (pub().folgas||[]).find(f=>d>=f.ini&&d<=(f.fim||f.ini))}
-function diaFechado(d){if(!diasTrabalho().includes(parse(d).getDay()))return 'Dia sem atendimento';const f=folgaDe(d);return f?(f.motivo||'Agenda bloqueada'):''}
-function intervalo(){const pb=pub();if(!pb.intervaloIni||!pb.intervaloFim)return null;const a=hm2min(pb.intervaloIni),b=hm2min(pb.intervaloFim);return b>a?[a,b]:null}
-function livresDia(d,minDur=60){const c=pub();if(diaFechado(d))return [];let cur=hm2min(c.abre);const fim=hm2min(c.fecha);const out=[];
+const DIA_PADRAO={on:true,ini:'08:00',fim:'20:00',pIni:'',pFim:''};
+function semana(){const pb=pub();if(Array.isArray(pb.semana)&&pb.semana.length===7)return pb.semana.map(x=>({...DIA_PADRAO,...x}));
+  const dias=Array.isArray(pb.dias)&&pb.dias.length?pb.dias:[1,2,3,4,5,6];
+  return [0,1,2,3,4,5,6].map(i=>({on:dias.includes(i),ini:pb.abre||'08:00',fim:pb.fecha||'20:00',pIni:pb.intervaloIni||'',pFim:pb.intervaloFim||''}))}
+const diasTrabalho=()=>semana().map((x,i)=>x.on?i:-1).filter(i=>i>=0);
+const excecoesDe=d=>(pub().folgas||[]).filter(f=>d>=f.ini&&d<=(f.fim||f.ini));
+function expediente(d){const ex=excecoesDe(d);const fe=ex.find(f=>(f.tipo||'fechado')==='fechado');if(fe)return {aberto:false,motivo:fe.motivo||'Agenda bloqueada'};
+  const es=ex.find(f=>f.tipo==='horario'&&f.abre&&f.fecha);if(es)return {aberto:true,abre:es.abre,fecha:es.fecha,pausa:null,especial:es.motivo||'Horário especial'};
+  const x=semana()[parse(d).getDay()];if(!x.on)return {aberto:false,motivo:'Dia sem atendimento'};
+  const pausa=x.pIni&&x.pFim&&x.pFim>x.pIni?[hm2min(x.pIni),hm2min(x.pFim)]:null;return {aberto:true,abre:x.ini,fecha:x.fim,pausa}}
+function diaFechado(d){const e=expediente(d);return e.aberto?'':e.motivo}
+const textoExpediente=e=>e.aberto?`${e.abre}–${e.fecha}${e.pausa?` · pausa ${min2hm(e.pausa[0])}–${min2hm(e.pausa[1])}`:''}${e.especial?` · ${e.especial}`:''}`:e.motivo;
+function livresDia(d,minDur=60){const e=expediente(d);if(!e.aberto)return [];let cur=hm2min(e.abre);const fim=hm2min(e.fecha);const out=[];
   if(d<today())return [];
   if(d===today()){const n=new Date();cur=Math.max(cur,Math.ceil((n.getHours()*60+n.getMinutes())/30)*30)}
   const ocup=arr('agenda').filter(a=>a.data===d&&a.status!=='cancelado'&&a.status!=='faltou').map(a=>{const s=hm2min(a.hora);return [s,s+(+a.duracao||120)]});
-  const iv=intervalo();if(iv)ocup.push(iv);
+  if(e.pausa)ocup.push(e.pausa);
   ocup.sort((a,b)=>a[0]-b[0]).forEach(([s,e])=>{if(s-cur>=minDur)out.push([cur,Math.min(s,fim)]);cur=Math.max(cur,e)});
   if(fim-cur>=minDur)out.push([cur,fim]);return out.filter(([a,b])=>b-a>=minDur)}
 
@@ -456,7 +468,7 @@ function docPolitica(){
 async function hashTexto(t){try{const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(t));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('').slice(0,16)}catch(e){return ''}}
 
 /* ================= interface: casca ================= */
-const UI={view:'inicio',agDia:today(),calMes:ym(today()),calDia:today(),finTab:'visao',finMes:ym(today()),lanTipo:'todos',cliBusca:'',cliNivel:'todos',cliOrd:'score',ctTab:'links',ctTipo:'servico',ctCli:'',ctAg:'',acFiltro:'todos',pkTab:'pacotes',relPer:6,lastView:null};
+const UI={view:'inicio',agDia:today(),calMes:ym(today()),calDia:today(),finTab:'visao',finMes:ym(today()),lanTipo:'todos',cliBusca:'',cliNivel:'todos',cliOrd:'score',ctTab:'links',ajTab:'horarios',cliTab:'lista',ctTipo:'servico',ctCli:'',ctAg:'',acFiltro:'todos',pkTab:'pacotes',relPer:6,lastView:null};
 const VIEWS=[['inicio','Início','home',()=>pode('base')],['agenda','Agenda','cal',()=>pode('base')],['clientes','Clientes','users',()=>pode('base')],['catalogo','Catálogo','image',()=>pode('base')],['financeiro','Finanças','wallet',()=>pode('fin')],['contratos','Contratos','file',()=>pode('contratos')],['pacotes','Pacotes e vales','ticket',()=>pode('base')],['estoque','Estoque','box',()=>pode('estoque')],['calendario','Datas e ideias','spark',()=>pode('base')],['ajustes','Ajustes','gear',()=>true]];
 const visiveis=()=>VIEWS.filter(v=>v[3]());
 let rq=0;function schedule(){if(rq)return;rq=requestAnimationFrame(()=>{rq=0;render()})}
@@ -465,7 +477,9 @@ function go(v){if(!visiveis().some(x=>x[0]===v))v=visiveis()[0][0];UI.view=v;try
 function shell(){
   const vs=visiveis();
   $('#brandSide').innerHTML=`${braidMark(36)}<div><div class="brand-name">Stéfany Medeiros</div><div class="brand-sub">Trancista</div></div>`;
-  $('#navSide').innerHTML=vs.map(([k,n,i])=>`<button class="nav" data-act="go" data-v="${k}" ${UI.view===k?'aria-current="page"':''}>${ic(i)}${n}</button>`).join('');
+  const GR=[['Atendimento',['inicio','agenda','clientes','contratos']],['Vitrine e marketing',['catalogo','pacotes','calendario']],['Gestão',['financeiro','estoque']],['',['ajustes']]];
+  const bt=([k,n,i])=>`<button class="nav" data-act="go" data-v="${k}" ${UI.view===k?'aria-current="page"':''}>${ic(i)}${n}</button>`;
+  $('#navSide').innerHTML=GR.map(([g,ks])=>{const it=ks.map(k=>vs.find(v=>v[0]===k)).filter(Boolean);return it.length?`${g?`<div class="nav-grupo">${g}</div>`:'<div class="nav-sep"></div>'}${it.map(bt).join('')}`:''}).join('');
   const tabs=vs.filter(v=>['inicio','agenda','clientes'].includes(v[0]));tabs.push(vs.find(v=>v[0]==='financeiro')||vs.find(v=>v[0]==='contratos')||vs.find(v=>v[0]==='pacotes'));
   const inTabs=tabs.some(t=>t[0]===UI.view);
   $('#tabbar').innerHTML=tabs.map(([k,n,i])=>`<button class="tab" data-act="go" data-v="${k}" ${UI.view===k?'aria-current="page"':''}>${ic(i)}<span>${k==='financeiro'?'Finanças':n}</span></button>`).join('')+`<button class="tab" data-act="mais" ${!inTabs?'aria-current="page"':''}>${ic('grid')}<span>Mais</span></button>`;
@@ -568,10 +582,10 @@ function vAgenda(){
   let out=head('Agenda',esc(cap(dataLonga(d))),`${ativos.length} atendimento${ativos.length===1?'':'s'} · previsto ${BRL(soma(ativos))}`,
    `<button class="icon-btn" data-act="agNav" data-n="-7" aria-label="Semana anterior">${ic('left')}</button><button class="btn sm soft" data-act="agHoje">Hoje</button><button class="icon-btn" data-act="agNav" data-n="7" aria-label="Próxima semana">${ic('right')}</button><button class="btn soft" data-act="divulgar">${ic('image')}Divulgar</button><button class="btn primary" data-act="novoAg">${ic('plus')}Agendar</button>`);
   out+=`<div class="week">${dias.map(x=>{const n=ag.filter(a=>a.data===x&&a.status!=='cancelado').length;const dd=parse(x);
-    const fe=diaFechado(x);return `<button class="day ${x===t?'today':''} ${fe?'fechado':''}" data-act="agDia" data-d="${x}" aria-pressed="${x===d}" title="${esc(fe)}"><span class="w">${SEM[dd.getDay()]}</span><span class="n">${dd.getDate()}</span><span class="c">${fe&&!n?'<span class="fx">fechado</span>':'<i></i>'.repeat(Math.min(n,4))}</span></button>`}).join('')}</div>`;
+    const exd=expediente(x);const fe=exd.aberto?'':exd.motivo;return `<button class="day ${x===t?'today':''} ${fe?'fechado':''} ${exd.especial?'especial':''}" data-act="agDia" data-d="${x}" aria-pressed="${x===d}" title="${esc(fe)}"><span class="w">${SEM[dd.getDay()]}</span><span class="n">${dd.getDate()}</span><span class="c">${fe&&!n?'<span class="fx">fechado</span>':'<i></i>'.repeat(Math.min(n,4))}</span></button>`}).join('')}</div>`;
   out+=`<section class="card" style="padding:14px 16px">${linhaTempo(d)}</section>`;
   out+=`<div class="grid g2"><section class="stack" style="gap:10px">${doDia.length?doDia.map(apptCard).join(''):`<div class="card empty">Nenhum atendimento neste dia.<br><button class="btn soft" style="margin-top:10px" data-act="novoAg" data-d="${d}">${ic('plus')}Marcar horário</button></div>`}</section>
-  <section class="stack"><div class="card"><h3>Horários livres <small>${esc(pb.abre)}–${esc(pb.fecha)}${intervalo()?` · pausa ${esc(pb.intervaloIni)}–${esc(pb.intervaloFim)}`:''}</small></h3>${diaFechado(d)?`<div class="empty">${esc(diaFechado(d))}.<br><button class="btn sm ghost" style="margin-top:6px" data-act="novoAg" data-d="${d}">Agendar mesmo assim</button></div>`:d<today()?'<div class="empty">Dia que já passou.</div>':livres.length?`<div class="row">${livres.map(([a,b])=>`<button class="free" data-act="novoAg" data-d="${d}" data-h="${min2hm(a)}">${min2hm(a)} às ${min2hm(b)}</button>`).join('')}</div>`:`<div class="empty">Dia cheio.</div>`}</div>
+  <section class="stack"><div class="card"><h3>Horários livres <small>${esc(textoExpediente(expediente(d)))}</small></h3>${diaFechado(d)?`<div class="empty">${esc(diaFechado(d))}.<br><button class="btn sm ghost" style="margin-top:6px" data-act="novoAg" data-d="${d}">Agendar mesmo assim</button></div>`:d<today()?'<div class="empty">Dia que já passou.</div>':livres.length?`<div class="row">${livres.map(([a,b])=>`<button class="free" data-act="novoAg" data-d="${d}" data-h="${min2hm(a)}">${min2hm(a)} às ${min2hm(b)}</button>`).join('')}</div>`:`<div class="empty">Dia cheio.</div>`}</div>
   <div class="card"><h3>Lista de espera <button class="btn sm soft" data-act="novaEspera">${ic('plus')}Adicionar</button></h3>${esp.length?`<div class="list">${esp.map(esperaRow).join('')}</div><p class="small muted" style="margin-bottom:0">O botão Avisar já sugere o primeiro horário livre que comporta o serviço.</p>`:'<div class="empty">Ninguém aguardando. Quando a agenda lotar, anote aqui quem quer um encaixe.</div>'}</div>
   <div class="card"><h3>Próximos 7 dias</h3><div class="list">${ag.filter(a=>a.data>d&&a.data<=addDays(d,7)&&a.status!=='cancelado').sort((a,b)=>(a.data+a.hora)<(b.data+b.hora)?-1:1).slice(0,6).map(a=>`<button class="item" data-act="agDia" data-d="${a.data}"><span class="time">${dataCurta(a.data)}</span><div class="grow"><div class="t">${esc(nomeCli(a.clienteId))}</div><div class="s">${esc(a.hora)} · ${esc(nomeServ(a.servicoId))}</div></div></button>`).join('')||'<div class="empty">Nada marcado.</div>'}</div></div></section></div>`;
   return out;
@@ -595,7 +609,7 @@ function vClientes(){
   const fl=lista.filter(x=>(UI.cliNivel==='todos'||x.f.nivel===UI.cliNivel||(UI.cliNivel==='risco'&&x.f.risco))&&(!q||x.c.nome.toLowerCase().includes(q)||(digits(q)&&digits(x.c.telefone).includes(digits(q)))));
   fl.sort({score:(a,b)=>b.f.score-a.f.score,nome:(a,b)=>a.c.nome.localeCompare(b.c.nome),gasto:(a,b)=>b.f.total-a.f.total,recente:(a,b)=>(b.f.ult||'')>(a.f.ult||'')?1:-1}[UI.cliOrd]);
   const ch=[['todos','Todas',lista.length],...Object.entries(NIVEIS).map(([k,v])=>[k,v.n,cont[k]||0]),['risco','Em risco',lista.filter(x=>x.f.risco).length]];
-  return head('Clientes','Suas <em>clientes</em>','Fidelidade calculada pelos últimos 12 meses.',`<button class="btn primary" data-act="novaCli">${ic('plus')}Nova cliente</button>`)+
+  return head('Clientes','Suas <em>clientes</em>','Fidelidade calculada pelos últimos 12 meses.',`<div class="row">${pode('base')?`<button class="btn soft" data-act="cadLink">${ic('send')}Link de cadastro</button>`:''}<button class="btn primary" data-act="novaCli">${ic('plus')}Nova cliente</button></div>`)+cadastrosBloco()+
   `<div class="row"><label class="searchbox">${ic('search')}<input id="cliBusca" type="search" placeholder="Buscar por nome ou telefone" value="${esc(UI.cliBusca)}" aria-label="Buscar cliente"></label>${seg('cliOrd',UI.cliOrd,[['score','Fidelidade'],['gasto','Mais gastou'],['recente','Recentes'],['nome','A–Z']],'o')}</div>
   <div class="chips">${ch.map(([k,n,q])=>`<button class="chip" data-act="cliNivel" data-n="${k}" aria-pressed="${UI.cliNivel===k}">${n} · ${q}</button>`).join('')}</div>
   <section class="card" style="padding:8px 14px">${fl.length?`<div class="list">${fl.map(({c,f})=>`<button class="item" data-act="verCli" data-id="${c.id}"><div class="avatar" style="--lv:${NIVEIS[f.nivel].c}">${iniciais(c.nome)}</div><div class="grow"><div class="t">${esc(c.nome)}${c.exemplo?' <span class="badge">exemplo</span>':''}</div><div class="s">${f.ult?`Última visita ${dataCurta(f.ult)} · `:''}${f.visitas} atendimento${f.visitas===1?'':'s'}${pode('fin')?` · ${BRL(f.total)}`:''}</div></div>${f.risco?'<span class="badge warn">em risco</span>':''}<span class="badge lv" style="--lv:${NIVEIS[f.nivel].c}">${NIVEIS[f.nivel].n} · ${f.score}</span></button>`).join('')}</div>`:`<div class="empty">Nenhuma cliente encontrada.</div>`}</section>
@@ -833,38 +847,45 @@ function vAjustes(){
   const own=isOwner();
   if(!own)return head('Ajustes','Sua <em>conta</em>')+contaCard()+`<section class="card"><h3>O que você acessa</h3><p class="small muted" style="margin:0">${ROLE==='parceira'?'Agenda, clientes, fichas de anamnese, estoque, pacotes, contratos e datas. Finanças e a política da empresa ficam só com a proprietária.':ROLE==='recepcao'?'Agenda, cadastro de clientes, pacotes, contratos de serviço e datas. Fichas de saúde, estoque e finanças ficam restritos.':'Finanças, contas, relatórios e obrigações do MEI, somente leitura. Clientes e fichas de saúde não ficam visíveis.'}</p></section>`+
    (pode('contratos')?`<section class="card"><h3>Política do ateliê</h3><button class="btn soft" data-act="ctTab" data-t="politica">${ic('file')}Abrir política</button></section>`:'');
-  const pb=pub(),c=priv();const nEx=ALL_COLS.reduce((s,k)=>s+arr(k).filter(r=>r.exemplo).length,0);
-  const ped=arr('pedidos'),eq=arr('equipe');
-  const donas=(ACESSO&&ACESSO.donas)||[];const dinfo=(ACESSO&&ACESSO.donasInfo)||{};
-  return head('Ajustes','Seu <em>negócio</em>')+contaCard()+
-  `<section class="card"><h3>Proprietárias <small>${donas.length} com acesso total</small></h3><div class="list">${donas.map(u=>{const i=dinfo[u]||{};return `<div class="item"><div class="avatar" style="--lv:var(--lv-perola)">${ic('shield')}</div><div class="grow"><div class="t">${esc(i.nome||i.email||'Proprietária')}${u===ME?' <span class="badge">você</span>':''}</div><div class="s">${esc(i.email||'e-mail aparece no próximo acesso dela')}</div></div>${u!==ME&&donas.length>1?`<button class="btn sm ghost danger" data-act="removerDona" data-id="${u}">Remover</button>`:''}</div>`}).join('')}</div><p class="small muted" style="margin-bottom:0">Para dar acesso total a alguém da equipe, use "Tornar proprietária" na lista abaixo.</p></section>
-  ${folgasCard()}
+  const tabs=[['horarios','Horários'],['negocio','Negócio e MEI'],['equipe','Equipe e acesso'],['dados','Conta e dados']];
+  if(!tabs.some(t=>t[0]===UI.ajTab))UI.ajTab='horarios';
+  return head('Ajustes','Seu <em>negócio</em>')+`<div class="tabs-scroll">${seg('ajTab',UI.ajTab,tabs)}</div>`+({horarios:ajHorarios,negocio:ajNegocio,equipe:ajEquipe,dados:ajDados}[UI.ajTab])();
+}
+function ajHorarios(){const sm=semana();const ord=[1,2,3,4,5,6,0];
+  return `<form class="card form" id="fHor"><h3>Horário de cada dia <small>marque os dias em que você atende</small></h3>
+   <div class="hr-tab">${ord.map(i=>{const x=sm[i];return `<div class="hr-row ${x.on?'':'off'}" data-d="${i}">
+     <button type="button" class="chip hr-dia" data-hdia="${i}" aria-pressed="${x.on}">${cap(SEMX[i])}</button>
+     <label class="fld">Abre<input type="time" data-k="ini" value="${esc(x.ini)}"></label><label class="fld">Fecha<input type="time" data-k="fim" value="${esc(x.fim)}"></label>
+     <label class="fld">Pausa de<input type="time" data-k="pIni" value="${esc(x.pIni)}"></label><label class="fld">até<input type="time" data-k="pFim" value="${esc(x.pFim)}"></label>
+     <span class="hr-fechado">Sem atendimento</span></div>`}).join('')}</div>
+   <div class="form-actions" style="justify-content:space-between"><button type="button" class="btn ghost" data-act="horCopiar">${ic('copy')}Copiar segunda para os dias marcados</button><button class="btn primary">${ic('check')}Salvar horários</button></div></form>
+  ${excecoesCard()}`}
+function ajNegocio(){const pb=pub(),c=priv();
+  return `<form class="card form" id="fCfg"><h3>Dados do negócio</h3>
+   <div class="f2"><label class="fld">Nome empresarial<input id="gNome" value="${esc(pb.nome)}"></label><label class="fld">Responsável<input id="gResp" value="${esc(pb.responsavel)}"></label><label class="fld">CNPJ<input id="gCnpj" inputmode="numeric" value="${esc(pb.cnpj)}" placeholder="00.000.000/0001-00"></label></div>
+   <div class="f2"><label class="fld">Endereço do ateliê<input id="gEnd" value="${esc(pb.endereco)}"></label><label class="fld">Município<input id="gMun" value="${esc(pb.municipio)}"></label></div>
+   <div class="f2"><label class="fld">WhatsApp do ateliê<input id="gWa" inputmode="tel" value="${esc(pb.whatsapp)}" placeholder="(27) 99999-9999"></label><label class="fld">Instagram do ateliê<input id="gIg" placeholder="@stefanytrancista" value="${esc(pb.instagram)}"></label><label class="fld">Desconto de aniversário (%)<input id="gAniv" type="number" min="0" max="50" value="${pb.descAniv}"></label></div>
+   <h3 style="margin-top:8px">Finanças e MEI <small>visível só para proprietárias e contabilidade</small></h3>
+   <div class="f2"><label class="fld">Abertura do MEI<input id="gIni" type="month" value="${esc(c.inicioMei)}"></label><label class="fld">Limite anual (R$)<input id="gLim" type="number" step="0.01" value="${c.limite}"></label><label class="fld">Valor do DAS (R$)<input id="gDas" type="number" step="0.01" value="${c.das}"></label><label class="fld">Meta mensal (R$)<input id="gMeta" type="number" step="50" value="${c.meta}"></label></div>
+   <div class="f2"><label class="fld">Taxa débito (%)<input id="gTd" type="number" step="0.01" value="${c.taxaDebito}"></label><label class="fld">Taxa crédito à vista (%)<input id="gTc" type="number" step="0.01" value="${c.taxaCredito}"></label><label class="fld">Taxa crédito parcelado (%)<input id="gTp" type="number" step="0.01" value="${c.taxaParcelado}"></label></div>
+   <div class="form-actions"><button class="btn primary">${ic('check')}Salvar</button></div></form>`}
+function ajEquipe(){const ped=arr('pedidos'),eq=arr('equipe');const donas=(ACESSO&&ACESSO.donas)||[];const dinfo=(ACESSO&&ACESSO.donasInfo)||{};
+  return `<section class="card"><h3>Proprietárias <small>${donas.length} com acesso total</small></h3><div class="list">${donas.map(u=>{const i=dinfo[u]||{};return `<div class="item"><div class="avatar" style="--lv:var(--lv-perola)">${ic('shield')}</div><div class="grow"><div class="t">${esc(i.nome||i.email||'Proprietária')}${u===ME?' <span class="badge">você</span>':''}</div><div class="s">${esc(i.email||'e-mail aparece no próximo acesso dela')}</div></div>${u!==ME&&donas.length>1?`<button class="btn sm ghost danger" data-act="removerDona" data-id="${u}">Remover</button>`:''}</div>`}).join('')}</div><p class="small muted" style="margin-bottom:0">Para dar acesso total a alguém da equipe, use "Tornar proprietária" na lista abaixo.</p></section>
   <section class="card"><h3>Equipe e acessos <small>${eq.filter(e=>e.ativo!==false).length} ativa(s)</small></h3>
    <ol class="small muted" style="margin-top:0;padding-left:18px"><li>No <a href="https://console.firebase.google.com" target="_blank" rel="noopener">console do Firebase</a>, abra <b>Authentication › Usuários › Adicionar usuário</b> e crie o e-mail da pessoa com uma senha provisória.</li><li>Ela entra no sistema com esse e-mail e aparece aqui como pedido.</li><li>Você escolhe o perfil. As regras do servidor só liberam os dados daquele perfil.</li></ol>
-   ${ped.length?`<div class="eyebrow" style="margin:10px 0 4px">Pedidos de acesso</div><div class="list">${ped.map(p=>`<div class="item"><div class="avatar">${iniciais(p.nome||p.email)}</div><div class="grow"><div class="t">${esc(p.nome||p.email)}</div><div class="s">${esc(p.email)} · pediu em ${dataBR((p.pedidoEm||'').slice(0,10))}</div></div><button class="btn sm primary" data-act="aprovar" data-id="${p.id}">Definir perfil</button><button class="btn sm ghost" data-act="tornarDona" data-id="${p.id}">Tornar proprietária</button><button class="btn sm ghost danger" data-act="recusar" data-id="${p.id}">Recusar</button></div>`).join('')}</div>`:''}
-   ${eq.length?`<div class="eyebrow" style="margin:10px 0 4px">Equipe</div><div class="list">${eq.map(e=>`<div class="item"><div class="avatar">${iniciais(e.apelido||e.email)}</div><div class="grow"><div class="t">${esc(e.apelido||e.email)}</div><div class="s">${PAPEIS[e.papel]||e.papel}${e.ativo===false?' · desativada':''} · ${esc(e.email||'')}</div></div><button class="btn sm soft" data-act="aprovar" data-id="${e.id}">Alterar</button><button class="btn sm ghost" data-act="tornarDona" data-id="${e.id}">${ic('shield')}Tornar proprietária</button></div>`).join('')}</div>`:''}
+   ${ped.length?`<div class="eyebrow" style="margin:10px 0 4px">Pedidos de acesso</div><div class="list">${ped.map(p=>`<div class="item wrap"><div class="avatar">${iniciais(p.nome||p.email)}</div><div class="grow"><div class="t">${esc(p.nome||p.email)}</div><div class="s">${esc(p.email)} · pediu em ${dataBR((p.pedidoEm||'').slice(0,10))}</div></div><div class="item-acoes"><button class="btn sm primary" data-act="aprovar" data-id="${p.id}">Definir perfil</button><button class="btn sm ghost" data-act="tornarDona" data-id="${p.id}">Tornar proprietária</button><button class="btn sm ghost danger" data-act="recusar" data-id="${p.id}">Recusar</button></div></div>`).join('')}</div>`:''}
+   ${eq.length?`<div class="eyebrow" style="margin:10px 0 4px">Equipe</div><div class="list">${eq.map(e=>`<div class="item wrap"><div class="avatar">${iniciais(e.apelido||e.email)}</div><div class="grow"><div class="t">${esc(e.apelido||e.email)}</div><div class="s">${PAPEIS[e.papel]||e.papel}${e.ativo===false?' · desativada':''} · ${esc(e.email||'')}</div></div><div class="item-acoes"><button class="btn sm soft" data-act="aprovar" data-id="${e.id}">Alterar</button><button class="btn sm ghost" data-act="tornarDona" data-id="${e.id}">${ic('shield')}Tornar proprietária</button></div></div>`).join('')}</div>`:''}
    ${!ped.length&&!eq.length?'<div class="empty">Ninguém da equipe ainda.</div>':''}
    <details class="how" style="margin-top:10px"><summary>O que cada perfil acessa</summary><table>
     <tr><td><b>Proprietária</b></td><td>Tudo, incluindo finanças, contas, relatórios, política da empresa e equipe.</td></tr>
     <tr><td><b>Trancista parceira</b></td><td>Agenda, clientes, fichas de anamnese, estoque (sem custos), pacotes, vales, contratos e datas.</td></tr>
     <tr><td><b>Recepção</b></td><td>Agenda, cadastro de clientes, pacotes, vales, contrato de serviço e datas. Sem fichas de saúde e sem estoque.</td></tr>
     <tr><td><b>Contador(a)</b></td><td>Finanças, contas, relatórios e MEI, somente leitura. Sem clientes nem fichas.</td></tr></table>
-    <p>Todas essas separações são aplicadas pelas regras de segurança do Firestore, no servidor. Para bloquear alguém de vez, desative o acesso aqui e também desative o usuário em Authentication no console.</p></details></section>
-  <form class="card form" id="fCfg"><h3>Dados do negócio</h3>
-   <div class="f2"><label class="fld">Nome empresarial<input id="gNome" value="${esc(pb.nome)}"></label><label class="fld">Responsável<input id="gResp" value="${esc(pb.responsavel)}"></label><label class="fld">CNPJ<input id="gCnpj" inputmode="numeric" value="${esc(pb.cnpj)}" placeholder="00.000.000/0001-00"></label></div>
-   <div class="f2"><label class="fld">Endereço do ateliê<input id="gEnd" value="${esc(pb.endereco)}"></label><label class="fld">Município<input id="gMun" value="${esc(pb.municipio)}"></label><label class="fld">WhatsApp do ateliê<input id="gWa" inputmode="tel" value="${esc(pb.whatsapp)}"></label></div>
-   <h3 style="margin-top:8px">Horário de atendimento</h3>
-   <div><div class="small muted" style="margin-bottom:6px">Dias em que você atende</div><div class="chips" id="gDias">${SEM.map((n,i)=>`<button type="button" class="chip" data-dia="${i}" aria-pressed="${diasTrabalho().includes(i)}">${cap(n)}</button>`).join('')}</div></div>
-   <div class="f2"><label class="fld">Início do expediente<input id="gAbre" type="time" value="${esc(pb.abre)}"></label><label class="fld">Fim do expediente<input id="gFecha" type="time" value="${esc(pb.fecha)}"></label><label class="fld">Pausa (início)<input id="gIvI" type="time" value="${esc(pb.intervaloIni)}"></label><label class="fld">Pausa (fim)<input id="gIvF" type="time" value="${esc(pb.intervaloFim)}"></label></div>
-   <div class="f2"><label class="fld">Instagram do ateliê<input id="gIg" placeholder="@stefanytrancista" value="${esc(pb.instagram)}"></label><label class="fld">Desconto de aniversário (%)<input id="gAniv" type="number" min="0" max="50" value="${pb.descAniv}"></label></div>
-   <h3 style="margin-top:8px">Finanças e MEI <small>visível só para você e a contabilidade</small></h3>
-   <div class="f2"><label class="fld">Abertura do MEI<input id="gIni" type="month" value="${esc(c.inicioMei)}"></label><label class="fld">Limite anual (R$)<input id="gLim" type="number" step="0.01" value="${c.limite}"></label><label class="fld">Valor do DAS (R$)<input id="gDas" type="number" step="0.01" value="${c.das}"></label><label class="fld">Meta mensal (R$)<input id="gMeta" type="number" step="50" value="${c.meta}"></label></div>
-   <div class="f2"><label class="fld">Taxa débito (%)<input id="gTd" type="number" step="0.01" value="${c.taxaDebito}"></label><label class="fld">Taxa crédito à vista (%)<input id="gTc" type="number" step="0.01" value="${c.taxaCredito}"></label><label class="fld">Taxa crédito parcelado (%)<input id="gTp" type="number" step="0.01" value="${c.taxaParcelado}"></label></div>
-   <div class="form-actions"><button class="btn primary">${ic('check')}Salvar ajustes</button></div></form>
-  <section class="card"><h3>Cópia de segurança</h3><p class="small muted" style="margin-top:0">Os dados ficam no Firestore e aparecem no PC e no celular. Mesmo assim, baixe uma cópia por mês. Use "Restaurar" também para trazer a cópia do sistema antigo.</p>
+    <p>Todas essas separações são aplicadas pelas regras de segurança do Firestore, no servidor. Para bloquear alguém de vez, desative o acesso aqui e também desative o usuário em Authentication no console.</p></details></section>`}
+function ajDados(){const nEx=ALL_COLS.reduce((s,k)=>s+arr(k).filter(r=>r.exemplo).length,0);
+  return contaCard()+`<section class="card"><h3>Cópia de segurança</h3><p class="small muted" style="margin-top:0">Os dados ficam no Firestore e aparecem no PC e no celular. Mesmo assim, baixe uma cópia por mês.</p>
    <div class="row"><button class="btn soft" data-act="backup">${ic('down')}Baixar cópia (JSON)</button><label class="btn ghost">${ic('up')}Restaurar cópia<input type="file" id="restFile" accept=".json,application/json" hidden></label></div></section>
-  ${nEx?`<section class="card"><h3>Dados de exemplo</h3><p class="small muted" style="margin-top:0">Há ${nEx} registros de exemplo. Apague antes de começar a usar de verdade.</p><button class="btn danger soft" data-act="limparEx">${ic('trash')}Apagar dados de exemplo</button></section>`:''}`;
-}
+  ${nEx?`<section class="card"><h3>Dados de exemplo</h3><p class="small muted" style="margin-top:0">Há ${nEx} registros de exemplo. Apague antes de começar a usar de verdade. Os serviços cadastrados são mantidos.</p><button class="btn danger soft" data-act="limparEx">${ic('trash')}Apagar dados de exemplo</button></section>`:''}`}
 
 /* ================= folhas (sheets), avisos e arquivos ================= */
 function sheet(title,html){
@@ -907,7 +928,7 @@ function abrirCliente(id){
    ${pks.length?`<div class="small"><b>Pacotes ativos:</b> ${pks.map(p=>`${esc(p.nome)} (${pacoteSaldo(p)} sessão(ões) disponível(is))`).join(', ')}</div>`:''}
    ${acs.length?`<div class="small"><b>Documentos aceitos:</b> ${acs.map(a=>`${a.tipo==='servico'?'contrato':a.tipo} em ${dataBR(a.aceitoEm.slice(0,10))}`).join(', ')}</div>`:''}
    ${pode('portal')?portalBloco(c):''}
-   <div class="row"><button class="btn primary" data-act="novoAg" data-c="${id}">${ic('cal')}Agendar</button>${l?`<a class="btn soft" href="${l}" target="_blank" rel="noopener">${ic('chat')}WhatsApp</a>`:''}<button class="btn soft" data-act="linkContrato" data-c="${id}">${ic('file')}Enviar contrato</button><button class="btn ghost" data-act="editCli" data-id="${id}">${ic('edit')}Editar</button></div>
+   <div class="row"><button class="btn primary" data-act="novoAg" data-c="${id}">${ic('cal')}Agendar</button>${l?`<a class="btn soft" href="${l}" target="_blank" rel="noopener">${ic('chat')}WhatsApp</a>`:''}${pode('base')?`<button class="btn soft" data-act="cadLink" data-c="${id}">${ic('send')}Atualizar cadastro</button>`:''}<button class="btn soft" data-act="linkContrato" data-c="${id}">${ic('file')}Enviar contrato</button><button class="btn ghost" data-act="editCli" data-id="${id}">${ic('edit')}Editar</button></div>
    <div><div class="eyebrow" style="margin-bottom:6px">Histórico</div>${hist.length?`<div class="list">${hist.map(a=>`<div class="item"><span class="time">${dataCurta(a.data)}</span><div class="grow"><div class="t">${esc(nomeServ(a.servicoId))}</div><div class="s">${a.data.slice(0,4)} · ${a.pacoteId?'pacote':BRL(a.valor)}</div></div><span class="badge">${STATUS[a.status]?.n||''}</span></div>`).join('')}</div>`:'<div class="empty">Sem atendimentos ainda.</div>'}</div></div>`);
 }
 function formCliente(id){
@@ -1007,9 +1028,9 @@ function formAgenda(id,pre={}){
   const checkConf=()=>{const d=$('#aData').value,h=hm2min($('#aHora').value),du=+$('#aDur').value||120;
     const c=arr('agenda').filter(x=>x.id!==id&&x.data===d&&x.status!=='cancelado'&&x.status!=='faltou'&&hm2min(x.hora)<h+du&&h<hm2min(x.hora)+(+x.duracao||120));
     const av=[];if(c.length)av.push(`Conflita com ${c.map(x=>`${esc(nomeCli(x.clienteId))} (${x.hora})`).join(', ')}.`);
-    const fe=d&&diaFechado(d);if(fe)av.push(`${esc(fe)} neste dia.`);const pb=pub();
-    if(!fe&&(h<hm2min(pb.abre)||h+du>hm2min(pb.fecha)))av.push(`Fora do expediente (${esc(pb.abre)}–${esc(pb.fecha)}).`);
-    const iv=intervalo();if(!fe&&iv&&h<iv[1]&&h+du>iv[0])av.push(`Passa pela pausa das ${esc(pb.intervaloIni)} às ${esc(pb.intervaloFim)}.`);
+    const ex=d?expediente(d):{aberto:true};if(!ex.aberto)av.push(`${esc(ex.motivo)} neste dia.`);
+    else if(d){if(h<hm2min(ex.abre)||h+du>hm2min(ex.fecha))av.push(`Fora do expediente deste dia (${esc(ex.abre)}–${esc(ex.fecha)}).`);
+      if(ex.pausa&&h<ex.pausa[1]&&h+du>ex.pausa[0])av.push(`Passa pela pausa das ${min2hm(ex.pausa[0])} às ${min2hm(ex.pausa[1])}.`)}
     $('#aConf').innerHTML=av.length?`<div class="alert warn">${ic('alert')}<div>${av.join('<br>')}</div></div>`:''};
   ['aData','aHora','aDur'].forEach(i=>$('#'+i).addEventListener('change',checkConf));checkConf();if(!id&&pre.s)srv.onchange();
   $('#fAg').onsubmit=async e=>{e.preventDefault();let cid=sel.value;
@@ -1363,14 +1384,14 @@ function imprimirArea(){const src=$('#reciboBox');if(!src)return;let pa=$('#prin
   pa.innerHTML=src.innerHTML;document.body.classList.add('imprimindo');const fim=()=>{document.body.classList.remove('imprimindo');pa.innerHTML='';window.removeEventListener('afterprint',fim)};window.addEventListener('afterprint',fim);window.print();setTimeout(fim,1500)}
 
 /* linha do tempo do dia */
-function linhaTempo(d){const pb=pub();const ini=hm2min(pb.abre),fim=Math.max(ini+60,hm2min(pb.fecha));const tot=fim-ini;
+function linhaTempo(d){const ex=expediente(d);const sm=semana().filter(x=>x.on);const ini=hm2min(ex.aberto?ex.abre:(sm[0]||DIA_PADRAO).ini),fim=Math.max(ini+60,hm2min(ex.aberto?ex.fecha:(sm[0]||DIA_PADRAO).fim));const tot=fim-ini;
   const ags=arr('agenda').filter(a=>a.data===d&&a.status!=='cancelado');
   const pos=m=>Math.max(0,Math.min(100,(m-ini)/tot*100));
   const horas=[];for(let h=Math.ceil(ini/60);h*60<=fim;h+=2)horas.push(h);
   const agora=new Date();const nm=agora.getHours()*60+agora.getMinutes();const mostraAgora=d===today()&&nm>=ini&&nm<=fim;
   const blocos=ags.map(a=>{const s=hm2min(a.hora),e=s+(+a.duracao||120);const st=STATUS[a.status]||STATUS.agendado;
     return `<button class="tl-b" data-act="agDia" data-d="${a.data}" style="left:${pos(s)}%;width:${Math.max(2,pos(e)-pos(s))}%;--st:${st.c}" title="${esc(a.hora)} · ${esc(nomeCli(a.clienteId))} · ${esc(nomeServ(a.servicoId))}"><span>${esc(primeiro(nomeCli(a.clienteId)))}</span></button>`}).join('');
-  const iv=intervalo();const pausa=iv?`<i class="tl-pausa" style="left:${pos(iv[0])}%;width:${pos(iv[1])-pos(iv[0])}%" title="Pausa"></i>`:'';const fe=diaFechado(d);
+  const iv=ex.aberto&&ex.pausa;const pausa=iv?`<i class="tl-pausa" style="left:${pos(iv[0])}%;width:${pos(iv[1])-pos(iv[0])}%" title="Pausa"></i>`:'';const fe=ex.aberto?'':ex.motivo;
   return `<div class="tl ${fe?'tl-fechado':''}" role="img" aria-label="Linha do tempo de ${esc(dataLonga(d))}"><div class="tl-track">${pausa}${fe&&!ags.length?`<span class="tl-msg">${esc(fe)}</span>`:''}${blocos}${mostraAgora?`<i class="tl-now" style="left:${pos(nm)}%"><b>agora</b></i>`:''}</div><div class="tl-h">${horas.map(h=>`<span style="left:${pos(h*60)}%">${pad(h)}h</span>`).join('')}</div></div>`}
 
 /* fechar folha arrastando para baixo (celular) */
@@ -1393,11 +1414,13 @@ const mascaraCpf=c=>{const d=digits(c);return d.length===11?`***.${d.slice(3,6)}
 function salvarVitrine(){if(!isOwner())return;const pb=pub();setDoc(doc(FS,'vitrine','config'),{nome:pb.nome,responsavel:pb.responsavel,whatsapp:pb.whatsapp,instagram:pb.instagram||'',municipio:pb.municipio,atualizadoEm:nowIso()}).catch(()=>{})}
 
 /* ---------- folgas ---------- */
-function folgasCard(){const f=(pub().folgas||[]).map((x,i)=>({...x,i})).filter(x=>(x.fim||x.ini)>=today());
-  return `<section class="card"><h3>Folgas e bloqueios <small>férias, feriados, cursos</small></h3>
-   <form class="f2" id="fFolga"><label class="fld">De<input type="date" id="fgIni" required></label><label class="fld">Até (opcional)<input type="date" id="fgFim"></label><label class="fld">Motivo<input id="fgMot" placeholder="Ex.: férias"></label><div class="fld" style="justify-content:flex-end"><button class="btn soft">${ic('lock')}Bloquear agenda</button></div></form>
-   ${f.length?`<div class="list" style="margin-top:10px">${f.map(x=>`<div class="item"><div class="avatar" style="--lv:var(--lv-prata)">${ic('lock')}</div><div class="grow"><div class="t">${esc(x.motivo||'Agenda bloqueada')}</div><div class="s">${dataBR(x.ini)}${x.fim&&x.fim!==x.ini?` até ${dataBR(x.fim)}`:''}</div></div><button class="btn sm ghost danger" data-act="folgaRem" data-i="${x.i}">Remover</button></div>`).join('')}</div>`:'<p class="small muted" style="margin-bottom:0">Nenhum bloqueio futuro. Dias bloqueados não aparecem como livres nem na divulgação de horários.</p>'}</section>`}
-
+function excecoesCard(){const f=(pub().folgas||[]).map((x,i)=>({...x,i})).filter(x=>(x.fim||x.ini)>=today());
+  return `<section class="card"><h3>Datas especiais <small>folgas, feriados, horários diferentes</small></h3>
+   <form class="form" id="fExc"><div class="seg" id="exTipo"><button type="button" data-t="fechado" aria-pressed="true">${ic('lock')}Fechado</button><button type="button" data-t="horario" aria-pressed="false">${ic('clock')}Horário diferente</button></div>
+    <div class="f2"><label class="fld">De<input type="date" id="fgIni" required></label><label class="fld">Até (opcional)<input type="date" id="fgFim"></label><label class="fld exh" hidden>Abre<input type="time" id="fgAbre" value="09:00"></label><label class="fld exh" hidden>Fecha<input type="time" id="fgFecha" value="14:00"></label></div>
+    <label class="fld">Motivo<input id="fgMot" placeholder="Ex.: férias, feriado, evento"></label>
+    <div class="form-actions"><button class="btn soft">${ic('plus')}Adicionar data</button></div></form>
+   ${f.length?`<div class="list" style="margin-top:10px">${f.map(x=>{const h=x.tipo==='horario';return `<div class="item"><div class="avatar" style="--lv:${h?'var(--lv-ouro)':'var(--lv-prata)'}">${ic(h?'clock':'lock')}</div><div class="grow"><div class="t">${esc(x.motivo||(h?'Horário especial':'Agenda fechada'))}</div><div class="s">${dataBR(x.ini)}${x.fim&&x.fim!==x.ini?` até ${dataBR(x.fim)}`:''} · ${h?`${esc(x.abre)}–${esc(x.fecha)}`:'fechado'}</div></div><button class="btn sm ghost danger" data-act="folgaRem" data-i="${x.i}">Remover</button></div>`}).join('')}</div>`:'<p class="small muted" style="margin-bottom:0">Nenhuma data especial futura. Dias fechados não aparecem como livres nem na divulgação de horários.</p>'}</section>`}
 /* ---------- catálogo ---------- */
 const FOTOS=new Map(),FOTO_PEND=new Set();
 function fotoImg(id,cls='',alt=''){return id?`<img class="${cls}" data-foto="${id}" alt="${esc(alt)}" loading="lazy" ${FOTOS.has(id)?`src="${FOTOS.get(id)}"`:''}>`:`<div class="${cls} foto-vazia" role="img" aria-label="Sem foto">${braidMark(42)}</div>`}
@@ -1582,14 +1605,64 @@ async function processar(){if(processando||!FS||!pode('portal')||[...NEED].some(
   processando=false}
 function avisosPortal(){if(!pode('portal'))return '';const lim=Date.now()-14*864e5;
   const canc=arr('solicitacoes').filter(q=>q.processado&&q.resultado==='cancelado'&&!q.visto&&toMs(q.criadoEm)>lim);
-  const acc=arr('contratosLink').filter(l=>l.status==='aceito'&&!l.visto);
-  if(!canc.length&&!acc.length)return '';
+  const acc=arr('contratosLink').filter(l=>l.status==='aceito'&&!l.visto);const cads=pode('base')?avisosCadastro():[];
+  if(!canc.length&&!acc.length&&!cads.length)return '';
   const rows=[...canc.map(q=>{const a=S.agenda.get(q.agendaId);const sinal=a?soma((a.pagamentos||[]).filter(p=>p.tipo==='sinal')):0;
       return `<div class="item"><div class="avatar" style="--lv:var(--lv-bronze)">${ic('x')}</div><div class="grow"><div class="t" style="white-space:normal">${esc(primeiro(nomeCli(a?.clienteId)))} cancelou ${a?`${esc(nomeServ(a.servicoId))} de ${dataCurta(a.data)} às ${esc(a.hora)}`:'um atendimento'}</div><div class="s" style="white-space:normal">pelo espaço da cliente, dentro do prazo${sinal?` · sinal de ${BRL(sinal)}: veja o que a política define para cancelamento no prazo`:''}${q.motivo?` · "${esc(q.motivo)}"`:''}</div></div>${a?`<button class="btn sm soft" data-act="avisoEspera" data-id="${a.id}">${ic('list')}Lista de espera</button>`:''}<button class="btn sm ghost" data-act="avisoVisto" data-k="sol" data-id="${q.id}">Ok</button></div>`}),
     ...acc.map(l=>{const w=waLink(l.telefone,`Oi, ${primeiro(l.nome)}! Recebi o seu aceite do contrato, obrigada 💕 Segue o link para o pagamento do sinal: `);
       return `<div class="item"><div class="avatar" style="--lv:var(--lv-perola)">${ic('check')}</div><div class="grow"><div class="t" style="white-space:normal">${esc(primeiro(l.nome))} aceitou o contrato</div><div class="s" style="white-space:normal">${esc(l.servico)}${l.data?` · ${dataCurta(l.data)} ${esc(l.hora||'')}`:''} · agora envie o link de pagamento do sinal</div></div>${w?`<a class="btn sm primary" href="${w}" target="_blank" rel="noopener">${ic('chat')}Pagamento</a>`:''}<button class="btn sm ghost" data-act="avisoVisto" data-k="link" data-id="${l.id}">Ok</button></div>`})];
-  return `<section class="card aviso-portal"><h3>Novidades das clientes <small>${rows.length}</small></h3><div class="list">${rows.join('')}</div></section>`}
+  rows.push(...cads);return `<section class="card aviso-portal"><h3>Novidades das clientes <small>${rows.length}</small></h3><div class="list">${rows.join('')}</div></section>`}
 async function avisoVisto(k,id){const col=k==='sol'?'solicitacoes':'contratosLink';const x=S[col].get(id);if(x)S[col].set(id,{...x,visto:true});touch();updateDoc(doc(FS,col,id),{visto:true}).catch(dbErr)}
+
+
+/* ---------- cadastro pela própria cliente ---------- */
+const cadExpirado=x=>x.status==='convite'&&toMs(x.expiraEm)&&toMs(x.expiraEm)<Date.now();
+function msgCadastro(x){const pb=pub();const n=primeiro(x.nome);return `Oi${n?`, ${n}`:''}! 💕 Para agilizar seu atendimento, preencha seu cadastro por este link (leva 1 minutinho):\n${urlPublica('cadastro',x.id)}\n\nBeijos, ${primeiro(pb.responsavel)}`}
+function cadastrosBloco(){if(!pode('base'))return '';const rec=arr('cadastros').filter(x=>x.status==='enviado').sort((a,b)=>toMs(b.enviadoEm)-toMs(a.enviadoEm));
+  const pend=arr('cadastros').filter(x=>x.status==='convite'&&!cadExpirado(x));
+  if(!rec.length&&!pend.length)return '';
+  return `<section class="card cad-box"><h3>Cadastros pelo link <small>${rec.length?`${rec.length} para revisar`:'nenhum para revisar'}${pend.length?` · ${pend.length} aguardando a cliente`:''}</small></h3>
+   ${rec.length?`<div class="list">${rec.map(x=>{const d=x.dados||{};const m=cadMatch(x);return `<button class="item" data-act="cadVer" data-id="${x.id}"><div class="avatar" style="--lv:var(--lv-nova)">${iniciais(d.nome)}</div><div class="grow"><div class="t">${esc(d.nome)}</div><div class="s">${esc(d.telefone)}${m?` · já cadastrada como ${esc(m.nome)}`:' · nova cliente'} · enviado ${new Date(toMs(x.enviadoEm)).toLocaleDateString('pt-BR')}</div></div><span class="badge good">revisar</span></button>`}).join('')}</div>`:''}
+   ${pend.length?`<details class="cad-pend"><summary class="small muted">Links enviados aguardando preenchimento (${pend.length})</summary><div class="list">${pend.map(x=>`<div class="item"><div class="avatar">${ic('send')}</div><div class="grow"><div class="t">${esc(x.nome||'Sem nome')}</div><div class="s">${esc(x.telefone||'sem telefone')} · vale até ${new Date(toMs(x.expiraEm)).toLocaleDateString('pt-BR')}</div></div><button class="btn sm ghost" data-act="cadMostrar" data-id="${x.id}">Link</button><button class="btn sm ghost danger" data-act="cadCancelar" data-id="${x.id}">${ic('x')}</button></div>`).join('')}</div></details>`:''}</section>`}
+function cadMatch(x){if(x.clienteId&&S.clientes.has(x.clienteId))return S.clientes.get(x.clienteId);const d=(x.dados||{});const t=digits(d.telefone).slice(-8);const cpf=digits(d.cpf);
+  return arr('clientes').find(c=>(t.length===8&&digits(c.telefone).slice(-8)===t)||(cpf.length===11&&digits(c.cpf)===cpf))||null}
+function formCadLink(cid){const c=cid?S.clientes.get(cid):null;
+  sheet(c?'Atualizar cadastro':'Link de cadastro',`<form class="form" id="fCad"><p class="small muted" style="margin:0">${c?`${esc(primeiro(c.nome))} recebe um link para conferir e completar os próprios dados. Você revisa antes de entrar na ficha.`:'A cliente preenche os próprios dados pelo link. Quando ela enviar, aparece em Clientes para você revisar e aprovar com um toque.'}</p>
+   <div class="f2"><label class="fld">Nome (opcional)<input id="cdNome" value="${esc(c?.nome)}" autocomplete="off"></label><label class="fld">WhatsApp (opcional)<input id="cdTel" inputmode="tel" placeholder="(27) 99999-9999" value="${esc(c?.telefone)}"></label></div>
+   <label class="fld">Validade<select id="cdDias"><option value="3">3 dias</option><option value="7" selected>7 dias</option><option value="15">15 dias</option><option value="30">30 dias</option></select></label>
+   <div class="form-actions"><button class="btn primary">${ic('send')}Gerar link</button></div></form>`);
+  $('#fCad').onsubmit=async e=>{e.preventDefault();const id=gerarToken();const pb=pub();const dias=+$('#cdDias').value||7;
+    const x={status:'convite',nome:$('#cdNome').value.trim(),telefone:$('#cdTel').value.trim(),clienteId:c?c.id:'',criadoEm:today(),criadoPor:ME||'',
+      expiraEm:Timestamp.fromMillis(Date.now()+dias*864e5),atelie:{nome:pb.nome,responsavel:pb.responsavel,whatsapp:pb.whatsapp,instagram:pb.instagram||''},
+      origens:ORIGENS,previo:c?{cpf:c.cpf||'',instagram:c.instagram||'',aniversario:c.aniversario||'',cabelo:c.cabelo||''}:null};
+    saveRaw('cadastros',id,x);closeSheet();setTimeout(()=>cadMostrar(id),250)}}
+function cadMostrar(id){const x=S.cadastros.get(id);if(!x)return;const url=urlPublica('cadastro',id);const w=waLink(x.telefone,msgCadastro(x));
+  sheet('Link de cadastro',`<div class="stack"><div class="small muted">${esc(x.nome||'Cliente')} · vale até ${new Date(toMs(x.expiraEm)).toLocaleDateString('pt-BR')}</div>
+   <label class="fld">Link<input readonly value="${esc(url)}" onclick="this.select()"></label>
+   <div class="row">${w?`<a class="btn primary" href="${w}" target="_blank" rel="noopener">${ic('chat')}Enviar no WhatsApp</a>`:''}<button class="btn soft" id="cdCopy">${ic('copy')}Copiar mensagem</button><a class="btn ghost" href="${url}" target="_blank" rel="noopener">${ic('right')}Abrir</a></div>
+   <p class="small muted" style="margin:0">O link é único e só pode ser enviado uma vez. Quando ela preencher, você recebe o aviso na tela inicial e em Clientes.</p></div>`);
+  $('#cdCopy').onclick=()=>copiar(msgCadastro(x),'Mensagem com o link copiada')}
+function cadVer(id){const x=S.cadastros.get(id);if(!x||x.status!=='enviado')return;const d=x.dados||{};const m=cadMatch(x);
+  const L=(k,v)=>v?`<div><b>${k}:</b> ${esc(v)}</div>`:'';
+  const dif=m?[['Nome','nome','nome'],['WhatsApp','telefone','telefone'],['CPF','cpf','cpf'],['Instagram','instagram','instagram'],['Nascimento','aniversario','aniversario'],['Cabelo','cabelo','cabelo']].filter(([,a,b])=>d[a]&&String(d[a]).trim()!==String(m[b]||'').trim()):[];
+  sheet('Cadastro recebido',`<div class="stack"><div class="row between"><div><b>${esc(d.nome)}</b><div class="small muted">enviado em ${new Date(toMs(x.enviadoEm)).toLocaleString('pt-BR')}</div></div><span class="badge ${m?'':'good'}">${m?'cliente existente':'nova cliente'}</span></div>
+   <div class="small">${L('WhatsApp',d.telefone)}${L('CPF',d.cpf)}${L('Nascimento',d.aniversario?dataBR(d.aniversario):'')}${L('Instagram',d.instagram)}${L('Como conheceu',d.origem)}${L('Indicada por',d.indicadaPor)}${L('Cabelo',d.cabelo)}${L('Observações',d.obs)}
+    <div><b>Fotos para divulgação:</b> ${d.imagem?'autoriza':'não autoriza'}</div><div><b>LGPD:</b> consentiu com o uso dos dados para atendimento</div></div>
+   ${m?`<div class="alert info">${ic('users')}<div>Encontramos <b>${esc(m.nome)}</b> com o mesmo ${x.clienteId?'link':'telefone ou CPF'}. ${dif.length?`Vão ser atualizados: ${dif.map(z=>z[0]).join(', ')}.`:'Os dados são os mesmos da ficha.'} Campos em branco no formulário não apagam o que já existe.</div></div>`:''}
+   <div class="form-actions" style="justify-content:space-between"><button class="btn ghost danger" data-act="cadDescartar" data-id="${id}">${ic('trash')}Descartar</button><div class="row">${m?`<button class="btn soft" data-act="cadImportar" data-id="${id}" data-novo="1">Criar como nova</button>`:''}<button class="btn primary" data-act="cadImportar" data-id="${id}">${ic('check')}${m?'Atualizar ficha':'Criar cliente'}</button></div></div></div>`)}
+async function cadImportar(id,novo){const x=S.cadastros.get(id);if(!x)return;const d=x.dados||{};const m=novo?null:cadMatch(x);
+  const ind=d.indicadaPor?arr('clientes').find(c=>normNome(c.nome)===normNome(d.indicadaPor)):null;
+  const base=m?{...m}:{criadoEm:today()};const set=(k,v)=>{if(v!==undefined&&v!==null&&String(v).trim()!=='')base[k]=String(v).trim()};
+  set('nome',d.nome);set('telefone',d.telefone);set('cpf',d.cpf);set('instagram',d.instagram);set('aniversario',d.aniversario);set('cabelo',d.cabelo);
+  if(d.origem&&!base.origem)base.origem=ORIGENS.includes(d.origem)?d.origem:'Outro';
+  if(ind&&!base.indicadaPor)base.indicadaPor=ind.id;
+  const notas=[d.obs,d.indicadaPor&&!ind?`Indicada por ${d.indicadaPor}`:''].filter(Boolean).join(' · ');if(notas)base.obs=[base.obs,notas].filter(Boolean).join(' · ');
+  base.consentimento={lgpd:true,imagem:!!d.imagem,em:new Date(toMs(x.enviadoEm)||Date.now()).toISOString(),via:'link de cadastro'};
+  delete base.id;const cid=await save('clientes',m?m.id:null,base);
+  S.cadastros.set(id,{...x,status:'importado',clienteId:cid});touch();updateDoc(doc(FS,'cadastros',id),{status:'importado',clienteId:cid,processadoEm:nowIso(),processadoPor:ME||''}).catch(dbErr);
+  closeSheet();toast(m?'Ficha atualizada':'Cliente cadastrada');if(!m&&pode('anamnese'))setTimeout(()=>abrirCliente(cid),300)}
+function avisosCadastro(){return arr('cadastros').filter(x=>x.status==='enviado').map(x=>{const d=x.dados||{};
+  return `<div class="item"><div class="avatar" style="--lv:var(--lv-nova)">${ic('users')}</div><div class="grow"><div class="t" style="white-space:normal">${esc(primeiro(d.nome))} preencheu o cadastro</div><div class="s" style="white-space:normal">${esc(d.telefone)} · revise e aprove para entrar em Clientes</div></div><button class="btn sm primary" data-act="cadVer" data-id="${x.id}">Revisar</button></div>`})}
 
 /* ================= ações ================= */
 const ACT={
@@ -1654,7 +1727,14 @@ const ACT={
  tornarDona:t=>{const id=t.dataset.id;const e=S.equipe.get(id)||S.pedidos.get(id)||{};confirmar(`Dar acesso total de proprietária para <b>${esc(e.apelido||e.nome||e.email||'esta pessoa')}</b>? Ela passa a ver finanças, contratos, equipe e configurações.`,()=>tornarDona(id))},
  removerDona:t=>confirmar('Remover o acesso de proprietária desta conta? Ela deixará de entrar no sistema até receber um perfil.',()=>removerDona(t.dataset.id)),
  servSug:async()=>{await servicosSugeridos();const f=$('#fLk')||$('#fAg');if(f){const sel=f.querySelector('#lkServ,#aServ');if(sel){const v=sel.value;sel.innerHTML=(sel.id==='lkServ'?optServCat():optServ(''))+(sel.id==='lkServ'?'<option value="__outro">Outro: digitar o nome</option>':'');sel.value=v==='__outro'?'':v;sel.dispatchEvent(new Event('change'))}const al=f.querySelector('.alert.warn');if(al&&/Nenhum serviço/.test(al.textContent))al.remove()}},
- folgaRem:t=>{const i=+t.dataset.i;const f=[...(pub().folgas||[])];f.splice(i,1);save('publico','config',{...pub(),folgas:f});toast('Bloqueio removido')},
+ folgaRem:t=>{const i=+t.dataset.i;const f=[...(pub().folgas||[])];f.splice(i,1);save('publico','config',{...pub(),folgas:f});toast('Data removida')},
+ ajTab:t=>{UI.ajTab=t.dataset.t;render()},
+ cadLink:t=>formCadLink(t.dataset.c||''),cadMostrar:t=>cadMostrar(t.dataset.id),cadVer:t=>cadVer(t.dataset.id),
+ cadImportar:t=>cadImportar(t.dataset.id,!!t.dataset.novo),
+ cadDescartar:t=>{const id=t.dataset.id;confirmar('Descartar este cadastro? A cliente não é avisada.',async()=>{const x=S.cadastros.get(id);if(x)S.cadastros.set(id,{...x,status:'descartado'});touch();updateDoc(doc(FS,'cadastros',id),{status:'descartado',processadoEm:nowIso()}).catch(dbErr);toast('Cadastro descartado')})},
+ cadCancelar:t=>{const id=t.dataset.id;confirmar('Cancelar este link? Ele deixa de funcionar.',async()=>{S.cadastros.delete(id);touch();deleteDoc(doc(FS,'cadastros',id)).catch(dbErr);toast('Link cancelado')})},
+ horCopiar:()=>{const base=$('#fHor .hr-row[data-d="1"]');const vals=['ini','fim','pIni','pFim'].map(k=>base.querySelector(`[data-k="${k}"]`).value);
+   $$('#fHor .hr-row').forEach(r=>{if(r===base||r.classList.contains('off'))return;['ini','fim','pIni','pFim'].forEach((k,j)=>r.querySelector(`[data-k="${k}"]`).value=vals[j])});toast('Horário de segunda copiado. Toque em Salvar.')},
  novoCat:t=>formCatalogo(null,{s:t.dataset.s}),editCat:t=>pode('catalogoEdit')?formCatalogo(t.dataset.id):verCatalogo(t.dataset.id),
  copiarCatalogo:()=>copiar(urlPublica('catalogo'),'Link do catálogo copiado'),
  linkContrato:t=>formLinkContrato({c:t.dataset.c,a:t.dataset.a}),verLink:t=>verLinkContrato(t.dataset.id),
@@ -1666,25 +1746,34 @@ const ACT={
 document.addEventListener('click',e=>{const t=e.target.closest('[data-act]');if(!t)return;
   if(t.dataset.act==='closeBack'){if(e.target===t)closeSheet();return}
   const f=ACT[t.dataset.act];if(!f)return;if(t.tagName!=='A')e.preventDefault();if(t.disabled)return;f(t,e)});
-document.addEventListener('click',e=>{const b=e.target.closest('#gDias [data-dia]');if(b){e.preventDefault();b.setAttribute('aria-pressed',b.getAttribute('aria-pressed')==='true'?'false':'true')}});
+document.addEventListener('click',e=>{const h=e.target.closest('[data-hdia]');if(h){e.preventDefault();const on=h.getAttribute('aria-pressed')!=='true';h.setAttribute('aria-pressed',on);h.closest('.hr-row').classList.toggle('off',!on);return}
+  const t=e.target.closest('#exTipo [data-t]');if(t){e.preventDefault();$$('#exTipo [data-t]').forEach(b=>b.setAttribute('aria-pressed',b===t));$$('#fExc .exh').forEach(l=>l.hidden=t.dataset.t!=='horario')}});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeSheet();const tag=(e.target.tagName||'').toLowerCase();const digitando=tag==='input'||tag==='textarea'||tag==='select'||e.target.isContentEditable;if(!digitando&&pode('base')&&!$('.sheet-back')&&(e.key==='/'||((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'))){e.preventDefault();busca()}});
 let buscaT;document.addEventListener('input',e=>{if(e.target.id==='cliBusca'){UI.cliBusca=e.target.value;clearTimeout(buscaT);buscaT=setTimeout(()=>{const pos=e.target.selectionStart;render();const i=$('#cliBusca');if(i){i.focus();try{i.setSelectionRange(pos,pos)}catch(_){}}},200)}});
 document.addEventListener('change',e=>{const id=e.target.id;
   if(id==='ctTipo'){UI.ctTipo=e.target.value;render()}else if(id==='ctCli'){UI.ctCli=e.target.value;UI.ctAg='';render()}else if(id==='ctAg'){UI.ctAg=e.target.value;render()}
   else if(id==='restFile'&&e.target.files[0]){const fr=new FileReader();fr.onload=()=>{let o;try{o=JSON.parse(fr.result)}catch(_){toast('Arquivo inválido');return}
-    confirmar('Restaurar esta cópia? Registros com o mesmo identificador serão substituídos.',async()=>{const ops=[];ALL_COLS.filter(c=>!['equipe','pedidos','contratosLink','solicitacoes'].includes(c)).forEach(c=>(o[c]||[]).forEach(r=>{if(r&&r.id)ops.push([c,r.id,r])}));await pool(ops.map(([c,id,r])=>()=>save(c,id,r,{quiet:true})),8);toast(`${ops.length} registros restaurados`)})};fr.readAsText(e.target.files[0])}});
+    confirmar('Restaurar esta cópia? Registros com o mesmo identificador serão substituídos.',async()=>{const ops=[];ALL_COLS.filter(c=>!['equipe','pedidos','contratosLink','solicitacoes','cadastros'].includes(c)).forEach(c=>(o[c]||[]).forEach(r=>{if(r&&r.id)ops.push([c,r.id,r])}));await pool(ops.map(([c,id,r])=>()=>save(c,id,r,{quiet:true})),8);toast(`${ops.length} registros restaurados`)})};fr.readAsText(e.target.files[0])}});
 document.addEventListener('submit',async e=>{
   if(e.target.id==='fLogin'){e.preventDefault();const m=$('#lgMsg');m.style.color='var(--bad)';m.textContent='Entrando…';
     try{await signInWithEmailAndPassword(AUTH,$('#lgEmail').value.trim(),$('#lgSenha').value)}catch(err){const c=err.code||'';m.textContent=/invalid-credential|wrong-password|user-not-found|invalid-email/.test(c)?'E-mail ou senha incorretos.':/too-many-requests/.test(c)?'Muitas tentativas. Aguarde alguns minutos.':/network/.test(c)?'Sem internet. Tente de novo.':'Não foi possível entrar.'}
     return}
   if(e.target.id==='fCfg'){e.preventDefault();const v=i=>$('#'+i).value.trim();
-    const dias=$$('#gDias [data-dia]').filter(b=>b.getAttribute('aria-pressed')==='true').map(b=>+b.dataset.dia);if(!dias.length){toast('Escolha pelo menos um dia de atendimento.','erro');return}
-    const ivI=v('gIvI'),ivF=v('gIvF');if((ivI||ivF)&&!(ivI&&ivF&&ivF>ivI)){toast('Confira a pausa: o fim precisa ser depois do início.','erro');return}
-    await save('publico','config',{...pub(),nome:v('gNome')||DEF_PUB.nome,responsavel:v('gResp'),cnpj:v('gCnpj'),endereco:v('gEnd'),municipio:v('gMun'),whatsapp:v('gWa'),instagram:v('gIg'),abre:v('gAbre')||'08:00',fecha:v('gFecha')||'20:00',dias,intervaloIni:ivI,intervaloFim:ivF,descAniv:+v('gAniv')||0,started:true});
+    await save('publico','config',{...pub(),nome:v('gNome')||DEF_PUB.nome,responsavel:v('gResp'),cnpj:v('gCnpj'),endereco:v('gEnd'),municipio:v('gMun'),whatsapp:v('gWa'),instagram:v('gIg'),descAniv:+v('gAniv')||0,started:true});
     salvarVitrine();
     await save('privado','config',{...priv(),inicioMei:v('gIni'),limite:+v('gLim')||81000,das:+v('gDas')||DEF_PRIV.das,meta:+v('gMeta')||0,taxaDebito:+v('gTd')||0,taxaCredito:+v('gTc')||0,taxaParcelado:+v('gTp')||0});toast('Ajustes salvos')}
-  else if(e.target.id==='fFolga'){e.preventDefault();const ini=$('#fgIni').value,fim=$('#fgFim').value||ini,motivo=$('#fgMot').value.trim();if(!ini){toast('Escolha a data.','erro');return}if(fim<ini){toast('A data final precisa ser depois da inicial.','erro');return}
-    const f=[...(pub().folgas||[]),{ini,fim,motivo}].sort((a,b)=>a.ini<b.ini?-1:1);await save('publico','config',{...pub(),folgas:f});toast('Agenda bloqueada')}
+  else if(e.target.id==='fHor'){e.preventDefault();const sm=[];let erro='';
+    $$('#fHor .hr-row').forEach(r=>{const i=+r.dataset.d;const g=k=>r.querySelector(`[data-k="${k}"]`).value;const on=r.querySelector('[data-hdia]').getAttribute('aria-pressed')==='true';
+      const x={on,ini:g('ini')||'08:00',fim:g('fim')||'18:00',pIni:g('pIni'),pFim:g('pFim')};
+      if(on&&x.fim<=x.ini)erro=`${cap(SEMX[i])}: o horário de fechar precisa ser depois do de abrir.`;
+      if(on&&(x.pIni||x.pFim)&&!(x.pIni&&x.pFim&&x.pFim>x.pIni&&x.pIni>=x.ini&&x.pFim<=x.fim))erro=`${cap(SEMX[i])}: confira a pausa, ela precisa ficar dentro do expediente.`;
+      sm[i]=x});
+    if(erro){toast(erro,'erro');return}if(!sm.some(x=>x.on)){toast('Marque pelo menos um dia de atendimento.','erro');return}
+    const on=sm.filter(x=>x.on);await save('publico','config',{...pub(),semana:sm,dias:sm.map((x,i)=>x.on?i:-1).filter(i=>i>=0),abre:on.map(x=>x.ini).sort()[0],fecha:on.map(x=>x.fim).sort().pop(),started:true});toast('Horários salvos')}
+  else if(e.target.id==='fExc'){e.preventDefault();const ini=$('#fgIni').value,fim=$('#fgFim').value||ini,motivo=$('#fgMot').value.trim();const tipo=$('#exTipo [aria-pressed="true"]').dataset.t;
+    if(!ini){toast('Escolha a data.','erro');return}if(fim<ini){toast('A data final precisa ser depois da inicial.','erro');return}
+    const reg={ini,fim,motivo,tipo};if(tipo==='horario'){reg.abre=$('#fgAbre').value;reg.fecha=$('#fgFecha').value;if(!reg.abre||!reg.fecha||reg.fecha<=reg.abre){toast('Confira o horário especial.','erro');return}}
+    const f=[...(pub().folgas||[]),reg].sort((a,b)=>a.ini<b.ini?-1:1);await save('publico','config',{...pub(),folgas:f});toast(tipo==='horario'?'Horário especial salvo':'Agenda bloqueada')}
   else if(e.target.id==='fPol'){e.preventDefault();const P=pol();const campos={},rev={};
     POL_CAMPOS.forEach(f=>{const el=$('#pol_'+f.k);campos[f.k]=f.t==='num'?+el.value||0:el.value.trim();const r=$('#rev_'+f.k);if(r&&r.checked)rev[f.k]=true});
     await save('publico','politica',{campos,revisados:rev,versao:P.versao+1,atualizadaEm:nowIso()});toast(`Política salva (versão ${P.versao+1})`);window.scrollTo({top:0,behavior:'smooth'})}

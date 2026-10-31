@@ -397,3 +397,21 @@ button.badge{border:0;cursor:pointer;font:inherit;font-size:.72rem;font-weight:6
 .card h3{flex-wrap:wrap}
 .fld input[type="time"],.fld input[type="date"],.fld input[type="month"]{min-width:0;max-width:100%}
 .cat-card .foto-vazia.cat-img{aspect-ratio:16/7}
+/* v6 — horários por dia */
+.tabs-scroll{margin:0 0 14px;max-width:100%;overflow-x:auto;scrollbar-width:none}.tabs-scroll::-webkit-scrollbar{display:none}
+.hr-tab{display:grid;gap:8px}
+.hr-row{display:grid;grid-template-columns:108px repeat(4,minmax(0,1fr));gap:8px;align-items:end;padding:10px;border-radius:14px;background:var(--surface-2);transition:opacity .25s,background .25s}
+.hr-row .fld{margin:0}
+.hr-row .hr-dia{justify-content:center;height:40px;font-weight:700}
+.hr-row .hr-fechado{display:none;grid-column:2/-1;align-self:center;color:var(--muted);font-size:.85rem}
+.hr-row.off{background:transparent;border:1px dashed var(--line)}
+.hr-row.off .fld{display:none}.hr-row.off .hr-fechado{display:block}
+@media (max-width:640px){.hr-row{grid-template-columns:1fr 1fr}.hr-row .hr-dia{grid-column:1/-1}.hr-row .hr-fechado{grid-column:1/-1}}
+.day.especial::after{content:'';position:absolute;top:6px;right:6px;width:6px;height:6px;border-radius:50%;background:var(--lv-ouro,#C9A45C)}
+.day{position:relative}
+.nav-grupo{font-size:.68rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:12px 12px 4px;opacity:.8}
+.nav-grupo:first-child{padding-top:2px}
+.nav-sep{height:1px;background:var(--line);margin:10px 12px}
+.cad-box .cad-pend{margin-top:8px}.cad-box .cad-pend summary{cursor:pointer;padding:4px 0}
+/* itens com vários botões quebram linha no celular em vez de vazar */
+@media (max-width:520px){div.item{flex-wrap:wrap}div.item>.grow{flex:1 1 150px}div.item>.btn,div.item>a.btn{flex:none}}
