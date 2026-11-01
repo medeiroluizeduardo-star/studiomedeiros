@@ -474,3 +474,7 @@ button.badge{border:0;cursor:pointer;font:inherit;font-size:.72rem;font-weight:6
 .sg-ag{display:flex;flex-direction:column;justify-content:flex-start;align-items:stretch}.sg-ag b{font-weight:700}
 .mes-grade+.kpis{margin-top:14px}
 .estrelas{color:var(--gold);letter-spacing:.06em}.reat h3 svg{width:18px;height:18px;vertical-align:-3px;margin-right:4px}
+.dur-in{display:flex;align-items:center;gap:6px}
+.dur-in .dur-h{width:4.2em;flex:none;text-align:center}
+.dur-in .dur-m{width:auto;flex:none;min-width:4.6em}
+.dur-in span{color:var(--muted);font-size:.85rem}
