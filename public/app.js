@@ -208,6 +208,8 @@ function salvarArquivo(nome,conteudo){const blob=conteudo instanceof Blob?conteu
 /* ================= regras de negócio ================= */
 const nomeCli=id=>S.clientes.get(id)?.nome||'Cliente avulsa';
 const nomeServ=id=>S.servicos.get(id)?.nome||'Serviço';
+const servsAg=a=>[a.servicoId,...(Array.isArray(a.extras)?a.extras:[])].filter(Boolean);
+const nomeAg=a=>a.servicoNome&&!a.servicoId?a.servicoNome:servsAg(a).map(nomeServ).join(' + ')||'Serviço';
 function catServ(sid){const n=nomeServ(sid);return /manuten/i.test(n)?'Manutenção':/retirada/i.test(n)?'Retirada':'Serviço de trança'}
 const ehComercio=l=>l.categoria==='Venda de produto';
 
@@ -233,7 +235,7 @@ function calcFidelidade(cli,ref){
 /* receitas derivadas de pagamentos registrados na agenda, pacotes e vales */
 function pagVirtuais(){return memo('pv',()=>{const out=[];
   const v=(col,doc,p,cat,desc,cli)=>out.push({id:`${col}:${doc.id}:${p.id}`,virtual:true,origem:col,origemId:doc.id,tipo:'receita',data:p.data,valor:+p.valor||0,categoria:cat,descricao:desc,forma:p.forma,parcelas:+p.parcelas||1,nf:!!p.nf,clienteId:cli,exemplo:doc.exemplo});
-  arr('agenda').forEach(a=>(a.pagamentos||[]).forEach(p=>{if(+p.valor>0)v('agenda',a,p,p.tipo==='sinal'?'Sinal':catServ(a.servicoId),`${p.tipo==='sinal'?'Sinal · ':''}${nomeServ(a.servicoId)} · ${nomeCli(a.clienteId)}`,a.clienteId)}));
+  arr('agenda').forEach(a=>(a.pagamentos||[]).forEach(p=>{if(+p.valor>0)v('agenda',a,p,p.tipo==='sinal'?'Sinal':catServ(a.servicoId),`${p.tipo==='sinal'?'Sinal · ':''}${nomeAg(a)} · ${nomeCli(a.clienteId)}`,a.clienteId)}));
   arr('pacotes').forEach(k=>(k.pagamentos||[]).forEach(p=>v('pacotes',k,p,'Pacotes',`Pacote ${k.nome} · ${nomeCli(k.clienteId)}`,k.clienteId)));
   arr('vales').forEach(x=>(x.pagamentos||[]).forEach(p=>v('vales',x,p,'Vale-presente',`Vale-presente ${x.codigo} · ${x.compradora||''}`)));
   return out})}
@@ -384,7 +386,7 @@ function docServico(cli,ag){
   <p><b>CONTRATADA:</b> ${esc(pb.responsavel||pb.nome)}, microempreendedora individual, nome empresarial ${esc(pb.nome)}, CNPJ ${linha(pb.cnpj)}, com endereço em ${linha(pb.endereco||pb.municipio)}, WhatsApp ${linha(pb.whatsapp)}.</p>
   <p><b>CONTRATANTE:</b> ${linha(cli?.nome)}, CPF ${linha(cli?.cpf)}, telefone ${linha(cli?.telefone)}.</p>
   <h2>Cláusula 1 – Objeto</h2>
-  <p>Prestação do serviço de <b>${linha(s?.nome||ag?.servicoNome)}</b>, na data ${ag&&ag.data?`<b>${dataExt(ag.data)}</b>${ag.hora?`, às <b>${esc(ag.hora)}</b>`:''}`:'a combinar entre as partes'}, com duração estimada de ${s||ag?.duracao?durTxt(ag.duracao||s.duracao):'____'}, ${pb.endereco?`no endereço ${esc(pb.endereco)}`:'no local combinado entre as partes'}.</p>
+  <p>Prestação do serviço de <b>${linha(ag&&servsAg(ag).length>1?nomeAg(ag):s?.nome||ag?.servicoNome)}</b>, na data ${ag&&ag.data?`<b>${dataExt(ag.data)}</b>${ag.hora?`, às <b>${esc(ag.hora)}</b>`:''}`:'a combinar entre as partes'}, com duração estimada de ${s||ag?.duracao?durTxt(ag.duracao||s.duracao):'____'}, ${pb.endereco?`no endereço ${esc(pb.endereco)}`:'no local combinado entre as partes'}.</p>
   <h2>Cláusula 2 – Preço e pagamento</h2>
   <p>2.1. O valor total do serviço é de <b>${ag?BRL(valor):'R$ ________'}</b>. Para reservar o horário, a CONTRATANTE paga sinal de ${V('sinalPct')}% (${ag?BRL(sinal):'R$ ______'}), que será abatido do valor final.</p>
   <p>2.2. Formas aceitas: Pix, dinheiro e cartões de débito e crédito. O parcelamento no cartão de crédito é possível em até ${V('parcelas')} vezes para serviços a partir de R$ ${V('parcelaMin')}, ${V('jurosParc')}.</p>
@@ -575,7 +577,7 @@ function vInicio(){
 
 /* ================= AGENDA ================= */
 function apptRow(a){const st=STATUS[a.status]||STATUS.agendado;
-  return `<button class="item" data-act="agDia" data-d="${a.data}"><span class="time">${esc(a.hora||'--:--')}</span><span class="dot" style="background:${st.c}"></span><div class="grow"><div class="t">${esc(nomeCli(a.clienteId))}</div><div class="s">${esc(nomeServ(a.servicoId))} · ${a.pacoteId?'pacote':BRL(a.valor)}</div></div><span class="badge">${st.n}</span></button>`}
+  return `<button class="item" data-act="agDia" data-d="${a.data}"><span class="time">${esc(a.hora||'--:--')}</span><span class="dot" style="background:${st.c}"></span><div class="grow"><div class="t">${esc(nomeCli(a.clienteId))}</div><div class="s">${esc(nomeAg(a))} · ${a.pacoteId?'pacote':BRL(a.valor)}</div></div><span class="badge">${st.n}</span></button>`}
 function esperaRow(e){const cli=S.clientes.get(e.clienteId);const nome=cli?.nome||e.nome;const tel=cli?.telefone||e.telefone;
   const s=S.servicos.get(e.servicoId);let sug=null;for(let i=0;i<14&&!sug;i++){const d=addDays(today(),i);const l=livresDia(d,+s?.duracao||120);if(l.length)sug={d,h:min2hm(l[0][0])}}
   const w=sug?waLink(tel,`Oi, ${primeiro(nome)}! Abriu um horário para ${s?.nome||'suas tranças'}: ${dataLonga(sug.d)} às ${sug.h}. Quer que eu reserve para você?`):null;
@@ -595,7 +597,7 @@ function vAgenda(){if(UI.agVis==='semana')return vAgendaSemana();if(UI.agVis==='
   out+=`<div class="grid g2"><section class="stack" style="gap:10px">${doDia.length?doDia.map(apptCard).join(''):`<div class="card empty">Nenhum atendimento neste dia.<br><button class="btn soft" style="margin-top:10px" data-act="novoAg" data-d="${d}">${ic('plus')}Marcar horário</button></div>`}</section>
   <section class="stack"><div class="card"><h3>Horários livres <small>${esc(textoExpediente(expediente(d)))}</small></h3>${diaFechado(d)?`<div class="empty">${esc(diaFechado(d))}.<br><button class="btn sm ghost" style="margin-top:6px" data-act="novoAg" data-d="${d}">Agendar mesmo assim</button></div>`:d<today()?'<div class="empty">Dia que já passou.</div>':livres.length?`<div class="row">${livres.map(([a,b])=>`<button class="free" data-act="novoAg" data-d="${d}" data-h="${min2hm(a)}">${min2hm(a)} às ${min2hm(b)}</button>`).join('')}</div>`:`<div class="empty">Dia cheio.</div>`}</div>
   <div class="card"><h3>Lista de espera <button class="btn sm soft" data-act="novaEspera">${ic('plus')}Adicionar</button></h3>${esp.length?`<div class="list">${esp.map(esperaRow).join('')}</div><p class="small muted" style="margin-bottom:0">O botão Avisar já sugere o primeiro horário livre que comporta o serviço.</p>`:'<div class="empty">Ninguém aguardando. Quando a agenda lotar, anote aqui quem quer um encaixe.</div>'}</div>
-  <div class="card"><h3>Próximos 7 dias</h3><div class="list">${ag.filter(a=>a.data>d&&a.data<=addDays(d,7)&&a.status!=='cancelado').sort((a,b)=>(a.data+a.hora)<(b.data+b.hora)?-1:1).slice(0,6).map(a=>`<button class="item" data-act="agDia" data-d="${a.data}"><span class="time">${dataCurta(a.data)}</span><div class="grow"><div class="t">${esc(nomeCli(a.clienteId))}</div><div class="s">${esc(a.hora)} · ${esc(nomeServ(a.servicoId))}</div></div></button>`).join('')||'<div class="empty">Nada marcado.</div>'}</div></div></section></div>`;
+  <div class="card"><h3>Próximos 7 dias</h3><div class="list">${ag.filter(a=>a.data>d&&a.data<=addDays(d,7)&&a.status!=='cancelado').sort((a,b)=>(a.data+a.hora)<(b.data+b.hora)?-1:1).slice(0,6).map(a=>`<button class="item" data-act="agDia" data-d="${a.data}"><span class="time">${dataCurta(a.data)}</span><div class="grow"><div class="t">${esc(nomeCli(a.clienteId))}</div><div class="s">${esc(a.hora)} · ${esc(nomeAg(a))}</div></div></button>`).join('')||'<div class="empty">Nada marcado.</div>'}</div></div></section></div>`;
   return out;
 }
 
@@ -625,12 +627,12 @@ function vAgendaSemana(){const d=UI.agDia;const ini=addDays(d,-parse(d).getDay()
    ${dias.map((x,i)=>{const e=exps[i];const dd=parse(x);return `<div class="sg-col ${x===t?'hoje':''} ${e.aberto?'':'fechado'}"><button class="sg-cab" data-act="agVerDia" data-d="${x}"><span>${SEM[dd.getDay()]}</span><b>${dd.getDate()}</b>${e.especial?'<i class="sg-esp" title="Horário especial"></i>':''}</button>
      <div class="sg-corpo">${horas.slice(1).map(m=>`<i class="sg-linha" style="top:${(m-h0)*PX}px"></i>`).join('')}
       ${e.aberto?`${hm2min(e.abre)>h0?`<i class="sg-off" style="top:0;height:${(hm2min(e.abre)-h0)*PX}px"></i>`:''}${hm2min(e.fecha)<h1?`<i class="sg-off" style="top:${(hm2min(e.fecha)-h0)*PX}px;bottom:0"></i>`:''}${e.pausa?`<i class="sg-off pausa" style="top:${(e.pausa[0]-h0)*PX}px;height:${(e.pausa[1]-e.pausa[0])*PX}px"></i>`:''}`:`<span class="sg-fechado">${esc(e.motivo)}</span>`}
-      ${porDia[i].map(a=>{const st=STATUS[a.status]||STATUS.agendado;const ini=hm2min(a.hora);const du=Math.max(30,+a.duracao||60);return `<button class="sg-ag" style="--st:${st.c};top:${(ini-h0)*PX}px;height:${du*PX-2}px" data-act="editAg" data-id="${a.id}" title="${esc(a.hora)} · ${esc(nomeCli(a.clienteId))} · ${esc(nomeServ(a.servicoId))}"><b>${esc(a.hora)}</b> ${esc(primeiro(nomeCli(a.clienteId)))}<small>${esc(nomeServ(a.servicoId))}</small></button>`}).join('')}
+      ${porDia[i].map(a=>{const st=STATUS[a.status]||STATUS.agendado;const ini=hm2min(a.hora);const du=Math.max(30,+a.duracao||60);return `<button class="sg-ag" style="--st:${st.c};top:${(ini-h0)*PX}px;height:${du*PX-2}px" data-act="editAg" data-id="${a.id}" title="${esc(a.hora)} · ${esc(nomeCli(a.clienteId))} · ${esc(nomeAg(a))}"><b>${esc(a.hora)}</b> ${esc(primeiro(nomeCli(a.clienteId)))}<small>${esc(nomeAg(a))}</small></button>`}).join('')}
       ${x>=t&&e.aberto?livresDia(x,60).map(([a,b])=>`<button class="sg-livre" style="top:${(a-h0)*PX}px;height:${(b-a)*PX-2}px" data-act="novoAg" data-d="${x}" data-h="${min2hm(a)}" aria-label="Agendar ${dataCurta(x)} às ${min2hm(a)}">${b-a>=60?`livre ${min2hm(a)}`:''}</button>`).join(''):''}
      </div></div>`}).join('')}</section>`;
   out+=`<div class="stack mostra-mob">${dias.map((x,i)=>{const e=exps[i];const dd=parse(x);const l=x>=t&&e.aberto?livresDia(x,60):[];
     return `<section class="card sm-dia ${x===t?'hoje':''}"><div class="row between"><button class="sm-cab" data-act="agVerDia" data-d="${x}"><b>${cap(SEMX[dd.getDay()])}, ${dd.getDate()}</b> <span class="small muted">${esc(textoExpediente(e))}</span></button>${e.aberto&&x>=t?`<button class="btn sm ghost" data-act="novoAg" data-d="${x}">${ic('plus')}</button>`:''}</div>
-     ${porDia[i].length?`<div class="list">${porDia[i].map(a=>{const st=STATUS[a.status]||STATUS.agendado;return `<button class="item" data-act="editAg" data-id="${a.id}"><span class="time">${esc(a.hora)}</span><span class="dot" style="background:${st.c}"></span><div class="grow"><div class="t">${esc(nomeCli(a.clienteId))}</div><div class="s">${esc(nomeServ(a.servicoId))} · ${st.n}</div></div></button>`}).join('')}</div>`:''}
+     ${porDia[i].length?`<div class="list">${porDia[i].map(a=>{const st=STATUS[a.status]||STATUS.agendado;return `<button class="item" data-act="editAg" data-id="${a.id}"><span class="time">${esc(a.hora)}</span><span class="dot" style="background:${st.c}"></span><div class="grow"><div class="t">${esc(nomeCli(a.clienteId))}</div><div class="s">${esc(nomeAg(a))} · ${st.n}</div></div></button>`}).join('')}</div>`:''}
      ${l.length?`<div class="row" style="margin-top:8px">${l.map(([a,b])=>`<button class="free" data-act="novoAg" data-d="${x}" data-h="${min2hm(a)}">${min2hm(a)} às ${min2hm(b)}</button>`).join('')}</div>`:!porDia[i].length?`<div class="small muted" style="margin-top:4px">${e.aberto?(x<t?'Sem atendimentos.':'Dia cheio.'):''}</div>`:''}</section>`}).join('')}</div>`;
   return out}
 function vAgendaMes(){const d=UI.agDia;const m=ym(d);const [Y,M]=m.split('-').map(Number);const prim=`${m}-01`;const ini=addDays(prim,-parse(prim).getDay());const t=today();
@@ -684,11 +686,11 @@ function paraReativar(){return memo('reat',()=>{const t=today();const out=[];
     else if(dias>90)out.push({c,ult,dias,motivo:'sumida',txt:`sem voltar há ${dias} dias`})});
   return out.sort((a,b)=>a.motivo===b.motivo?b.dias-a.dias:a.motivo==='manutencao'?-1:1)})}
 function msgReativar(x){const pb=pub();const n=primeiro(x.c.nome);return x.motivo==='manutencao'
-  ?`Oi, ${n}! 💕 Já está na hora da manutenção da sua ${nomeServ(x.ult.servicoId)}, para manter o couro cabeludo saudável e as tranças bonitas. Quer que eu reserve um horário para você esta semana?`
+  ?`Oi, ${n}! 💕 Já está na hora da manutenção da sua ${nomeAg(x.ult)}, para manter o couro cabeludo saudável e as tranças bonitas. Quer que eu reserve um horário para você esta semana?`
   :`Oi, ${n}! Que saudade! 💕 Faz um tempinho que você não vem ao ateliê. Tenho horários livres nos próximos dias. Quer que eu reserve um para você? Beijos, ${primeiro(pb.responsavel)}`}
 function reativarBloco(){if(!pode('base'))return '';const L=paraReativar();if(!L.length)return '';const ver=UI.reatTodos?L:L.slice(0,5);
   return `<section class="card reat"><h3>${ic('repeat')} Para reativar <small>${L.length} cliente${L.length===1?'':'s'}</small></h3><div class="list">${ver.map(x=>{const w=waLink(x.c.telefone,msgReativar(x));
-    return `<div class="item wrap"><div class="avatar" style="--lv:${x.motivo==='manutencao'?'var(--lv-ouro)':'var(--lv-bronze)'}">${iniciais(x.c.nome)}</div><div class="grow"><div class="t">${esc(x.c.nome)}</div><div class="s">${esc(x.txt)} · ${esc(nomeServ(x.ult.servicoId))}</div></div>${w?`<a class="btn sm primary" href="${w}" target="_blank" rel="noopener" data-act="reatFeito" data-id="${x.c.id}">${ic('chat')}Convidar</a>`:''}<button class="btn sm ghost" data-act="reatFeito" data-id="${x.c.id}" title="Some da lista por 30 dias">Já falei</button></div>`}).join('')}</div>
+    return `<div class="item wrap"><div class="avatar" style="--lv:${x.motivo==='manutencao'?'var(--lv-ouro)':'var(--lv-bronze)'}">${iniciais(x.c.nome)}</div><div class="grow"><div class="t">${esc(x.c.nome)}</div><div class="s">${esc(x.txt)} · ${esc(nomeAg(x.ult))}</div></div>${w?`<a class="btn sm primary" href="${w}" target="_blank" rel="noopener" data-act="reatFeito" data-id="${x.c.id}">${ic('chat')}Convidar</a>`:''}<button class="btn sm ghost" data-act="reatFeito" data-id="${x.c.id}" title="Some da lista por 30 dias">Já falei</button></div>`}).join('')}</div>
    ${L.length>5?`<button class="btn sm ghost" data-act="reatTodos">${UI.reatTodos?'Mostrar menos':`Ver todas (${L.length})`}</button>`:''}</section>`}
 /* sinais */
 function inicioMs(a){const [h,m]=String(a.hora||'00:00').split(':').map(Number);const d=parse(a.data);d.setHours(h||0,m||0,0,0);return d.getTime()}
@@ -701,8 +703,8 @@ function finSinais(){const P=pol();const pct=+P.campos.sinalPct||0;const prazoH=
     if(a.sinalDevolvido)sit='devolvido';else if(a.sinalRetido)sit='retido';else if(a.status==='faltou')sit='retido';
     else if(a.canceladoEm){sit=inicioMs(a)-Date.parse(a.canceladoEm)>=prazoH*3600e3?'verificar':'retido'}else sit='verificar';return {a,sit,v:sinalDe(a)}});
   const retMes=perdidos.filter(x=>x.sit==='retido'&&ym(x.a.data)===m),verif=perdidos.filter(x=>x.sit==='verificar');
-  const row=(a,extra='')=>{const cli=S.clientes.get(a.clienteId);return `<div class="item wrap"><span class="time">${dataCurta(a.data)}</span><div class="grow"><div class="t">${esc(nomeCli(a.clienteId))}</div><div class="s">${esc(a.hora)} · ${esc(nomeServ(a.servicoId))} · serviço ${BRL(a.valor)} · sinal ${BRL(sinalDe(a))} de ${BRL(esp(a))}</div></div>${extra}</div>`};
-  const cobrar=a=>{const cli=S.clientes.get(a.clienteId);const falta=Math.max(0,esp(a)-sinalDe(a));const w=cli&&pode('finEdit')?waLink(cli.telefone,`Oi, ${primeiro(cli.nome)}! 💕 Para garantir seu horário de ${nomeServ(a.servicoId)} ${dataLonga(a.data)} às ${a.hora}, falta o sinal de ${BRL(falta)}. Te mando o link de pagamento?`):null;
+  const row=(a,extra='')=>{const cli=S.clientes.get(a.clienteId);return `<div class="item wrap"><span class="time">${dataCurta(a.data)}</span><div class="grow"><div class="t">${esc(nomeCli(a.clienteId))}</div><div class="s">${esc(a.hora)} · ${esc(nomeAg(a))} · serviço ${BRL(a.valor)} · sinal ${BRL(sinalDe(a))} de ${BRL(esp(a))}</div></div>${extra}</div>`};
+  const cobrar=a=>{const cli=S.clientes.get(a.clienteId);const falta=Math.max(0,esp(a)-sinalDe(a));const w=cli&&pode('finEdit')?waLink(cli.telefone,`Oi, ${primeiro(cli.nome)}! 💕 Para garantir seu horário de ${nomeAg(a)} ${dataLonga(a.data)} às ${a.hora}, falta o sinal de ${BRL(falta)}. Te mando o link de pagamento?`):null;
     return `${w?`<a class="btn sm soft" href="${w}" target="_blank" rel="noopener">${ic('chat')}Cobrar</a>`:''}${pode('finEdit')?`<button class="btn sm ghost" data-act="editAg" data-id="${a.id}">Registrar</button>`:''}`};
   return `<section class="kpis"><div class="kpi"><div class="l">Sinais recebidos no mês</div><div class="v">${cnt(rec)}</div><div class="d">${esc(cap(mesNome(m)))}</div></div>
    <div class="kpi"><div class="l">Sem sinal (próx. 45 dias)</div><div class="v" style="color:${sem.length?'var(--warn)':'inherit'}">${sem.length}</div><div class="d">${BRL(soma(sem.map(a=>({valor:esp(a)}))))} a receber</div></div>
@@ -734,12 +736,12 @@ function relatorioContador(){const m=UI.finMes;const pb=pub(),c=priv();const ano
 function abrirRelatorioContador(){sheet('Relatório para a contabilidade',`<div class="stack"><div id="reciboBox">${relatorioContador()}</div><div class="row"><button class="btn primary" data-act="imprimirArea">${ic('file')}Imprimir ou salvar PDF</button></div><p class="small muted" style="margin:0">No celular, escolha "Salvar como PDF" na tela de impressão e envie para a contabilidade.</p></div>`)}
 function apptCard(a){
   const st=STATUS[a.status]||STATUS.agendado;const cli=S.clientes.get(a.clienteId);const fim=min2hm(hm2min(a.hora)+(+a.duracao||0));const pb=pub();
-  const pago=soma(a.pagamentos||[]);const msg=`Oi, ${primeiro(cli?.nome)}! 💕 Confirmando seu horário de ${nomeServ(a.servicoId)} ${dataLonga(a.data)} às ${a.hora}. Lembre de vir ${pol().campos.preparo}. Qualquer imprevisto, me avise com ${pol().campos.prazoCancel}h de antecedência. Beijos, ${primeiro(pb.responsavel)}`;
+  const pago=soma(a.pagamentos||[]);const msg=`Oi, ${primeiro(cli?.nome)}! 💕 Confirmando seu horário de ${nomeAg(a)} ${dataLonga(a.data)} às ${a.hora}. Lembre de vir ${pol().campos.preparo}. Qualquer imprevisto, me avise com ${pol().campos.prazoCancel}h de antecedência. Beijos, ${primeiro(pb.responsavel)}`;
   const l=cli?waLink(cli.telefone,msg):null;const aberto=a.status==='agendado'||a.status==='confirmado';
   const an=pode('anamnese')?anamDe(a.clienteId):null;const al=anamAlertas(an);
   const anTag=pode('anamnese')?(!an?`<span class="badge warn">sem anamnese</span>`:anamVencida(an)?`<span class="badge warn">anamnese vencida</span>`:al.length?`<span class="badge bad" title="${esc(al.map(x=>x.q+(x.det?': '+x.det:'')).join(' | '))}">atenção: ${esc(al.map(x=>x.k==='alergia'?'alergia':x.k==='quimica'?'química recente':x.k==='couro'?'sensibilidade':x.k).join(', '))}</span>`:`<span class="badge good">anamnese ok</span>`):'';
   return `<article class="appt" style="--st:${st.c}"><div><div class="time">${esc(a.hora)}</div><div class="small muted num">${fim}</div></div>
-   <div style="min-width:0"><div class="row between"><b>${esc(nomeCli(a.clienteId))}</b><span class="badge">${st.n}</span></div><div class="small muted">${esc(nomeServ(a.servicoId))} · ${a.pacoteId?'sessão de pacote':BRL(a.valor)}${pago?` · recebido ${BRL(pago)}`:''}</div>
+   <div style="min-width:0"><div class="row between"><b>${esc(nomeCli(a.clienteId))}</b><span class="badge">${st.n}</span></div><div class="small muted">${esc(nomeAg(a))} · ${a.pacoteId?'sessão de pacote':BRL(a.valor)}${pago?` · recebido ${BRL(pago)}`:''}</div>
    <div class="row" style="gap:6px;margin-top:6px">${anTag}${contratoTag(a)}${a.canceladoPor?`<span class="badge">cancelado pela cliente</span>`:''}</div>${a.obs?`<div class="small" style="margin-top:4px">${esc(a.obs)}</div>`:''}</div>
    <div class="actions">${aberto?`<button class="btn sm primary" data-act="concluir" data-id="${a.id}">${ic('check')}Concluir</button>`:''}${a.status==='agendado'?`<button class="btn sm soft" data-act="stAg" data-id="${a.id}" data-s="confirmado">Confirmada</button>`:''}${l&&aberto?`<a class="btn sm soft" href="${l}" target="_blank" rel="noopener">${ic('chat')}Lembrete</a>`:''}${aberto&&!contratoDoAg(a.id)?`<button class="btn sm ghost" data-act="linkContrato" data-c="${a.clienteId}" data-a="${a.id}">${ic('file')}Enviar contrato</button>`:''}${a.status==='concluido'?`<button class="btn sm soft" data-act="recibo" data-id="${a.id}">${ic('receipt')}Recibo</button><button class="btn sm ghost" data-act="retorno" data-id="${a.id}">${ic('repeat')}Agendar retorno</button>`:''}<button class="btn sm ghost" data-act="editAg" data-id="${a.id}">${ic('edit')}Editar</button></div></article>`;
 }
@@ -908,7 +910,7 @@ function ctEmitir(){
   return `<section class="card"><div class="f2">
    <label class="fld">Documento<select id="ctTipo">${tipos.map(([k,n])=>`<option value="${k}" ${k===UI.ctTipo?'selected':''}>${n}</option>`).join('')}</select></label>
    <label class="fld">Cliente${precisaCli?'':' (opcional)'}<select id="ctCli"><option value="">Selecione…</option>${cls.map(c=>`<option value="${c.id}" ${c.id===UI.ctCli?'selected':''}>${esc(c.nome)}</option>`).join('')}</select></label>
-   ${UI.ctTipo==='servico'?`<label class="fld">Atendimento<select id="ctAg"><option value="">Sem atendimento definido</option>${ags.map(a=>`<option value="${a.id}" ${a.id===UI.ctAg?'selected':''}>${dataBR(a.data)} ${esc(a.hora)} · ${esc(nomeServ(a.servicoId))}</option>`).join('')}</select></label>`:''}</div>
+   ${UI.ctTipo==='servico'?`<label class="fld">Atendimento<select id="ctAg"><option value="">Sem atendimento definido</option>${ags.map(a=>`<option value="${a.id}" ${a.id===UI.ctAg?'selected':''}>${dataBR(a.data)} ${esc(a.hora)} · ${esc(nomeAg(a))}</option>`).join('')}</select></label>`:''}</div>
    ${UI.ctTipo==='anamnese'&&cli&&!an?`<div class="alert warn" style="margin-top:10px">${ic('alert')}<div>${esc(primeiro(cli.nome))} ainda não tem ficha preenchida. <button class="btn sm soft" data-act="anamnese" data-id="${cli.id}">Preencher ficha</button></div></div>`:''}
    ${cli&&!cli.cpf&&precisaCli?`<p class="small muted" style="margin-bottom:0">Dica: cadastre o CPF da cliente para o contrato sair completo.</p>`:''}
    <div class="row" style="margin-top:12px"><button class="btn primary" data-act="aceite" ${precisaCli&&!cli?'disabled':''}>${ic('pen')}Coletar aceite</button><button class="btn soft" data-act="copyDoc">${ic('copy')}Copiar texto</button><button class="btn soft" data-act="imprimirDoc">${ic('file')}Imprimir ou salvar PDF</button><button class="btn ghost" data-act="baixarDoc">${ic('down')}Baixar</button>${cli?.telefone?`<a class="btn ghost" href="${waLink(cli.telefone,`Oi, ${primeiro(cli.nome)}! Segue ${UI.ctTipo==='servico'?'o contrato do seu atendimento':UI.ctTipo==='anamnese'?'sua ficha de anamnese':'a política do ateliê'} para leitura. Se estiver de acordo, responda "Li e aceito".`)}" target="_blank" rel="noopener">${ic('chat')}Avisar no WhatsApp</a>`:''}</div></section>
@@ -969,7 +971,7 @@ function vCalendario(){
   const d=UI.calDia;const pb=pub();
   const evD=[...datasEntre(d,d).map(x=>`<div class="event"><span class="when">${x.tipo==='fiscal'?'Fiscal':'Data comemorativa'}</span><b>${esc(x.nome)}</b><p>${esc(x.ideia)}</p></div>`),
     ...aniversariosEntre(d,d).map(x=>`<div class="event"><span class="when" style="color:var(--gold)">Aniversário</span><b>${esc(x.cli.nome)}</b><p>Mande parabéns e o presente de ${pb.descAniv}% de desconto.</p></div>`),
-    ...ag.filter(a=>a.data===d).map(a=>`<div class="event"><span class="when" style="color:var(--good)">Atendimento ${esc(a.hora)}</span><b>${esc(nomeCli(a.clienteId))}</b><p>${esc(nomeServ(a.servicoId))}</p></div>`),
+    ...ag.filter(a=>a.data===d).map(a=>`<div class="event"><span class="when" style="color:var(--good)">Atendimento ${esc(a.hora)}</span><b>${esc(nomeCli(a.clienteId))}</b><p>${esc(nomeAg(a))}</p></div>`),
     ...ideias.filter(i=>i.data===d).map(ideiaCard)];
   const doMes=datasEntre(m+'-01',fimMes).filter(x=>x.tipo==='com');const minhas=ideias.filter(i=>!i.data||ym(i.data)===m).sort((a,b)=>(a.feito?1:0)-(b.feito?1:0));
   const prox=datasEntre(addDays(fimMes,1),addDays(fimMes,45)).filter(x=>x.tipo==='com').slice(0,2);
@@ -1074,7 +1076,7 @@ function abrirCliente(id){
    ${c.indicacaoCodigo||(indPorCli().get(id)||0)?`<div class="small"><b>Indicação:</b> código <b>${esc(c.indicacaoCodigo||'— (criado ao ativar o espaço)')}</b> · indicou ${indPorCli().get(id)||0} cliente(s)</div>`:''}
    ${pode('portal')?portalBloco(c):''}
    <div class="row"><button class="btn primary" data-act="novoAg" data-c="${id}">${ic('cal')}Agendar</button>${l?`<a class="btn soft" href="${l}" target="_blank" rel="noopener">${ic('chat')}WhatsApp</a>`:''}${pode('base')?`<button class="btn soft" data-act="cadLink" data-c="${id}">${ic('send')}Atualizar cadastro</button>`:''}<button class="btn soft" data-act="linkContrato" data-c="${id}">${ic('file')}Enviar contrato</button><button class="btn ghost" data-act="editCli" data-id="${id}">${ic('edit')}Editar</button></div>
-   <div><div class="eyebrow" style="margin-bottom:6px">Histórico</div>${hist.length?`<div class="list">${hist.map(a=>`<div class="item"><span class="time">${dataCurta(a.data)}</span><div class="grow"><div class="t">${esc(nomeServ(a.servicoId))}</div><div class="s">${a.data.slice(0,4)} · ${a.pacoteId?'pacote':BRL(a.valor)}</div></div><span class="badge">${STATUS[a.status]?.n||''}</span></div>`).join('')}</div>`:'<div class="empty">Sem atendimentos ainda.</div>'}</div></div>`);
+   <div><div class="eyebrow" style="margin-bottom:6px">Histórico</div>${hist.length?`<div class="list">${hist.map(a=>`<div class="item"><span class="time">${dataCurta(a.data)}</span><div class="grow"><div class="t">${esc(nomeAg(a))}</div><div class="s">${a.data.slice(0,4)} · ${a.pacoteId?'pacote':BRL(a.valor)}</div></div><span class="badge">${STATUS[a.status]?.n||''}</span></div>`).join('')}</div>`:'<div class="empty">Sem atendimentos ainda.</div>'}</div></div>`);
 }
 function formCliente(id){
   const c=id?S.clientes.get(id):{};const outras=arr('clientes').filter(x=>x.id!==id).sort((a,b)=>a.nome.localeCompare(b.nome));
@@ -1148,13 +1150,16 @@ function verAceite(id){const a=S.aceites.get(id);if(!a)return;
 function htmlDocStandalone(title,body,extra=''){return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${esc(title)}</title><style>body{font-family:Georgia,serif;max-width:720px;margin:40px auto;padding:0 20px;line-height:1.6;color:#222}h1{text-align:center;font-size:22px}h2{font-size:13px;letter-spacing:.1em;text-transform:uppercase;margin-top:22px}.sub{text-align:center;color:#666;font-size:12px}.rev{background:#fff3cd}.ass{display:flex;gap:40px;margin-top:50px}.ass div{flex:1;border-top:1px solid #222;padding-top:6px;text-align:center;font-size:12px}table{width:100%;border-collapse:collapse}td{border-bottom:1px solid #ddd;padding:6px 4px;vertical-align:top;font-size:14px}pre{white-space:pre-wrap;font-family:inherit}</style></head><body>${body}${extra}</body></html>`}
 
 /* ---------- agenda ---------- */
+const extraServRow=v=>`<div class="extra-serv"><label class="fld">Mais um serviço<select>${optServ(v,{vazio:'Escolha o serviço'})}</select></label><button type="button" class="icon-btn" data-rmx aria-label="Remover serviço">${ic('x')}</button></div>`;
 function formAgenda(id,pre={}){
   const a=id?S.agenda.get(id):{data:pre.d||UI.agDia,hora:pre.h||'09:00',status:'agendado',clienteId:pre.c||'',servicoId:pre.s||'',obs:pre.obs||''};
   const P=pol();const sinalPago=soma((a.pagamentos||[]).filter(p=>p.tipo==='sinal'));
   sheet(id?'Editar atendimento':'Novo atendimento',`<form class="form" id="fAg">
    <label class="fld">Cliente<select id="aCli">${optCli(a.clienteId,'<option value="__nova">+ Nova cliente</option>')}</select></label>
    <div class="f2" id="novaBox" hidden><label class="fld">Nome da nova cliente<input id="aNovaNome"></label><label class="fld">WhatsApp<input id="aNovaTel" inputmode="tel"></label></div>
-   <label class="fld">Serviço<select id="aServ">${optServ(a.servicoId)}</select></label>${S.servicos.size?'':`<div class="alert warn">${ic('alert')}<div>Nenhum serviço cadastrado. ${pode('precos')?`<button type="button" class="btn sm ghost" data-act="servSug">Adicionar serviços sugeridos</button>`:'Peça à proprietária para cadastrar.'}</div></div>`}
+   <label class="fld">Serviço<select id="aServ">${optServ(a.servicoId)}</select></label>
+   <div id="aExtras" class="stack" style="gap:8px">${(a.extras||[]).map(x=>extraServRow(x)).join('')}</div>
+   <button type="button" class="btn sm ghost" id="aExtraAdd" style="align-self:flex-start">${ic('plus')}Adicionar outro serviço</button>${S.servicos.size?'':`<div class="alert warn">${ic('alert')}<div>Nenhum serviço cadastrado. ${pode('precos')?`<button type="button" class="btn sm ghost" data-act="servSug">Adicionar serviços sugeridos</button>`:'Peça à proprietária para cadastrar.'}</div></div>`}
    <label class="fld" id="pkBox" hidden>Pacote<select id="aPk"></select></label>
    <div class="f2"><label class="fld">Data<input id="aData" type="date" required value="${esc(a.data)}"></label><label class="fld">Hora<input id="aHora" type="time" required value="${esc(a.hora)}"></label><label class="fld">Duração${durCampo('aDur',a.duracao)}</label></div>
    <div class="f2" id="valBox"><label class="fld">Valor (R$)<input id="aVal" type="number" step="0.01" min="0" inputmode="decimal" value="${esc(a.valor??'')}"></label>
@@ -1170,7 +1175,11 @@ function formAgenda(id,pre={}){
     $('#pkBox').hidden=!ps.length;$('#valBox').hidden=!!pk.value};
   sel.onchange=()=>{$('#novaBox').hidden=sel.value!=='__nova';upPk()};pk.onchange=()=>{$('#valBox').hidden=!!pk.value};upPk();
   const sinalSug=()=>{const s=$('#aSinal');if(s)s.placeholder=`sugestão ${BRL((+$('#aVal').value||0)*P.campos.sinalPct/100)}`};
-  srv.onchange=()=>{const s=S.servicos.get(srv.value);if(s){$('#aVal').value=s.preco;setDur('aDur',s.duracao)}sinalSug();checkConf()};$('#aVal').oninput=sinalSug;sinalSug();
+  const lista=()=>[srv.value,...$$('#aExtras select').map(x=>x.value)].filter(Boolean).map(i=>S.servicos.get(i)).filter(Boolean);
+  srv.onchange=()=>{const L=lista();if(L.length){$('#aVal').value=Math.round(L.reduce((t,s)=>t+(+s.preco||0),0)*100)/100;setDur('aDur',L.reduce((t,s)=>t+(+s.duracao||0),0))}sinalSug();checkConf()};
+  $('#aExtraAdd').onclick=()=>{$('#aExtras').insertAdjacentHTML('beforeend',extraServRow(''));};
+  $('#aExtras').onchange=e=>{if(e.target.matches('select'))srv.onchange()};
+  $('#aExtras').onclick=e=>{const b=e.target.closest('[data-rmx]');if(b){b.closest('.extra-serv').remove();srv.onchange()}};$('#aVal').oninput=sinalSug;sinalSug();
   const checkConf=()=>{const d=$('#aData').value,h=hm2min($('#aHora').value),du=+$('#aDur').value||120;
     const c=arr('agenda').filter(x=>x.id!==id&&x.data===d&&x.status!=='cancelado'&&x.status!=='faltou'&&hm2min(x.hora)<h+du&&h<hm2min(x.hora)+(+x.duracao||120));
     const av=[];if(c.length)av.push(`Conflita com ${c.map(x=>`${esc(nomeCli(x.clienteId))} (${x.hora})`).join(', ')}.`);
@@ -1183,7 +1192,7 @@ function formAgenda(id,pre={}){
     if(cid==='__nova'){const n=$('#aNovaNome').value.trim();if(!n){toast('Informe o nome da nova cliente');return}cid=await save('clientes',null,{nome:n,telefone:$('#aNovaTel').value.trim(),criadoEm:today()})}
     if(!cid){toast('Escolha a cliente');return}
     const antes=a.status;const pac=pk.value;
-    const d={...a,clienteId:cid,servicoId:srv.value,pacoteId:pac||'',data:$('#aData').value,hora:$('#aHora').value,duracao:+$('#aDur').value||120,valor:pac?0:+$('#aVal').value||0,obs:$('#aObs').value.trim(),status:id?$('#aSt').value:'agendado',pagamentos:[...(a.pagamentos||[])]};
+    const d={...a,clienteId:cid,servicoId:srv.value,extras:$$('#aExtras select').map(x=>x.value).filter(Boolean),pacoteId:pac||'',data:$('#aData').value,hora:$('#aHora').value,duracao:+$('#aDur').value||120,valor:pac?0:+$('#aVal').value||0,obs:$('#aObs').value.trim(),status:id?$('#aSt').value:'agendado',pagamentos:[...(a.pagamentos||[])]};
     const sv=+($('#aSinal')?.value||0);if(sv>0&&!pac)d.pagamentos.push({id:uid(),tipo:'sinal',data:today(),valor:sv,forma:$('#aSinalF').value,parcelas:1,nf:false});
     await save('agenda',id,d);closeSheet();UI.agDia=d.data;toast(id?'Atendimento atualizado':'Horário marcado');
     if(id&&(antes==='agendado'||antes==='confirmado')&&(d.status==='cancelado'||d.status==='faltou'))setTimeout(()=>sugerirEspera(d),300)};
@@ -1194,9 +1203,9 @@ function sugerirEspera(a){const esp=arr('espera').filter(e=>e.status==='aguardan
 function concluir(id){
   const a=S.agenda.get(id);if(!a)return;const P=pol();const pago=soma(a.pagamentos||[]);const s=S.servicos.get(a.servicoId);
   const rest=a.pacoteId?0:Math.max(0,(+a.valor||0)-pago);
-  const cons=(s?.consumo||[]).map(c=>({...c}));const itens=arr('estoque').sort((x,y)=>x.nome.localeCompare(y.nome));
+  const cons=servsAg(a).flatMap(i=>(S.servicos.get(i)?.consumo||[]).map(c=>({...c})));const itens=arr('estoque').sort((x,y)=>x.nome.localeCompare(y.nome));
   const consRow=(c,i)=>`<div class="cons" data-i="${i}"><label class="fld">Material<select class="cItem"><option value="">—</option>${itens.map(it=>`<option value="${it.id}" ${it.id===c.itemId?'selected':''}>${esc(it.nome)} (${it.qtd} ${esc(it.unidade)})</option>`).join('')}</select></label><label class="fld">Qtd<input class="cQtd" type="number" step="0.5" min="0" value="${c.qtd||1}"></label><button type="button" class="icon-btn" data-rm="${i}" aria-label="Remover">${ic('x')}</button></div>`;
-  sheet('Concluir atendimento',`<form class="form" id="fCon"><p class="muted small" style="margin:0">${esc(nomeCli(a.clienteId))} · ${esc(nomeServ(a.servicoId))}${a.pacoteId?' · sessão de pacote':''}${pago?` · ${BRL(pago)} já recebido`:''}</p>
+  sheet('Concluir atendimento',`<form class="form" id="fCon"><p class="muted small" style="margin:0">${esc(nomeCli(a.clienteId))} · ${esc(nomeAg(a))}${a.pacoteId?' · sessão de pacote':''}${pago?` · ${BRL(pago)} já recebido`:''}</p>
    ${a.pacoteId?`<div class="alert info">${ic('ticket')}<div>Sessão coberta pelo pacote. Nada a cobrar.</div></div>`:`
    <div class="f2"><label class="fld">Valor total do serviço<input id="kTot" type="number" step="0.01" inputmode="decimal" value="${+a.valor||0}"></label><label class="fld">Vale-presente (código)<input id="kVale" placeholder="SM-XXXXX" style="text-transform:uppercase"></label></div>
    <div id="kValeInfo" class="small"></div>
@@ -1216,7 +1225,7 @@ function concluir(id){
       if(vale){const usar=Math.min(valeSaldo(vale),Math.max(0,tot-pago));if(usar>0){d.valeUsado={valeId:vale.id,codigo:vale.codigo,valor:usar};await save('vales',vale.id,{...vale,usos:[...(vale.usos||[]),{agendaId:id,valor:usar,em:dataPg}]})}}
       if(v>0)d.pagamentos.push({id:uid(),tipo:'servico',data:dataPg,valor:v,forma:$('#kForma').value,parcelas:$('#kForma').value==='Cartão de crédito'?+$('#kParc').value:1,nf:$('#kNf').checked})}
     if(pode('estoque')){const usos=$$('#consList .cons').map(r=>({itemId:$('.cItem',r).value,qtd:+$('.cQtd',r).value||0})).filter(u=>u.itemId&&u.qtd>0);d.consumo=usos;d.custoMaterial=Math.round(custoFicha(usos)*100)/100;
-      for(const u of usos){const it=S.estoque.get(u.itemId);if(it)await save('estoque',it.id,{...it,qtd:Math.round(((+it.qtd||0)-u.qtd)*100)/100,mov:[{em:today(),qtd:-u.qtd,motivo:`${nomeServ(a.servicoId)} · ${primeiro(nomeCli(a.clienteId))}`},...(it.mov||[])].slice(0,40)})}}
+      for(const u of usos){const it=S.estoque.get(u.itemId);if(it)await save('estoque',it.id,{...it,qtd:Math.round(((+it.qtd||0)-u.qtd)*100)/100,mov:[{em:today(),qtd:-u.qtd,motivo:`${nomeAg(a)} · ${primeiro(nomeCli(a.clienteId))}`},...(it.mov||[])].slice(0,40)})}}
     await save('agenda',id,d);closeSheet();toast('Atendimento concluído');setTimeout(()=>sugerirRetorno(id,true),500);
     const bx=(d.consumo||[]).map(u=>S.estoque.get(u.itemId)).filter(it=>it&&baixo(it));if(bx.length)setTimeout(()=>toast(`Repor: ${bx.map(i=>i.nome).join(', ')}`),1200)};
 }
@@ -1471,7 +1480,7 @@ function resultadosBusca(q){
   const grupo=(t,rows)=>rows.length?`<div class="eyebrow" style="margin:12px 0 4px">${t}</div><div class="list">${rows.join('')}</div>`:'';
   const item=(k,id,icone,tit,sub)=>`<button class="item" data-act="buscaIr" data-k="${k}" data-id="${id}"><div class="avatar" style="--lv:var(--rose)">${icone}</div><div class="grow"><div class="t">${tit}</div><div class="s">${sub}</div></div>${ic('right')}</button>`;
   const html=grupo('Clientes',cl.map(c=>{const f=fidelidade(c);return item('cli',c.id,iniciais(c.nome),esc(c.nome),`${NIVEIS[f.nivel].n}${c.telefone?' · '+esc(c.telefone):''}`)}))+
-    grupo('Atendimentos',ag.map(a=>item('ag',a.id,ic('cal'),`${esc(nomeCli(a.clienteId))} · ${dataBR(a.data)} ${esc(a.hora)}`,`${esc(nomeServ(a.servicoId))} · ${STATUS[a.status]?.n||''}`)))+
+    grupo('Atendimentos',ag.map(a=>item('ag',a.id,ic('cal'),`${esc(nomeCli(a.clienteId))} · ${dataBR(a.data)} ${esc(a.hora)}`,`${esc(nomeAg(a))} · ${STATUS[a.status]?.n||''}`)))+
     grupo('Vales-presente',vl.map(v=>item('vale',v.id,ic('gift'),`<span class="code">${esc(v.codigo)}</span> · ${esc(v.presenteada||'—')}`,`saldo ${BRL(valeSaldo(v))}`)))+
     grupo('Pacotes',pk.map(p=>item('pac',p.id,ic('ticket'),`${esc(nomeCli(p.clienteId))} · ${esc(p.nome)}`,`${pacoteSaldo(p)} sessão(ões) disponível(is)`)));
   return html||'<div class="empty">Nada encontrado.</div>';
@@ -1485,7 +1494,7 @@ function retornos(){return memo('ret',()=>{const t=today();const max=+pol().camp
   const futuras=new Set(arr('agenda').filter(a=>a.data>=t&&(a.status==='agendado'||a.status==='confirmado')).map(a=>a.clienteId));
   arr('clientes').forEach(c=>{if(futuras.has(c.id))return;
     const ult=arr('agenda').filter(a=>a.clienteId===c.id&&a.status==='concluido'&&a.data<=t).sort((a,b)=>a.data<b.data?1:-1)[0];
-    if(!ult||/retirada/i.test(nomeServ(ult.servicoId)))return;
+    if(!ult||/retirada/i.test(nomeAg(ult)))return;
     const sem=Math.floor(diffDays(ult.data,t)/7);if(sem<Math.max(3,max-3)||sem>max+6)return;
     out.push({c,ult,sem,retirar:sem>=max-1})});
   return out.sort((a,b)=>b.sem-a.sem)})}
@@ -1494,15 +1503,15 @@ function retornoRow(r){const max=pol().campos.semanasMax;const pb=pub();
     :`Oi, ${primeiro(r.c.nome)}! Suas tranças completam ${r.sem} semanas 💕 É uma ótima hora para uma manutenção e deixar tudo alinhado de novo. Quer que eu reserve um horário?`;
   const w=waLink(r.c.telefone,msg+` Beijos, ${primeiro(pb.responsavel)}`);
   const sv=arr('servicos').find(s=>r.retirar?/retirada/i.test(s.nome):/manuten/i.test(s.nome));
-  return `<div class="item"><div class="avatar" style="--lv:${r.retirar?'var(--lv-bronze)':'var(--lv-ouro)'}">${iniciais(r.c.nome)}</div><div class="grow"><div class="t">${esc(r.c.nome)}</div><div class="s">${esc(nomeServ(r.ult.servicoId))} há ${r.sem} semanas</div></div><span class="badge ${r.retirar?'bad':'warn'}">${r.retirar?'retirar':'manutenção'}</span>${w?`<a class="btn sm soft" href="${w}" target="_blank" rel="noopener">${ic('chat')}Avisar</a>`:''}<button class="icon-btn" data-act="retornoAg" data-c="${r.c.id}" data-s="${sv?.id||''}" data-d="${today()}" aria-label="Agendar">${ic('cal')}</button></div>`}
+  return `<div class="item"><div class="avatar" style="--lv:${r.retirar?'var(--lv-bronze)':'var(--lv-ouro)'}">${iniciais(r.c.nome)}</div><div class="grow"><div class="t">${esc(r.c.nome)}</div><div class="s">${esc(nomeAg(r.ult))} há ${r.sem} semanas</div></div><span class="badge ${r.retirar?'bad':'warn'}">${r.retirar?'retirar':'manutenção'}</span>${w?`<a class="btn sm soft" href="${w}" target="_blank" rel="noopener">${ic('chat')}Avisar</a>`:''}<button class="icon-btn" data-act="retornoAg" data-c="${r.c.id}" data-s="${sv?.id||''}" data-d="${today()}" aria-label="Agendar">${ic('cal')}</button></div>`}
 function confirmarRow(a){const cli=S.clientes.get(a.clienteId);const pb=pub();
-  const w=cli?waLink(cli.telefone,`Oi, ${primeiro(cli.nome)}! 💕 Passando para confirmar seu horário amanhã, ${dataLonga(a.data)}, às ${a.hora}, para ${nomeServ(a.servicoId)}. Lembre de vir ${pol().campos.preparo}. Posso confirmar? Beijos, ${primeiro(pb.responsavel)}`):null;
-  return `<div class="item"><span class="time">${esc(a.hora)}</span><div class="grow"><div class="t">${esc(nomeCli(a.clienteId))}</div><div class="s">${esc(nomeServ(a.servicoId))}</div></div>${w?`<a class="btn sm soft" href="${w}" target="_blank" rel="noopener">${ic('chat')}Pedir confirmação</a>`:''}<button class="btn sm primary" data-act="stAg" data-id="${a.id}" data-s="confirmado">${ic('check')}Confirmada</button></div>`}
+  const w=cli?waLink(cli.telefone,`Oi, ${primeiro(cli.nome)}! 💕 Passando para confirmar seu horário amanhã, ${dataLonga(a.data)}, às ${a.hora}, para ${nomeAg(a)}. Lembre de vir ${pol().campos.preparo}. Posso confirmar? Beijos, ${primeiro(pb.responsavel)}`):null;
+  return `<div class="item"><span class="time">${esc(a.hora)}</span><div class="grow"><div class="t">${esc(nomeCli(a.clienteId))}</div><div class="s">${esc(nomeAg(a))}</div></div>${w?`<a class="btn sm soft" href="${w}" target="_blank" rel="noopener">${ic('chat')}Pedir confirmação</a>`:''}<button class="btn sm primary" data-act="stAg" data-id="${a.id}" data-s="confirmado">${ic('check')}Confirmada</button></div>`}
 
 /* sugerir retorno após concluir */
 function sugerirRetorno(agId,auto){const a=S.agenda.get(agId);if(!a||!a.clienteId)return;
   if(auto&&arr('agenda').some(x=>x.clienteId===a.clienteId&&x.id!==a.id&&x.data>=today()&&(x.status==='agendado'||x.status==='confirmado')))return;
-  const max=+pol().campos.semanasMax||8;const nome=nomeServ(a.servicoId);const ehRet=/retirada/i.test(nome);
+  const max=+pol().campos.semanasMax||8;const nome=nomeAg(a);const ehRet=/retirada/i.test(nome);
   const man=arr('servicos').find(s=>/manuten/i.test(s.nome)),ret=arr('servicos').find(s=>/retirada/i.test(s.nome));
   const op=[];
   if(!ehRet&&man)op.push(['Manutenção',man.id,4]);
@@ -1519,13 +1528,13 @@ function reciboHtml(a){const pb=pub();const cli=S.clientes.get(a.clienteId);cons
   const linhas=pg.map(p=>`<tr><td>${dataBR(p.data)}</td><td>${p.tipo==='sinal'?'Sinal':'Pagamento'}</td><td>${esc(p.forma)}${+p.parcelas>1?` em ${p.parcelas}x`:''}</td><td style="text-align:right">${BRL(p.valor)}</td></tr>`).join('')+(a.valeUsado?`<tr><td></td><td>Vale-presente</td><td class="code">${esc(a.valeUsado.codigo)}</td><td style="text-align:right">${BRL(a.valeUsado.valor)}</td></tr>`:'');
   const pago=soma(pg)+(+a.valeUsado?.valor||0);
   return `<article class="doc"><h1>Recibo</h1><div class="sub">Nº ${num}</div>
-   <p>Recebi de <b>${linha(cli?.nome)}</b>${cli?.cpf?`, CPF ${esc(cli.cpf)}`:''}, a importância de <b>${BRL(a.pacoteId?0:pago)}</b>, referente ao serviço de <b>${esc(nomeServ(a.servicoId))}</b> realizado em ${dataExt(a.data)}${a.pacoteId?', coberto por pacote adquirido anteriormente':''}.</p>
+   <p>Recebi de <b>${linha(cli?.nome)}</b>${cli?.cpf?`, CPF ${esc(cli.cpf)}`:''}, a importância de <b>${BRL(a.pacoteId?0:pago)}</b>, referente ao serviço de <b>${esc(nomeAg(a))}</b> realizado em ${dataExt(a.data)}${a.pacoteId?', coberto por pacote adquirido anteriormente':''}.</p>
    ${linhas?`<table><tr><td><b>Data</b></td><td><b>Tipo</b></td><td><b>Forma</b></td><td style="text-align:right"><b>Valor</b></td></tr>${linhas}<tr><td colspan="3"><b>Total do serviço</b></td><td style="text-align:right"><b>${BRL(a.pacoteId?0:total)}</b></td></tr></table>`:''}
    <p style="margin-top:14px">${esc(pb.nome)} · CNPJ ${linha(pb.cnpj)}${pb.endereco?` · ${esc(pb.endereco)}`:''}</p>
    <p>${esc(pb.municipio)}, ${dataExt(today())}.</p>
    <div class="ass"><div>${esc(pb.responsavel||pb.nome)}</div></div></article>`}
 function recibo(id){const a=S.agenda.get(id);if(!a)return;const cli=S.clientes.get(a.clienteId);const pb=pub();
-  const txt=`Recibo · ${pb.nome}\nCliente: ${cli?.nome||''}\nServiço: ${nomeServ(a.servicoId)} em ${dataBR(a.data)}\nValor: ${BRL(a.pacoteId?0:soma(a.pagamentos||[])+(+a.valeUsado?.valor||0))}\n${(a.pagamentos||[]).map(p=>`${dataBR(p.data)} · ${p.forma}${+p.parcelas>1?` ${p.parcelas}x`:''} · ${BRL(p.valor)}`).join('\n')}\nObrigada pela confiança! 💕`;
+  const txt=`Recibo · ${pb.nome}\nCliente: ${cli?.nome||''}\nServiço: ${nomeAg(a)} em ${dataBR(a.data)}\nValor: ${BRL(a.pacoteId?0:soma(a.pagamentos||[])+(+a.valeUsado?.valor||0))}\n${(a.pagamentos||[]).map(p=>`${dataBR(p.data)} · ${p.forma}${+p.parcelas>1?` ${p.parcelas}x`:''} · ${BRL(p.valor)}`).join('\n')}\nObrigada pela confiança! 💕`;
   const w=cli?waLink(cli.telefone,txt):null;
   sheet('Recibo',`<div class="stack"><div id="reciboBox">${reciboHtml(a)}</div><div class="row"><button class="btn primary" data-act="imprimirArea">${ic('file')}Imprimir ou salvar PDF</button>${w?`<a class="btn soft" href="${w}" target="_blank" rel="noopener">${ic('chat')}Enviar no WhatsApp</a>`:''}<button class="btn ghost" id="rcCopy">${ic('copy')}Copiar</button></div></div>`);
   $('#rcCopy').onclick=()=>copiar(txt,'Recibo copiado')}
@@ -1539,7 +1548,7 @@ function linhaTempo(d){const ex=expediente(d);const sm=semana().filter(x=>x.on);
   const horas=[];for(let h=Math.ceil(ini/60);h*60<=fim;h+=2)horas.push(h);
   const agora=new Date();const nm=agora.getHours()*60+agora.getMinutes();const mostraAgora=d===today()&&nm>=ini&&nm<=fim;
   const blocos=ags.map(a=>{const s=hm2min(a.hora),e=s+(+a.duracao||120);const st=STATUS[a.status]||STATUS.agendado;
-    return `<button class="tl-b" data-act="agDia" data-d="${a.data}" style="left:${pos(s)}%;width:${Math.max(2,pos(e)-pos(s))}%;--st:${st.c}" title="${esc(a.hora)} · ${esc(nomeCli(a.clienteId))} · ${esc(nomeServ(a.servicoId))}"><span>${esc(primeiro(nomeCli(a.clienteId)))}</span></button>`}).join('');
+    return `<button class="tl-b" data-act="agDia" data-d="${a.data}" style="left:${pos(s)}%;width:${Math.max(2,pos(e)-pos(s))}%;--st:${st.c}" title="${esc(a.hora)} · ${esc(nomeCli(a.clienteId))} · ${esc(nomeAg(a))}"><span>${esc(primeiro(nomeCli(a.clienteId)))}</span></button>`}).join('');
   const iv=ex.aberto&&ex.pausa;const pausa=iv?`<i class="tl-pausa" style="left:${pos(iv[0])}%;width:${pos(iv[1])-pos(iv[0])}%" title="Pausa"></i>`:'';const fe=ex.aberto?'':ex.motivo;
   return `<div class="tl ${fe?'tl-fechado':''}" role="img" aria-label="Linha do tempo de ${esc(dataLonga(d))}"><div class="tl-track">${pausa}${fe&&!ags.length?`<span class="tl-msg">${esc(fe)}</span>`:''}${blocos}${mostraAgora?`<i class="tl-now" style="left:${pos(nm)}%"><b>agora</b></i>`:''}</div><div class="tl-h">${horas.map(h=>`<span style="left:${pos(h*60)}%">${pad(h)}h</span>`).join('')}</div></div>`}
 
@@ -1669,7 +1678,7 @@ function formLinkContrato(pre={}){
    <div class="form-actions"><button class="btn primary" type="submit">${ic('file')}Gerar link</button></div></form>`);
   const sel=$('#lkCli'),ag=$('#lkAg');
   const up=()=>{const cid=sel.value;$('#lkNova').hidden=cid!=='__nova';const c=S.clientes.get(cid);$('#lkCpf').value=c?.cpf||'';
-    const fs=c?futuros(c.id):[];ag.innerHTML=fs.map(a=>`<option value="${a.id}" ${a.id===pre.a?'selected':''}>${dataBR(a.data)} ${esc(a.hora)} · ${esc(nomeServ(a.servicoId))}${a.pacoteId?'':` · ${BRL(a.valor)}`}</option>`).join('')+'<option value="">Ainda não marcado: informar abaixo</option>';
+    const fs=c?futuros(c.id):[];ag.innerHTML=fs.map(a=>`<option value="${a.id}" ${a.id===pre.a?'selected':''}>${dataBR(a.data)} ${esc(a.hora)} · ${esc(nomeAg(a))}${a.pacoteId?'':` · ${BRL(a.valor)}`}</option>`).join('')+'<option value="">Ainda não marcado: informar abaixo</option>';
     if(pre.a&&fs.some(a=>a.id===pre.a))ag.value=pre.a;upAg()};
   const upAg=()=>{$('#lkManual').hidden=!!ag.value};
   sel.onchange=up;ag.onchange=upAg;
@@ -1685,7 +1694,7 @@ function formLinkContrato(pre={}){
     bt.disabled=true;
     const html=semRevisao(docServico(cli,a));const texto=htmlParaTexto(html);const pb=pub();
     const token=gerarToken();const ptok=await portalCriar(cid,false,true);
-    saveRaw('contratosLink',token,{tipo:'servico',clienteId:cid,agendaId:a.id||'',nome:cli.nome,cpf:cli.cpf||'',telefone:cli.telefone||'',servico:a.servicoNome||nomeServ(a.servicoId),data:a.data||'',hora:a.hora||'',valor:+a.valor||0,html,texto,versao:pol().versao||0,hash:await hashTexto(texto),status:'pendente',criadoEm:nowIso(),criadoPor:ME||'',expiraEm:Timestamp.fromDate(new Date(Date.now()+(+$('#lkDias').value||7)*864e5)),portalToken:ptok||'',atelie:{nome:pb.nome,responsavel:pb.responsavel,whatsapp:pb.whatsapp}});
+    saveRaw('contratosLink',token,{tipo:'servico',clienteId:cid,agendaId:a.id||'',nome:cli.nome,cpf:cli.cpf||'',telefone:cli.telefone||'',servico:nomeAg(a),data:a.data||'',hora:a.hora||'',valor:+a.valor||0,html,texto,versao:pol().versao||0,hash:await hashTexto(texto),status:'pendente',criadoEm:nowIso(),criadoPor:ME||'',expiraEm:Timestamp.fromDate(new Date(Date.now()+(+$('#lkDias').value||7)*864e5)),portalToken:ptok||'',atelie:{nome:pb.nome,responsavel:pb.responsavel,whatsapp:pb.whatsapp}});
     closeSheet(true);verLinkContrato(token)};
 }
 function msgLink(l){const pb=pub();return `Oi, ${primeiro(l.nome)}! 💕 Antes de confirmar seu horário de ${l.servico}${l.data?` em ${dataBR(l.data)}${l.hora?` às ${l.hora}`:''}`:''}, leia o contrato e confirme por este link:\n${urlPublica('contrato',l.id)}\n\nAssim que você aceitar, eu te envio o link de pagamento do sinal para garantir o horário. Beijos, ${primeiro(pb.responsavel)}`}
@@ -1727,9 +1736,9 @@ function portalSnapshot(c,P,pb){const f=fidelidade(c);const nv=NIVEIS[f.nivel];c
   const concl=arr('agenda').filter(a=>a.clienteId===c.id&&(a.status==='concluido'||a.status==='faltou')&&a.data<=t).sort((a,b)=>(a.data+a.hora)<(b.data+b.hora)?1:-1);
   const avaliado=a=>S.avaliacoes.has(`${c.portalToken}_${a.id}`);const lim60=addDays(t,-60);
   const avaliaveis=concl.filter(a=>a.status==='concluido'&&a.data>=lim60&&!avaliado(a)).map(a=>a.id);
-  const ultimos=concl.slice(0,6).map(a=>({id:a.id,data:a.data,servico:nomeServ(a.servicoId),status:a.status,pacote:!!a.pacoteId,avaliar:avaliaveis.includes(a.id)}));
+  const ultimos=concl.slice(0,6).map(a=>({id:a.id,data:a.data,servico:nomeAg(a),status:a.status,pacote:!!a.pacoteId,avaliar:avaliaveis.includes(a.id)}));
   const ua=concl.find(a=>a.status==='concluido');let cuidados=null;
-  if(ua&&ua.data>=addDays(t,-150)){const m=manutDe(ua.servicoId);const cat=catDoServ(ua.servicoId);cuidados={servico:nomeServ(ua.servicoId),data:ua.data,texto:(cat&&cat.cuidados)||CUIDADOS_PADRAO,semanas:m,manutAte:addDays(ua.data,m*7),temFuturo:arr('agenda').some(a=>a.clienteId===c.id&&a.data>=t&&(a.status==='agendado'||a.status==='confirmado'))}}
+  if(ua&&ua.data>=addDays(t,-150)){const m=manutDe(ua.servicoId);const cat=catDoServ(ua.servicoId);cuidados={servico:nomeAg(ua),data:ua.data,texto:(cat&&cat.cuidados)||CUIDADOS_PADRAO,semanas:m,manutAte:addDays(ua.data,m*7),temFuturo:arr('agenda').some(a=>a.clienteId===c.id&&a.data>=t&&(a.status==='agendado'||a.status==='confirmado'))}}
   const indicacao={codigo:c.indicacaoCodigo||'',indicadas:indPorCli().get(c.id)||0,beneficio:pb.indBenef||IND_PADRAO[0],beneficioNova:pb.indBenefNova||IND_PADRAO[1]};
   const contratos=[];const vistos=new Set();
   arr('contratosLink').filter(l=>l.clienteId===c.id).sort((a,b)=>a.criadoEm<b.criadoEm?1:-1).forEach(l=>{vistos.add(l.id);contratos.push({token:l.id,servico:l.servico||'',data:l.data||'',status:linkStatus(l),criadoEm:String(l.criadoEm).slice(0,10)})});
@@ -1744,7 +1753,7 @@ function portalSnapshot(c,P,pb){const f=fidelidade(c);const nv=NIVEIS[f.nivel];c
   arr('agenda').filter(a=>a.clienteId===c.id&&a.data>=t&&(a.status==='agendado'||a.status==='confirmado'||(a.status==='cancelado'&&a.canceladoPor==='cliente'))).forEach(a=>{
     const [y,m,d]=a.data.split('-').map(Number);const [hh,mm]=String(a.hora||'00:00').split(':').map(Number);const ini=new Date(y,m-1,d,hh||0,mm||0).getTime();
     const sinal=soma((a.pagamentos||[]).filter(p=>p.tipo==='sinal'));
-    const o={data:a.data,hora:a.hora||'',servico:nomeServ(a.servicoId),duracao:+a.duracao||0,status:a.status,pacote:!!a.pacoteId,sinal,limiteMs:ini-prazo};
+    const o={data:a.data,hora:a.hora||'',servico:nomeAg(a),duracao:+a.duracao||0,status:a.status,pacote:!!a.pacoteId,sinal,limiteMs:ini-prazo};
     if(a.status==='cancelado')o.cancelado=true;else if(!pend.has(a.id))o.cancelado=false;
     prox[a.id]=o});
   return {main,prox}}
@@ -1782,7 +1791,7 @@ function avisosPortal(){if(!pode('portal'))return '';const lim=Date.now()-14*864
   cads.push(...ans);if(pode('base'))cads.push(...avisosAvaliacao(),...avisosIndicacao());
   if(!canc.length&&!acc.length&&!cads.length)return '';
   const rows=[...canc.map(q=>{const a=S.agenda.get(q.agendaId);const sinal=a?soma((a.pagamentos||[]).filter(p=>p.tipo==='sinal')):0;
-      return `<div class="item"><div class="avatar" style="--lv:var(--lv-bronze)">${ic('x')}</div><div class="grow"><div class="t" style="white-space:normal">${esc(primeiro(nomeCli(a?.clienteId)))} cancelou ${a?`${esc(nomeServ(a.servicoId))} de ${dataCurta(a.data)} às ${esc(a.hora)}`:'um atendimento'}</div><div class="s" style="white-space:normal">pelo espaço da cliente, dentro do prazo${sinal?` · sinal de ${BRL(sinal)}: veja o que a política define para cancelamento no prazo`:''}${q.motivo?` · "${esc(q.motivo)}"`:''}</div></div>${a?`<button class="btn sm soft" data-act="avisoEspera" data-id="${a.id}">${ic('list')}Lista de espera</button>`:''}<button class="btn sm ghost" data-act="avisoVisto" data-k="sol" data-id="${q.id}">Ok</button></div>`}),
+      return `<div class="item"><div class="avatar" style="--lv:var(--lv-bronze)">${ic('x')}</div><div class="grow"><div class="t" style="white-space:normal">${esc(primeiro(nomeCli(a?.clienteId)))} cancelou ${a?`${esc(nomeAg(a))} de ${dataCurta(a.data)} às ${esc(a.hora)}`:'um atendimento'}</div><div class="s" style="white-space:normal">pelo espaço da cliente, dentro do prazo${sinal?` · sinal de ${BRL(sinal)}: veja o que a política define para cancelamento no prazo`:''}${q.motivo?` · "${esc(q.motivo)}"`:''}</div></div>${a?`<button class="btn sm soft" data-act="avisoEspera" data-id="${a.id}">${ic('list')}Lista de espera</button>`:''}<button class="btn sm ghost" data-act="avisoVisto" data-k="sol" data-id="${q.id}">Ok</button></div>`}),
     ...acc.map(l=>{const w=waLink(l.telefone,`Oi, ${primeiro(l.nome)}! Recebi o seu aceite do contrato, obrigada 💕 Segue o link para o pagamento do sinal: `);
       return `<div class="item"><div class="avatar" style="--lv:var(--lv-perola)">${ic('check')}</div><div class="grow"><div class="t" style="white-space:normal">${esc(primeiro(l.nome))} aceitou o contrato</div><div class="s" style="white-space:normal">${esc(l.servico)}${l.data?` · ${dataCurta(l.data)} ${esc(l.hora||'')}`:''} · agora envie o link de pagamento do sinal</div></div>${w?`<a class="btn sm primary" href="${w}" target="_blank" rel="noopener">${ic('chat')}Pagamento</a>`:''}<button class="btn sm ghost" data-act="avisoVisto" data-k="link" data-id="${l.id}">Ok</button></div>`})];
   rows.push(...cads);return `<section class="card aviso-portal"><h3>Novidades das clientes <small>${rows.length}</small></h3><div class="list">${rows.join('')}</div></section>`}
