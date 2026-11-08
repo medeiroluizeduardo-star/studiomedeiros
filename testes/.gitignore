@@ -1,0 +1,5 @@
+node_modules/
+resultado.tap
+capturas/
+package-lock.json
+*.log

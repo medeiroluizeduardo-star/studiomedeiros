@@ -1,0 +1,20 @@
+{
+  "name": "stefany-testes",
+  "private": true,
+  "type": "module",
+  "description": "Testes automáticos: regras de segurança do Firestore (emulador do Firebase) e as telas do site no modo demonstração (navegador Chromium)",
+  "scripts": {
+    "test": "node --test --test-concurrency=1 --test-reporter=spec --test-reporter-destination=stdout --test-reporter=tap --test-reporter-destination=resultado.tap regras.test.mjs",
+    "regras": "firebase emulators:exec --only firestore --project demo-stefany --config ../firebase.json \"npm test\"",
+    "telas": "node --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=tap --test-reporter-destination=resultado.tap telas.test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^4.0.1",
+    "firebase": "^11.10.0",
+    "firebase-tools": "^14.27.0",
+    "playwright": "1.63.0"
+  }
+}

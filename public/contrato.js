@@ -1,4 +1,4 @@
-import { doc, getDoc, updateDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { doc, getDoc, updateDoc, serverTimestamp } from './fb.js';
 import { FS, $, esc, BRL, ic, marca, waLink, estado, dataBR, primeiro, toMs, digits, tokenDaUrl, toast } from './publico.js';
 
 const main = $('#pub');

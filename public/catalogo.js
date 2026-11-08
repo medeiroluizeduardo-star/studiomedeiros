@@ -1,4 +1,4 @@
-import { doc, getDoc, getDocs, collection, query, where } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { doc, getDoc, getDocs, collection, query, where } from './fb.js';
 import { FS, $, $$, esc, BRL, ic, braidMark, marca, waLink, estado } from './publico.js';
 
 const main = $('#pub');

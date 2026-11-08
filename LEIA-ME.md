@@ -124,6 +124,14 @@ O sistema continua abrindo com internet fraca. O que for salvo sem internet é e
 
 ---
 
+## Modo demonstração, prévia e testes (desde a versão 6)
+
+- **Modo demonstração:** abra o endereço do sistema com `?demo` no fim (ex.: `https://stefany-medeiros-trancista.web.app/?demo`). Entra direto como proprietária, com clientes, agenda e finanças fictícias. Tudo fica só naquele navegador: nada é lido nem gravado nos dados reais. A faixa amarela no topo avisa que é demonstração; **Recomeçar** apaga os dados de teste e **Sair** volta ao sistema real.
+- **Prévia de cada mudança:** toda proposta de mudança (pull request) no GitHub ganha um endereço próprio de teste, que aparece num comentário da proposta e vale 7 dias. A prévia abre sempre no modo demonstração.
+- **Testes antes de publicar:** em toda proposta e antes de cada publicação, o GitHub roda dois testes. *regras* confere, perfil por perfil, quem lê e quem altera cada parte do banco (ex.: recepção não lê ficha de anamnese, ninguém vira proprietária sozinho, contrato aceito não muda). *telas* abre todas as telas no modo demonstração, no computador e no celular, e procura erros, tela em branco e rolagem para o lado. Se algum falhar, nada é publicado.
+- **Trava da main:** o site só é publicado quando a mudança entra por proposta aceita (merge do pull request). Um envio direto para a `main` é barrado e o site continua como estava. Em emergência: GitHub › Actions › **Publicar no Firebase** › **Run workflow**.
+- **Rodar os testes no computador:** `cd testes`, `npm install`, `npx playwright install chromium` e depois `npm run telas` (telas) ou `npm run regras` (regras; precisa do Java).
+
 ## Atualizações futuras
 
 Quando receber arquivos novos, substitua os desta pasta (mantendo o seu `firebase-config.js` e o `.firebaserc`) e rode de novo:
@@ -152,7 +160,11 @@ stefany-trancista/
     ├── app.js             o sistema
     ├── styles.css         o visual
     ├── firebase-config.js os dados do SEU projeto (preencher)
+    ├── fb.js              escolhe entre o Firebase de verdade e o de demonstração
+    ├── demo/              banco de mentira do modo demonstração
     ├── manifest.webmanifest, sw.js, ícones  (instalação no celular)
+testes/                    testes automáticos (regras do banco e telas)
+.github/workflows/         publicar, prévia e testes
 ```
 
 ## Problemas comuns

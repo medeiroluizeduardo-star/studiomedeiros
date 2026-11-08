@@ -1,9 +1,9 @@
 // Mantém o sistema abrindo rápido mesmo com internet fraca.
 // Tenta a versão mais nova primeiro; se a rede demorar mais de 2,5 s, usa a cópia guardada
 // e atualiza em segundo plano para a próxima abertura.
-const CACHE = 'smt-v8';
+const CACHE = 'smt-v9';
 const ARQUIVOS = ['./', 'img/marca.webp', 'img/logo.webp', 'img/faixa.webp', 'index.html', 'styles.css', 'app.js', 'firebase-config.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png',
-  'publico.css', 'publico.js', 'catalogo.js', 'cliente.js', 'contrato.js', 'cadastro.js'];
+  'publico.css', 'publico.js', 'catalogo.js', 'cliente.js', 'contrato.js', 'cadastro.js', 'fb.js', 'demo/firebase-demo.js'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(ARQUIVOS).catch(() => {})).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', e => {

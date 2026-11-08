@@ -479,3 +479,8 @@ button.badge{border:0;cursor:pointer;font:inherit;font-size:.72rem;font-weight:6
 .dur-in .dur-m{width:auto;flex:none;min-width:4.6em}
 .dur-in span{color:var(--muted);font-size:.85rem}
 .extra-serv{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end}
+/* modo demonstração */
+.demo-faixa{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 14px;padding:10px 14px;border-radius:14px;border:1px dashed var(--warn);background:color-mix(in srgb,var(--warn) 12%,transparent);font-size:.86rem;line-height:1.35}
+.demo-faixa>svg{width:18px;height:18px;flex:none;color:var(--warn)}
+.demo-faixa .grow{flex:1 1 220px;min-width:0}
+.gate .demo-faixa,.demo-faixa+.gate{margin-top:0}
