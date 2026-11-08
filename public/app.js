@@ -71,7 +71,7 @@ function braidMark(size=34,spin=false){
 
 /* ================= constantes ================= */
 const CAT_REC=['Serviço de trança','Manutenção','Retirada','Sinal','Pacotes','Vale-presente','Venda de produto','Outras receitas'];
-const CAT_DES=['Cabelo / fibra','Materiais (pomada, linha, elástico)','DAS-MEI','Aluguel / espaço','Transporte','Marketing e redes','Equipamentos','Cursos','Taxas de maquininha','Retirada pró-labore','Outras despesas'];
+const CAT_DES=['Cabelo / fibra','Materiais (pomada, linha, elástico)','DAS-MEI','Aluguel / espaço','Transporte','Marketing e redes','Equipamentos','Cursos','Taxas de maquininha','Retirada pró-labore','Repasse a parceira','Outras despesas'];
 const FORMAS=['Pix','Dinheiro','Cartão de débito','Cartão de crédito','Transferência'];
 const CAT_EST=['Cabelo / fibra','Pomadas e finalizadores','Linhas e elásticos','Miçangas e acessórios','Higiene e descartáveis','Outros'];
 const ORIGENS=['Instagram','Indicação','TikTok','WhatsApp','Google','Passou no ateliê','Outro'];
@@ -132,6 +132,30 @@ function pode(f){const own=isOwner(),r=ROLE;
   }}
 const pub=()=>({...DEF_PUB,...(S.publico.get('config')||{})});
 const priv=()=>({...DEF_PRIV,...(S.privado.get('config')||{})});
+
+/* Pix "copia e cola" (padrão BR Code do Banco Central), gerado aqui mesmo, sem serviço externo e sem taxa. */
+const semAcento=t=>String(t||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+function pixChave(pb=pub()){const ch=String(pb.pixChave||'').trim();if(!ch)return '';const t=pb.pixTipo||'cpf';
+  if(t==='email'||t==='aleatoria')return ch.toLowerCase();const d=digits(ch);if(t==='celular')return '+'+(d.length<=11?'55'+d:d);return d}
+function crc16(s){let c=0xFFFF;for(let i=0;i<s.length;i++){c^=s.charCodeAt(i)<<8;for(let j=0;j<8;j++)c=c&0x8000?((c<<1)^0x1021)&0xFFFF:(c<<1)&0xFFFF}return c.toString(16).toUpperCase().padStart(4,'0')}
+function pixCodigo(valor,txid,pb=pub()){const ch=pixChave(pb);if(!ch)return '';const f=(id,v)=>id+String(v.length).padStart(2,'0')+v;
+  const nome=semAcento(pb.pixNome||pb.responsavel||pb.nome).replace(/[^A-Za-z0-9 ]/g,'').replace(/\s+/g,' ').trim().slice(0,25)||'RECEBEDOR';
+  const cid=semAcento(pb.pixCidade||String(pb.municipio||'').split(/\s[-–]\s|\//)[0]).replace(/[^A-Za-z ]/g,'').replace(/\s+/g,' ').trim().slice(0,15)||'BRASIL';
+  const tx=String(txid||'').replace(/[^A-Za-z0-9]/g,'').slice(0,25)||'***';
+  const s=f('00','01')+f('26',f('00','br.gov.bcb.pix')+f('01',ch))+f('52','0000')+f('53','986')+(+valor>0?f('54',(+valor).toFixed(2)):'')+f('58','BR')+f('59',nome)+f('60',cid)+f('62',f('05',tx))+'6304';
+  return s+crc16(s)}
+/* Quanto ainda falta do sinal combinado (política da empresa) neste atendimento. */
+function sinalFalta(a){if(!a||a.pacoteId||!(a.status==='agendado'||a.status==='confirmado'))return 0;const pct=+pol().campos.sinalPct||0;
+  const pago=soma((a.pagamentos||[]).filter(p=>p.tipo==='sinal'));return Math.max(0,Math.round((+a.valor||0)*pct)/100-pago)}
+/* Repasse das trancistas parceiras: nomes em publico/config (aparecem na agenda), regra de valor em privado/config. */
+const profs=()=>(pub().profissionais||[]).filter(p=>p&&p.id&&p.nome);
+const nomeProf=id=>id?((profs().find(p=>p.id===id)||{}).nome||'Parceira'):primeiro(pub().responsavel)||'Proprietária';
+function baseRepasse(a){if(!a.pacoteId)return +a.valor||0;const p=S.pacotes.get(a.pacoteId);return p&&+p.sessoes?Math.round((+p.valor||0)/(+p.sessoes)*100)/100:0}
+function repasseDoMes(id,m){const r=(priv().repasse||{})[id]||{tipo:'pct',valor:0};
+  const ags=arr('agenda').filter(a=>a.prof===id&&a.status==='concluido'&&ym(a.data)===m).sort((a,b)=>(a.data+a.hora)<(b.data+b.hora)?-1:1);
+  const linhas=ags.map(a=>{const base=baseRepasse(a);const v=r.tipo==='fixo'?+r.valor||0:Math.round(base*(+r.valor||0))/100;return {a,base,v}});
+  const pago=arr('lancamentos').filter(l=>l.repasseRef===`${id}|${m}`);return {r,linhas,total:soma(linhas.map(x=>({valor:x.v}))),base:soma(linhas.map(x=>({valor:x.base}))),pago:soma(pago)}}
+const pixDoSinal=a=>{const v=sinalFalta(a);return v>0.009?pixCodigo(v,'SINAL'+String(a.id||'').slice(0,18)):''};
 
 function limpaUndef(o){return JSON.parse(JSON.stringify(o))}
 function save(col,id,data,{quiet}={}){
@@ -848,7 +872,7 @@ function finSinais(){const P=pol();const pct=+P.campos.sinalPct||0;const prazoH=
     else if(a.canceladoEm){sit=inicioMs(a)-Date.parse(a.canceladoEm)>=prazoH*3600e3?'verificar':'retido'}else sit='verificar';return {a,sit,v:sinalDe(a)}});
   const retMes=perdidos.filter(x=>x.sit==='retido'&&ym(x.a.data)===m),verif=perdidos.filter(x=>x.sit==='verificar');
   const row=(a,extra='')=>{const cli=S.clientes.get(a.clienteId);return `<div class="item wrap"><span class="time">${dataCurta(a.data)}</span><div class="grow"><div class="t">${esc(nomeCli(a.clienteId))}</div><div class="s">${esc(a.hora)} · ${esc(nomeAg(a))} · serviço ${BRL(a.valor)} · sinal ${BRL(sinalDe(a))} de ${BRL(esp(a))}</div></div>${extra}</div>`};
-  const cobrar=a=>{const cli=S.clientes.get(a.clienteId);const falta=Math.max(0,esp(a)-sinalDe(a));const w=cli&&pode('finEdit')?waLink(cli.telefone,`Oi, ${primeiro(cli.nome)}! 💕 Para garantir seu horário de ${nomeAg(a)} ${dataLonga(a.data)} às ${a.hora}, falta o sinal de ${BRL(falta)}. Te mando o link de pagamento?`):null;
+  const cobrar=a=>{const cli=S.clientes.get(a.clienteId);const falta=Math.max(0,esp(a)-sinalDe(a));const cod=pixCodigo(falta,'SINAL'+String(a.id||'').slice(0,18));const w=cli&&pode('finEdit')?waLink(cli.telefone,cod?msgPixSinal(a,cli,falta,cod):`Oi, ${primeiro(cli.nome)}! 💕 Para garantir seu horário de ${nomeAg(a)} ${dataLonga(a.data)} às ${a.hora}, falta o sinal de ${BRL(falta)}. Te mando o link de pagamento?`):null;
     return `${w?`<a class="btn sm soft" href="${w}" target="_blank" rel="noopener">${ic('chat')}Cobrar</a>`:''}${pode('finEdit')?`<button class="btn sm ghost" data-act="editAg" data-id="${a.id}">Registrar</button>`:''}`};
   return `<section class="kpis"><div class="kpi"><div class="l">Sinais recebidos no mês</div><div class="v">${cnt(rec)}</div><div class="d">${esc(cap(mesNome(m)))}</div></div>
    <div class="kpi"><div class="l">Sem sinal (próx. 45 dias)</div><div class="v" style="color:${sem.length?'var(--warn)':'inherit'}">${sem.length}</div><div class="d">${BRL(soma(sem.map(a=>({valor:esp(a)}))))} a receber</div></div>
@@ -878,6 +902,15 @@ function relatorioContador(){const m=UI.finMes;const pb=pub(),c=priv();const ano
    <h2>Lançamentos do mês</h2><table><tbody>${lan.map(l=>`<tr><td style="white-space:nowrap">${dataBR(l.data)}</td><td>${l.t}</td><td>${esc(l.descricao||l.categoria||'')}${l.nf?' · NF':''}</td><td style="text-align:right;white-space:nowrap">${l.t==='Despesa'?'−':''}${BRL(l.valor)}</td></tr>`).join('')||'<tr><td>Sem lançamentos.</td></tr>'}</tbody></table>
    <p class="sub" style="margin-top:18px">Relatório gerencial gerado pelo sistema do ateliê. Não substitui a escrituração nem a orientação da contabilidade.</p></article>`}
 function abrirRelatorioContador(){sheet('Relatório para a contabilidade',`<div class="stack"><div id="reciboBox">${relatorioContador()}</div><div class="row"><button class="btn primary" data-act="imprimirArea">${ic('file')}Imprimir ou salvar PDF</button></div><p class="small muted" style="margin:0">No celular, escolha "Salvar como PDF" na tela de impressão e envie para a contabilidade.</p></div>`)}
+function pixSinal(id){const a=S.agenda.get(id);if(!a)return;const v=sinalFalta(a);const cod=pixDoSinal(a);const cli=S.clientes.get(a.clienteId);
+  if(!cod){toast(pub().pixChave?'Este atendimento não tem sinal a receber.':'Cadastre a chave Pix em Ajustes › Negócio.');return}
+  const w=cli?waLink(cli.telefone,msgPixSinal(a,cli,v,cod)):null;
+  sheet('Pix do sinal',`<div class="stack"><p class="small muted" style="margin:0">${esc(nomeCli(a.clienteId))} · ${esc(nomeAg(a))} · ${dataLonga(a.data)} às ${esc(a.hora)}</p>
+   <div class="kpi"><div class="l">Sinal a receber</div><div class="v">${BRL(v)}</div></div>
+   <label class="fld">Código Pix copia e cola<textarea readonly rows="4" style="font-family:monospace;font-size:.8rem;word-break:break-all">${esc(cod)}</textarea></label>
+   <div class="row">${w?`<a class="btn primary" href="${w}" target="_blank" rel="noopener">${ic('chat')}Enviar no WhatsApp</a>`:''}<button class="btn soft" data-act="pixCopiar" data-pix="${esc(cod)}">${ic('copy')}Copiar código</button><button class="btn ghost" data-act="editAg" data-id="${a.id}">Registrar sinal recebido</button></div>
+   <p class="small muted" style="margin:0">O código também aparece no espaço da cliente, no card do horário. Quando o dinheiro cair, registre o sinal no atendimento.</p></div>`)}
+function msgPixSinal(a,cli,v,cod){return `Oi, ${primeiro(cli.nome)}! 💕 Para garantir seu horário de ${nomeAg(a)} ${dataLonga(a.data)} às ${a.hora}, o sinal é de ${BRL(v)}. É só copiar o código abaixo e colar no app do seu banco, em Pix › Copia e cola:\n\n${cod}\n\nDepois me manda o comprovante, por favor. Beijos, ${primeiro(pub().responsavel)}`}
 function apptCard(a){
   const st=STATUS[a.status]||STATUS.agendado;const cli=S.clientes.get(a.clienteId);const fim=min2hm(hm2min(a.hora)+(+a.duracao||0));const pb=pub();
   const pago=soma(a.pagamentos||[]);const msg=`Oi, ${primeiro(cli?.nome)}! 💕 Confirmando seu horário de ${nomeAg(a)} ${dataLonga(a.data)} às ${a.hora}. Lembre de vir ${pol().campos.preparo}. Qualquer imprevisto, me avise com ${pol().campos.prazoCancel}h de antecedência. Beijos, ${primeiro(pb.responsavel)}`;
@@ -887,7 +920,7 @@ function apptCard(a){
   return `<article class="appt" style="--st:${st.c}"><div><div class="time">${esc(a.hora)}</div><div class="small muted num">${fim}</div></div>
    <div style="min-width:0"><div class="row between"><b>${esc(nomeCli(a.clienteId))}</b><span class="badge">${st.n}</span></div><div class="small muted">${esc(nomeAg(a))} · ${a.pacoteId?'sessão de pacote':BRL(a.valor)}${pago?` · recebido ${BRL(pago)}`:''}</div>
    <div class="row" style="gap:6px;margin-top:6px">${anTag}${contratoTag(a)}${a.canceladoPor?`<span class="badge">cancelado pela cliente</span>`:''}</div>${a.obs?`<div class="small" style="margin-top:4px">${esc(a.obs)}</div>`:''}</div>
-   <div class="actions">${aberto?`<button class="btn sm primary" data-act="concluir" data-id="${a.id}">${ic('check')}Concluir</button>`:''}${a.status==='agendado'?`<button class="btn sm soft" data-act="stAg" data-id="${a.id}" data-s="confirmado">Confirmada</button>`:''}${l&&aberto?`<a class="btn sm soft" href="${l}" target="_blank" rel="noopener">${ic('chat')}Lembrete</a>`:''}${aberto&&!contratoDoAg(a.id)?`<button class="btn sm ghost" data-act="linkContrato" data-c="${a.clienteId}" data-a="${a.id}">${ic('file')}Enviar contrato</button>`:''}${a.status==='concluido'?`<button class="btn sm soft" data-act="recibo" data-id="${a.id}">${ic('receipt')}Recibo</button><button class="btn sm ghost" data-act="retorno" data-id="${a.id}">${ic('repeat')}Agendar retorno</button>`:''}<button class="btn sm ghost" data-act="editAg" data-id="${a.id}">${ic('edit')}Editar</button></div></article>`;
+   <div class="actions">${aberto?`<button class="btn sm primary" data-act="concluir" data-id="${a.id}">${ic('check')}Concluir</button>`:''}${a.status==='agendado'?`<button class="btn sm soft" data-act="stAg" data-id="${a.id}" data-s="confirmado">Confirmada</button>`:''}${l&&aberto?`<a class="btn sm soft" href="${l}" target="_blank" rel="noopener">${ic('chat')}Lembrete</a>`:''}${aberto&&pub().pixChave&&sinalFalta(a)>0.009?`<button class="btn sm soft" data-act="pixSinal" data-id="${a.id}">${ic('wallet')}Pix do sinal</button>`:''}${aberto&&!contratoDoAg(a.id)?`<button class="btn sm ghost" data-act="linkContrato" data-c="${a.clienteId}" data-a="${a.id}">${ic('file')}Enviar contrato</button>`:''}${a.status==='concluido'?`<button class="btn sm soft" data-act="recibo" data-id="${a.id}">${ic('receipt')}Recibo</button><button class="btn sm ghost" data-act="retorno" data-id="${a.id}">${ic('repeat')}Agendar retorno</button>`:''}<button class="btn sm ghost" data-act="editAg" data-id="${a.id}">${ic('edit')}Editar</button></div></article>`;
 }
 
 /* ================= CLIENTES ================= */
@@ -910,11 +943,12 @@ function vClientes(){
 
 /* ================= FINANÇAS ================= */
 function vFinanceiro(){
-  const tabs=[['visao','Visão geral'],['lanc','Lançamentos'],['contas','Contas'],['sinais','Sinais'],['mei','MEI e impostos'],['rel','Relatórios'],['serv','Serviços e preços']];
-  const comMes=['visao','lanc','mei','sinais'].includes(UI.finTab);
+  const tabs=[['visao','Visão geral'],['lanc','Lançamentos'],['contas','Contas'],['sinais','Sinais'],...(profs().length?[['repasse','Repasse']]:[]),['mei','MEI e impostos'],['rel','Relatórios'],['serv','Serviços e preços']];
+  if(UI.finTab==='repasse'&&!profs().length)UI.finTab='visao';
+  const comMes=['visao','lanc','mei','sinais','repasse'].includes(UI.finTab);
   return head('Finanças','Controle <em>financeiro</em>',comMes?esc(cap(mesNome(UI.finMes))):'',
     `${comMes?`<button class="icon-btn" data-act="finMes" data-n="-1" aria-label="Mês anterior">${ic('left')}</button><button class="icon-btn" data-act="finMes" data-n="1" aria-label="Próximo mês">${ic('right')}</button>`:''}${['visao','mei'].includes(UI.finTab)?`<button class="btn soft" data-act="relContador">${ic('file')}Relatório do mês</button>`:''}${!pode('finEdit')?'<span class="badge">somente leitura</span>':UI.finTab==='serv'?`<button class="btn primary" data-act="novoServ">${ic('plus')}Serviço</button>`:UI.finTab==='contas'?`<button class="btn primary" data-act="novaConta">${ic('plus')}Conta a pagar</button>`:`<button class="btn primary" data-act="novoLan">${ic('plus')}Lançar</button>`}`)+
-  `<div style="overflow-x:auto">${seg('finTab',UI.finTab,tabs)}</div>`+({visao:finVisao,lanc:finLanc,contas:finContas,sinais:finSinais,mei:finMei,rel:finRel,serv:finServ}[UI.finTab]||finVisao)();
+  `<div style="overflow-x:auto">${seg('finTab',UI.finTab,tabs)}</div>`+({visao:finVisao,lanc:finLanc,contas:finContas,sinais:finSinais,repasse:finRepasse,mei:finMei,rel:finRel,serv:finServ}[UI.finTab]||finVisao)();
 }
 function finVisao(){
   const m=UI.finMes;const R=receitas(l=>ym(l.data)===m),D=despesas(l=>ym(l.data)===m);const r=soma(R),d=soma(D);
@@ -1002,6 +1036,13 @@ function finMei(){
    ${[['clock','DAS mensal','Até o dia 20 de cada mês, referente ao mês anterior. Garante INSS e benefícios.'],['wallet','Relatório mensal de receitas brutas','Até o dia 20 do mês seguinte. Este sistema gera automaticamente.'],['cal','DASN-SIMEI (declaração anual)',`Até 31 de maio, com o faturamento de ${+ano-1}: ${BRL(soma(receitas(l=>l.data.slice(0,4)===String(+ano-1))))} registrados aqui.`],['check','Nota fiscal','Obrigatória quando a cliente é empresa (CNPJ). Para pessoa física é opcional, salvo exigência do município.'],['users','Funcionário','O MEI pode contratar 1 empregado. Trancista parceira deve ter contrato próprio (Lei do Salão-Parceiro).'],['info','Guarde comprovantes','Notas, recibos e relatórios por 5 anos.']].map(([i,t,s])=>`<div class="item"><div class="avatar" style="--lv:var(--rose)">${ic(i)}</div><div class="grow"><div class="t" style="white-space:normal">${t}</div><div class="s" style="white-space:normal">${s}</div></div></div>`).join('')}
   </div><p class="small muted" style="margin-bottom:0">Referência 2026: limite anual de R$ 81.000 e DAS de serviços de R$ 86,05. Se a lei mudar, atualize em Ajustes.</p></section>`;
 }
+function finRepasse(){const m=UI.finMes;const ed=pode('finEdit');
+  return profs().map(p=>{const x=repasseDoMes(p.id,m);const regra=x.r.tipo==='fixo'?`${BRL(x.r.valor)} por atendimento`:`${+x.r.valor||0}% do valor do serviço`;const falta=Math.max(0,x.total-x.pago);
+    return `<section class="card"><h3>${esc(p.nome)} <small>${regra}</small></h3>
+     <div class="kpis"><div class="kpi"><div class="l">Atendimentos concluídos</div><div class="v">${x.linhas.length}</div><div class="d">serviços somam ${BRL(x.base)}</div></div><div class="kpi"><div class="l">Repasse do mês</div><div class="v">${BRL(x.total)}</div><div class="d">${x.pago?`pago ${BRL(x.pago)}`:'ainda não pago'}</div></div></div>
+     ${x.linhas.length?`<div class="list" style="margin-top:10px">${x.linhas.map(({a,base,v})=>`<div class="item"><span class="time">${dataCurta(a.data)}</span><div class="grow"><div class="t">${esc(nomeCli(a.clienteId))}</div><div class="s">${esc(nomeAg(a))} · ${a.pacoteId?'sessão de pacote · ':''}${BRL(base)}</div></div><b class="num">${BRL(v)}</b></div>`).join('')}</div>`:'<p class="small muted">Nenhum atendimento concluído por ela neste mês. Marque "Quem atende" no atendimento.</p>'}
+     ${ed&&falta>0.009?`<div class="form-actions"><button class="btn primary" data-act="repassePagar" data-id="${esc(p.id)}" data-v="${falta.toFixed(2)}">${ic('check')}Registrar pagamento de ${BRL(falta)}</button></div>`:''}</section>`}).join('')+
+  `<div class="alert info">${ic('info')}<div>A regra de cada parceira fica em Ajustes › Equipe. O pagamento registrado entra como despesa "Repasse a parceira" em Lançamentos.</div></div>`}
 function finRel(){
   const t=today();const ini=addMonths(ym(t),-UI.relPer+1)+'-01';const c=priv();
   const ag=arr('agenda').filter(a=>a.data>=ini&&a.data<=t);const concl=ag.filter(a=>a.status==='concluido');
@@ -1155,10 +1196,22 @@ function ajNegocio(){const pb=pub(),c=priv();
    <div class="f2"><label class="fld">WhatsApp do ateliê<input id="gWa" inputmode="tel" value="${esc(pb.whatsapp)}" placeholder="(27) 99999-9999"></label><label class="fld">Instagram do ateliê<input id="gIg" placeholder="@stefanytrancista" value="${esc(pb.instagram)}"></label><label class="fld">Desconto de aniversário (%)<input id="gAniv" type="number" min="0" max="50" value="${pb.descAniv}"></label></div>
    <h3 style="margin-top:8px">Programa de indicação <small>aparece no espaço da cliente e no catálogo</small></h3>
    <div class="f2"><label class="fld">Quem indica ganha<input id="gIndB" value="${esc(pb.indBenef||'')}" placeholder="${esc(IND_PADRAO[0])}"></label><label class="fld">Quem foi indicada ganha<input id="gIndN" value="${esc(pb.indBenefNova||'')}" placeholder="${esc(IND_PADRAO[1])}"></label></div>
+   <h3 style="margin-top:8px">Pix para o sinal <small>gera o código "copia e cola" com o valor certo</small></h3>
+   <div class="f2"><label class="fld">Tipo de chave<select id="gPixT">${[['cpf','CPF ou CNPJ'],['celular','Celular'],['email','E-mail'],['aleatoria','Chave aleatória']].map(([k,n])=>`<option value="${k}" ${(pb.pixTipo||'cpf')===k?'selected':''}>${n}</option>`).join('')}</select></label><label class="fld">Chave Pix<input id="gPix" autocapitalize="off" spellcheck="false" value="${esc(pb.pixChave||'')}" placeholder="a chave cadastrada no banco"></label></div>
+   <div class="f2"><label class="fld">Nome de quem recebe<input id="gPixN" maxlength="25" value="${esc(pb.pixNome||'')}" placeholder="${esc(pb.responsavel||pb.nome)}"></label><label class="fld">Cidade de quem recebe<input id="gPixC" maxlength="15" value="${esc(pb.pixCidade||'')}" placeholder="${esc(String(pb.municipio||'').split(/\s[-–]\s/)[0])}"></label></div>
+   <p class="small muted" style="margin:-4px 0 0">Antes de usar com clientes, faça um Pix de teste de R$ 1,00 com o código para conferir se cai na conta certa.${pb.pixChave?` <button type="button" class="btn sm ghost" data-act="pixTeste">${ic('copy')}Copiar código de teste</button>`:''}</p>
+   <h3 style="margin-top:8px">Horários livres para as clientes</h3>
+   <label class="check"><input type="checkbox" id="gHorOn" ${pb.horariosOnline!==false?'checked':''}>Mostrar os horários livres no catálogo e no espaço da cliente (só os horários, nunca quem está marcado)</label>
    <h3 style="margin-top:8px">Finanças e MEI <small>visível só para proprietárias e contabilidade</small></h3>
    <div class="f2"><label class="fld">Abertura do MEI<input id="gIni" type="month" value="${esc(c.inicioMei)}"></label><label class="fld">Limite anual (R$)<input id="gLim" type="number" step="0.01" value="${c.limite}"></label><label class="fld">Valor do DAS (R$)<input id="gDas" type="number" step="0.01" value="${c.das}"></label><label class="fld">Meta mensal (R$)<input id="gMeta" type="number" step="50" value="${c.meta}"></label></div>
    <div class="f2"><label class="fld">Taxa débito (%)<input id="gTd" type="number" step="0.01" value="${c.taxaDebito}"></label><label class="fld">Taxa crédito à vista (%)<input id="gTc" type="number" step="0.01" value="${c.taxaCredito}"></label><label class="fld">Taxa crédito parcelado (%)<input id="gTp" type="number" step="0.01" value="${c.taxaParcelado}"></label></div>
    <div class="form-actions"><button class="btn primary">${ic('check')}Salvar</button></div></form>`}
+function repLinha(p,r){return `<div class="f2 rep-linha" data-id="${esc(p.id)}"><label class="fld">Nome<input data-k="nome" value="${esc(p.nome)}" placeholder="Ex.: Ana"></label><label class="fld">Como calcula<select data-k="tipo"><option value="pct" ${r.tipo!=='fixo'?'selected':''}>% do valor do serviço</option><option value="fixo" ${r.tipo==='fixo'?'selected':''}>Valor fixo por atendimento</option></select></label><label class="fld">Valor (% ou R$)<input data-k="valor" type="number" step="0.01" min="0" value="${esc(r.valor??'')}"></label><button type="button" class="btn sm ghost danger" data-act="repRm" style="align-self:end">Remover</button></div>`}
+function repasseCard(){if(!isOwner())return '';const rp=priv().repasse||{};
+  return `<form class="card form" id="fRep"><h3>Trancistas parceiras e repasse <small>quanto cada uma recebe por atendimento</small></h3>
+   <p class="small muted" style="margin-top:0">Quem estiver aqui aparece em "Quem atende" no atendimento, e o valor do mês sai em Finanças › Repasse. O nome aparece para a equipe; a regra de valor só para você e a contabilidade.</p>
+   <div id="repLista" class="stack" style="gap:8px">${profs().map(p=>repLinha(p,rp[p.id]||{tipo:'pct',valor:''})).join('')}</div>
+   <div class="form-actions" style="justify-content:space-between"><button type="button" class="btn ghost" data-act="repAdd">${ic('plus')}Adicionar parceira</button><button class="btn primary">${ic('check')}Salvar</button></div></form>`}
 function ajEquipe(){const ped=arr('pedidos'),eq=arr('equipe');const donas=(ACESSO&&ACESSO.donas)||[];const dinfo=(ACESSO&&ACESSO.donasInfo)||{};
   return `<section class="card"><h3>Proprietárias <small>${donas.length} com acesso total</small></h3><div class="list">${donas.map(u=>{const i=dinfo[u]||{};return `<div class="item"><div class="avatar" style="--lv:var(--lv-perola)">${ic('shield')}</div><div class="grow"><div class="t">${esc(i.nome||i.email||'Proprietária')}${u===ME?' <span class="badge">você</span>':''}</div><div class="s">${esc(i.email||'e-mail aparece no próximo acesso dela')}</div></div>${u!==ME&&donas.length>1?`<button class="btn sm ghost danger" data-act="removerDona" data-id="${u}">Remover</button>`:''}</div>`}).join('')}</div><p class="small muted" style="margin-bottom:0">Para dar acesso total a alguém da equipe, use "Tornar proprietária" na lista abaixo.</p></section>
   <section class="card"><h3>Equipe e acessos <small>${eq.filter(e=>e.ativo!==false).length} ativa(s)</small></h3>
@@ -1171,7 +1224,7 @@ function ajEquipe(){const ped=arr('pedidos'),eq=arr('equipe');const donas=(ACESS
     <tr><td><b>Trancista parceira</b></td><td>Agenda, clientes, fichas de anamnese, estoque (sem custos), pacotes, vales, contratos e datas.</td></tr>
     <tr><td><b>Recepção</b></td><td>Agenda, cadastro de clientes, pacotes, vales, contrato de serviço e datas. Sem fichas de saúde e sem estoque.</td></tr>
     <tr><td><b>Contador(a)</b></td><td>Finanças, contas, relatórios e MEI, somente leitura. Sem clientes nem fichas.</td></tr></table>
-    <p>Todas essas separações são aplicadas pelas regras de segurança do Firestore, no servidor. Para bloquear alguém de vez, desative o acesso aqui e também desative o usuário em Authentication no console.</p></details></section>`}
+    <p>Todas essas separações são aplicadas pelas regras de segurança do Firestore, no servidor. Para bloquear alguém de vez, desative o acesso aqui e também desative o usuário em Authentication no console.</p></details></section>${repasseCard()}`}
 function ajDados(){const nEx=ALL_COLS.reduce((s,k)=>s+arr(k).filter(r=>r.exemplo).length,0);
   return contaCard()+cardAvisos()+`<section class="card"><h3>Cópia de segurança</h3><p class="small muted" style="margin-top:0">Os dados ficam no Firestore e aparecem no PC e no celular. Além disso, o GitHub faz uma cópia automática todo dia de madrugada (guardada 30 dias; a de domingo, 90 dias), que pode ser restaurada pela rotina <b>Restaurar cópia de segurança</b> (veja o LEIA-ME). Se quiser uma cópia sua, baixe aqui.</p>
    <div class="row"><button class="btn soft" data-act="backup">${ic('down')}Baixar cópia (JSON)</button><label class="btn ghost">${ic('up')}Restaurar cópia<input type="file" id="restFile" accept=".json,application/json" hidden></label></div></section>
@@ -1305,6 +1358,7 @@ function formAgenda(id,pre={}){
    <div id="aExtras" class="stack" style="gap:8px">${(a.extras||[]).map(x=>extraServRow(x)).join('')}</div>
    <button type="button" class="btn sm ghost" id="aExtraAdd" style="align-self:flex-start">${ic('plus')}Adicionar outro serviço</button>${S.servicos.size?'':`<div class="alert warn">${ic('alert')}<div>Nenhum serviço cadastrado. ${pode('precos')?`<button type="button" class="btn sm ghost" data-act="servSug">Adicionar serviços sugeridos</button>`:'Peça à proprietária para cadastrar.'}</div></div>`}
    <label class="fld" id="pkBox" hidden>Pacote<select id="aPk"></select></label>
+   ${profs().length?`<label class="fld">Quem atende<select id="aProf"><option value="">${esc(nomeProf(''))}</option>${profs().map(p=>`<option value="${esc(p.id)}" ${a.prof===p.id?'selected':''}>${esc(p.nome)}</option>`).join('')}</select></label>`:''}
    <div class="f2"><label class="fld">Data<input id="aData" type="date" required value="${esc(a.data)}"></label><label class="fld">Hora<input id="aHora" type="time" required value="${esc(a.hora)}"></label><label class="fld">Duração${durCampo('aDur',a.duracao)}</label></div>
    <div class="f2" id="valBox"><label class="fld">Valor (R$)<input id="aVal" type="number" step="0.01" min="0" inputmode="decimal" value="${esc(a.valor??'')}"></label>
     ${sinalPago?`<div class="fld">Sinal<div class="small" style="padding:11px 0;color:var(--fg)">${BRL(sinalPago)} já recebido</div></div>`:`<label class="fld">Sinal recebido (R$)<input id="aSinal" type="number" step="0.01" min="0" inputmode="decimal" placeholder="sugestão ${P.campos.sinalPct}%"></label><label class="fld">Forma do sinal<select id="aSinalF">${optFormas('Pix')}</select></label>`}</div>
@@ -1336,14 +1390,16 @@ function formAgenda(id,pre={}){
     if(cid==='__nova'){const n=$('#aNovaNome').value.trim();if(!n){toast('Informe o nome da nova cliente');return}cid=await save('clientes',null,{nome:n,telefone:$('#aNovaTel').value.trim(),criadoEm:today()})}
     if(!cid){toast('Escolha a cliente');return}
     const antes=a.status;const pac=pk.value;
-    const d={...a,clienteId:cid,servicoId:srv.value,extras:$$('#aExtras select').map(x=>x.value).filter(Boolean),pacoteId:pac||'',data:$('#aData').value,hora:$('#aHora').value,duracao:+$('#aDur').value||120,valor:pac?0:+$('#aVal').value||0,obs:$('#aObs').value.trim(),status:id?$('#aSt').value:'agendado',pagamentos:[...(a.pagamentos||[])]};
+    const d={...a,clienteId:cid,servicoId:srv.value,extras:$$('#aExtras select').map(x=>x.value).filter(Boolean),pacoteId:pac||'',data:$('#aData').value,hora:$('#aHora').value,duracao:+$('#aDur').value||120,valor:pac?0:+$('#aVal').value||0,obs:$('#aObs').value.trim(),prof:$('#aProf')?$('#aProf').value:(a.prof||''),status:id?$('#aSt').value:'agendado',pagamentos:[...(a.pagamentos||[])]};
     const sv=+($('#aSinal')?.value||0);if(sv>0&&!pac)d.pagamentos.push({id:uid(),tipo:'sinal',data:today(),valor:sv,forma:$('#aSinalF').value,parcelas:1,nf:false});
     await save('agenda',id,d);closeSheet();UI.agDia=d.data;toast(id?'Atendimento atualizado':'Horário marcado');
+    if(pre.pedido){const q=S.solicitacoes.get(pre.pedido);if(q)S.solicitacoes.set(q.id,{...q,processado:true,resultado:'agendado'});touch('solicitacoes');updateDoc(doc(FS,'solicitacoes',pre.pedido),{processado:true,resultado:'agendado',processadoEm:nowIso()}).catch(dbErr)}
     if(id&&(antes==='agendado'||antes==='confirmado')&&(d.status==='cancelado'||d.status==='faltou'))setTimeout(()=>sugerirEspera(d),300)};
 }
-function sugerirEspera(a){const esp=arr('espera').filter(e=>e.status==='aguardando');if(!esp.length){toast('Horário liberado');return}
+function sugerirEspera(a){const cabe=e=>{const sv=S.servicos.get(e.servicoId);return !sv||!(+sv.duracao)||+sv.duracao<=(+a.duracao||120)};
+  const esp=arr('espera').filter(e=>e.status==='aguardando').sort((x,y)=>cabe(y)-cabe(x));if(!esp.length){toast('Horário liberado');return}
   sheet('Horário liberado',`<p class="muted small" style="margin-top:0">${dataLonga(a.data)} às ${esc(a.hora)} ficou livre. Avise quem está na lista de espera:</p><div class="list">${esp.map(e=>{const cli=S.clientes.get(e.clienteId);const nome=cli?.nome||e.nome;const w=waLink(cli?.telefone||e.telefone,`Oi, ${primeiro(nome)}! Abriu um horário ${dataLonga(a.data)} às ${a.hora}. Quer que eu reserve para você?`);
-   return `<div class="item"><div class="grow"><div class="t">${esc(nome)}</div><div class="s">${esc(nomeServ(e.servicoId))} · ${esc(e.preferencia||'qualquer horário')}</div></div>${w?`<a class="btn sm soft" href="${w}" target="_blank" rel="noopener" data-act="avisada" data-id="${e.id}">${ic('chat')}Avisar</a>`:''}</div>`}).join('')}</div>`)}
+   return `<div class="item"><div class="grow"><div class="t">${esc(nome)}</div><div class="s">${esc(nomeServ(e.servicoId))} · ${esc(e.preferencia||'qualquer horário')}</div></div>${cabe(e)?'<span class="badge good">cabe no horário</span>':'<span class="badge">precisa de mais tempo</span>'}${w?`<a class="btn sm soft" href="${w}" target="_blank" rel="noopener" data-act="avisada" data-id="${e.id}">${ic('chat')}Avisar</a>`:''}</div>`}).join('')}</div>`)}
 function concluir(id){
   const a=S.agenda.get(id);if(!a)return;const P=pol();const pago=soma(a.pagamentos||[]);const s=S.servicos.get(a.servicoId);
   const rest=a.pacoteId?0:Math.max(0,(+a.valor||0)-pago);
@@ -1563,7 +1619,7 @@ async function seed(ex){
     for(const [k,nome,tel,cab,nv,last,intv,serv,faltas,ind,aniv,origem,cpf] of CL){C[k]=uid();
       ops.push(['clientes',C[k],{nome,telefone:tel,cabelo:cab,aniversario:aniv,indicadaPor:ind?C[ind]:'',origem,cpf,criadoEm:addDays(t,-400),...X}]);
       for(let i=0;i<nv;i++){const d=addDays(t,-(last+i*intv));const sk=i%3===2?'man':serv;const f=formas[Math.floor(rnd()*5)];
-        ops.push(['agenda',uid(),{clienteId:C[k],servicoId:SV[sk],data:d,hora:['09:00','13:30','08:30'][i%3],duracao:D[sk],valor:P[sk],status:'concluido',pagamentos:[{id:uid(),tipo:'servico',data:d,valor:P[sk],forma:f,parcelas:f==='Cartão de crédito'&&P[sk]>=200?2:1,nf:false}],...X}])}
+        ops.push(['agenda',uid(),{clienteId:C[k],servicoId:SV[sk],data:d,hora:['09:00','13:30','08:30'][i%3],duracao:D[sk],valor:P[sk],status:'concluido',prof:DEMO&&i%2===0?'demo-ana':'',pagamentos:[{id:uid(),tipo:'servico',data:d,valor:P[sk],forma:f,parcelas:f==='Cartão de crédito'&&P[sk]>=200?2:1,nf:false}],...X}])}
       for(let i=0;i<faltas;i++)ops.push(['agenda',uid(),{clienteId:C[k],servicoId:SV[serv],data:addDays(t,-25),hora:'14:00',duracao:120,valor:P[serv],status:'faltou',pagamentos:[{id:uid(),tipo:'sinal',data:addDays(t,-30),valor:36,forma:'Pix',parcelas:1,nf:false}],...X}]);
     }
     const pkId=uid();ops.push(['pacotes',pkId,{clienteId:C.ana,nome:'Box braids + 2 manutenções',sessoes:3,valor:450,validade:addDays(t,100),criadoEm:addDays(t,-20),status:'ativo',pagamentos:[{id:uid(),tipo:'pacote',data:addDays(t,-20),valor:450,forma:'Pix',parcelas:1,nf:false}],...X}]);
@@ -1592,8 +1648,10 @@ async function seed(ex){
   }
   if(ex){[['Box braids','4 a 6 horas','Tranças soltas e versáteis, do comprimento que você escolher. Duram de 6 a 8 semanas com os cuidados certos.','Tranças soltas',280],['Nagô','1 a 2 horas','Tranças rentes ao couro cabeludo, em desenhos retos ou criativos. Ótimas para o dia a dia e para o calor.','Nagô',120],['Fulani braids','4 a 5 horas','Combinação de nagô na frente com tranças soltas atrás, com miçangas e anéis.','Tranças soltas',260]]
       .forEach(([nome,tempo,descricao,categoria,preco],i)=>ops.push(['catalogo',uid(),{nome,tempo,descricao,categoria,preco,mostrarPreco:true,link:'',botao:'Quero este modelo',ativo:true,ordem:i,fotos:[],exemplo:true}]))}
-  ops.push(['publico','config',{...pub(),started:true}]);
-  ops.push(['privado','config',{...priv(),dasPagos:pagos}]);
+  // Só na demonstração: chave Pix fictícia e uma parceira de exemplo (no sistema real a chave é sempre a da Stéfany).
+  const demoPub=DEMO?{pixTipo:'aleatoria',pixChave:'00000000-0000-4000-8000-000000000000',pixNome:'Atelie Exemplo',profissionais:[{id:'demo-ana',nome:'Ana (exemplo)'}]}:{};
+  ops.push(['publico','config',{...pub(),...demoPub,started:true}]);
+  ops.push(['privado','config',{...priv(),dasPagos:pagos,...(DEMO?{repasse:{'demo-ana':{tipo:'pct',valor:40}}}:{})}]);
   ops.forEach(([c,id,d])=>{S[c].set(id,{id,...d})});touch();
   await pool(ops.map(([c,id,d])=>()=>save(c,id,d,{quiet:true})),8);
   toast(ex?'Dados de exemplo carregados':'Pronto! Ajuste preços em Finanças › Serviços e o estoque inicial');
@@ -1649,7 +1707,7 @@ function retornoRow(r){const max=pol().campos.semanasMax;const pb=pub();
   const sv=arr('servicos').find(s=>r.retirar?/retirada/i.test(s.nome):/manuten/i.test(s.nome));
   return `<div class="item"><div class="avatar" style="--lv:${r.retirar?'var(--lv-bronze)':'var(--lv-ouro)'}">${iniciais(r.c.nome)}</div><div class="grow"><div class="t">${esc(r.c.nome)}</div><div class="s">${esc(nomeAg(r.ult))} há ${r.sem} semanas</div></div><span class="badge ${r.retirar?'bad':'warn'}">${r.retirar?'retirar':'manutenção'}</span>${w?`<a class="btn sm soft" href="${w}" target="_blank" rel="noopener">${ic('chat')}Avisar</a>`:''}<button class="icon-btn" data-act="retornoAg" data-c="${r.c.id}" data-s="${sv?.id||''}" data-d="${today()}" aria-label="Agendar">${ic('cal')}</button></div>`}
 function confirmarRow(a){const cli=S.clientes.get(a.clienteId);const pb=pub();
-  const w=cli?waLink(cli.telefone,`Oi, ${primeiro(cli.nome)}! 💕 Passando para confirmar seu horário amanhã, ${dataLonga(a.data)}, às ${a.hora}, para ${nomeAg(a)}. Lembre de vir ${pol().campos.preparo}. Posso confirmar? Beijos, ${primeiro(pb.responsavel)}`):null;
+  const w=cli?waLink(cli.telefone,`Oi, ${primeiro(cli.nome)}! 💕 Passando para confirmar seu horário amanhã, ${dataLonga(a.data)}, às ${a.hora}, para ${nomeAg(a)}. Lembre de vir ${pol().campos.preparo}. ${cli.portalToken?`Pode confirmar com um toque no seu espaço:\n${urlPublica('cliente',cli.portalToken)}\n\nOu me responda por aqui 😉`:'Posso confirmar?'}${pixDoSinal(a)?`\n\nFalta o sinal de ${BRL(sinalFalta(a))}. O código Pix está no seu espaço${cli.portalToken?'':', é só me pedir'}.`:''} Beijos, ${primeiro(pb.responsavel)}`):null;
   return `<div class="item"><span class="time">${esc(a.hora)}</span><div class="grow"><div class="t">${esc(nomeCli(a.clienteId))}</div><div class="s">${esc(nomeAg(a))}</div></div>${w?`<a class="btn sm soft" href="${w}" target="_blank" rel="noopener">${ic('chat')}Pedir confirmação</a>`:''}<button class="btn sm primary" data-act="stAg" data-id="${a.id}" data-s="confirmado">${ic('check')}Confirmada</button></div>`}
 
 /* sugerir retorno após concluir */
@@ -1758,9 +1816,13 @@ function verCatalogo(id){const x=S.catalogo.get(id);if(!x)return;
   sheet(esc(x.nome),`<div class="stack"><div class="cat-carrossel">${(x.fotos||[null]).map(f=>fotoImg(f,'cat-foto',x.nome)).join('')}</div>${x.tempo?`<div><span class="badge">${ic('clock')}Tempo médio: ${esc(x.tempo)}</span></div>`:''}<p style="margin:0">${esc(x.descricao||'')}</p>${x.preco&&x.mostrarPreco?`<p class="small muted" style="margin:0">A partir de ${BRL(x.preco)}</p>`:''}<button class="btn soft" data-act="copiarCatalogo">${ic('copy')}Copiar link do catálogo</button></div>`)}
 function formCatalogo(id,pre={}){const novo=!id;id=id||uid();const sv0=pre.s?S.servicos.get(pre.s):null;const x=S.catalogo.get(id)||{ativo:true,botao:'Quero este modelo',mostrarPreco:false,ordem:arr('catalogo').length,fotos:[],...(sv0?{nome:sv0.nome,servicoId:sv0.id,preco:sv0.preco,tempo:`cerca de ${durTxt(sv0.duracao)}`}:{})};
   let fotos=(x.fotos||[]).map(f=>({id:f}));const removidas=[];
+  const pares=(x.antesDepois||[]).map(p=>({a:{id:p.a},d:{id:p.d}}));
   const cats=[...new Set(arr('catalogo').map(c=>c.categoria).filter(Boolean))];
   sheet(novo?'Novo modelo':'Editar modelo',`<form class="form" id="fCat">
    <div><div class="small muted" style="margin-bottom:6px">Fotos (até 6; a primeira é a capa)</div><div class="cat-fotos" id="cfFotos"></div><label class="btn soft" style="margin-top:8px">${ic('image')}Adicionar fotos<input type="file" id="cfFile" accept="image/*" multiple hidden></label></div>
+   <div><div class="small muted" style="margin-bottom:6px">Antes e depois (até 4 pares, aparecem no catálogo dentro do modelo)</div><div class="stack" id="cfAD" style="gap:8px"></div>
+    <button type="button" class="btn sm ghost" id="cfADadd" style="margin-top:8px">${ic('plus')}Adicionar antes e depois</button>
+    <label class="check" id="cfADokL" style="margin-top:6px"><input type="checkbox" id="cfADok" ${(x.antesDepois||[]).length?'checked':''}>As clientes destas fotos autorizaram o uso da imagem (anamnese ou cadastro)</label></div>
    <label class="fld">Nome do serviço<input id="cfNome" required value="${esc(x.nome)}" placeholder="Ex.: Box braids médias"></label>
    <div class="f2"><label class="fld">Tempo médio de aplicação<input id="cfTempo" value="${esc(x.tempo)}" placeholder="Ex.: 4 a 6 horas"></label><label class="fld">Categoria<input id="cfCat" list="cfCats" value="${esc(x.categoria)}" placeholder="Ex.: Tranças soltas"><datalist id="cfCats">${cats.map(c=>`<option value="${esc(c)}">`).join('')}</datalist></label></div>
    <div class="f2"><label class="fld">Duração na agenda${durCampo('cfDur',S.servicos.get(x.servicoId)?.duracao||duracaoDoTempo(x.tempo)||'')}</label>
@@ -1776,6 +1838,13 @@ function formCatalogo(id,pre={}){const novo=!id;id=id||uid();const sv0=pre.s?S.s
    <div class="form-actions">${!novo?`<button type="button" class="btn danger ghost" id="cfDel">${ic('trash')}Excluir</button>`:''}<button class="btn primary" type="submit">${ic('check')}Salvar</button></div></form>`);
   const desenha=()=>{$('#cfFotos').innerHTML=fotos.length?fotos.map((f,i)=>`<div class="cf-item">${f.data?`<img src="${f.data}" alt="">`:fotoImg(f.id,'','')}<div class="cf-acoes">${i>0?`<button type="button" class="icon-btn" data-mv="${i}" aria-label="Mover para a esquerda">${ic('left')}</button>`:'<span class="badge">capa</span>'}<button type="button" class="icon-btn" data-rm="${i}" aria-label="Remover foto">${ic('x')}</button></div></div>`).join(''):'<div class="small muted">Nenhuma foto ainda.</div>';carregaFotos()};
   desenha();
+  const slot=(p,i,k)=>{const f=p[k];return `<label class="cf-item ad-slot" style="cursor:pointer">${f&&f.data?`<img src="${f.data}" alt="">`:f&&f.id?fotoImg(f.id,'',''):`<div class="foto-vazia small muted" style="display:grid;place-items:center;height:100%">${k==='a'?'Foto de antes':'Foto de depois'}</div>`}<input type="file" accept="image/*" hidden data-ad="${i}" data-k="${k}"><span class="badge" style="position:absolute;left:6px;bottom:6px">${k==='a'?'antes':'depois'}</span></label>`};
+  const desenhaAD=()=>{$('#cfAD').innerHTML=pares.map((p,i)=>`<div class="row" style="gap:8px;align-items:center">${slot(p,i,'a')}${slot(p,i,'d')}<button type="button" class="icon-btn" data-adrm="${i}" aria-label="Remover par">${ic('x')}</button></div>`).join('');$('#cfADadd').hidden=pares.length>=4;$('#cfADokL').hidden=!pares.length;carregaFotos()};
+  desenhaAD();
+  $('#cfADadd').onclick=()=>{if(pares.length<4){pares.push({a:null,d:null});desenhaAD()}};
+  $('#cfAD').onclick=e=>{const rm=e.target.closest('[data-adrm]');if(!rm)return;const [p]=pares.splice(+rm.dataset.adrm,1);[p.a,p.d].forEach(f=>{if(f&&f.id)removidas.push(f.id)});desenhaAD()};
+  $('#cfAD').onchange=async e=>{const inp=e.target.closest('[data-ad]');if(!inp||!inp.files[0])return;const p=pares[+inp.dataset.ad];const k=inp.dataset.k;
+    try{const data=await comprimeFoto(inp.files[0]);if(p[k]&&p[k].id)removidas.push(p[k].id);p[k]={data};desenhaAD()}catch(err){toast('Não foi possível ler a foto. Use JPG ou PNG.','erro')}};
   $('#cfFotos').onclick=e=>{const mv=e.target.closest('[data-mv]'),rm=e.target.closest('[data-rm]');
     if(mv){const i=+mv.dataset.mv;[fotos[i-1],fotos[i]]=[fotos[i],fotos[i-1]];desenha()}
     if(rm){const [f]=fotos.splice(+rm.dataset.rm,1);if(f.id)removidas.push(f.id);desenha()}};
@@ -1783,15 +1852,18 @@ function formCatalogo(id,pre={}){const novo=!id;id=id||uid();const sv0=pre.s?S.s
     toast('Preparando fotos…');for(const f of fs){try{fotos.push({data:await comprimeFoto(f)})}catch(err){toast('Não foi possível ler uma das fotos. Use JPG ou PNG.','erro')}}desenha();e.target.value=''};
   $('#cfServ').onchange=e=>{const s=S.servicos.get(e.target.value);if(!s)return;if(!$('#cfTempo').value)$('#cfTempo').value=`cerca de ${durTxt(s.duracao)}`;setDur('cfDur',s.duracao);if(!$('#cfPreco').value&&s.preco)$('#cfPreco').value=s.preco;if(!$('#cfNome').value)$('#cfNome').value=s.nome};
   $('#cfTempo').addEventListener('change',()=>{const d=duracaoDoTempo($('#cfTempo').value);if(d&&!+$('#cfDur').value)setDur('cfDur',d)});
-  if(!novo)$('#cfDel').onclick=()=>confirmar('Excluir este modelo e as fotos dele?',async()=>{for(const f of x.fotos||[])deleteDoc(doc(FS,'catalogoFotos',f)).catch(()=>{});await del('catalogo',id);toast('Modelo excluído')});
+  if(!novo)$('#cfDel').onclick=()=>confirmar('Excluir este modelo e as fotos dele?',async()=>{for(const f of [...(x.fotos||[]),...(x.antesDepois||[]).flatMap(p=>[p.a,p.d])].filter(Boolean))deleteDoc(doc(FS,'catalogoFotos',f)).catch(()=>{});await del('catalogo',id);toast('Modelo excluído')});
   $('#fCat').onsubmit=async e=>{e.preventDefault();const bt=$('#fCat button[type=submit]');bt.disabled=true;
     let link=$('#cfLink').value.trim();if(link&&!/^https?:\/\//i.test(link))link='https://'+link;
     if(link&&!/^https:\/\//i.test(link)){toast('Use um link que comece com https://','erro');bt.disabled=false;return}
     try{const ids=[];for(const f of fotos){if(f.id){ids.push(f.id);continue}const fid=uid();await setDoc(doc(FS,'catalogoFotos',fid),{itemId:id,data:f.data,criadoEm:nowIso()});FOTOS.set(fid,f.data);ids.push(fid)}
+      const completos=pares.filter(p=>p.a&&p.d);if(completos.length&&!$('#cfADok').checked){toast('Confirme que as clientes autorizaram o uso das fotos de antes e depois.','erro');bt.disabled=false;return}
+      const antesDepois=[];for(const p of completos){const par={};for(const k of ['a','d']){const f=p[k];if(f.id){par[k]=f.id;continue}const fid=uid();await setDoc(doc(FS,'catalogoFotos',fid),{itemId:id,data:f.data,criadoEm:nowIso()});FOTOS.set(fid,f.data);f.id=fid;par[k]=fid}antesDepois.push(par)}
+      pares.filter(p=>!(p.a&&p.d)).forEach(p=>[p.a,p.d].forEach(f=>{if(f&&f.id)removidas.push(f.id)}));
       removidas.forEach(f=>deleteDoc(doc(FS,'catalogoFotos',f)).catch(()=>{}));
       const nomeM=$('#cfNome').value.trim();if(!nomeM){toast('Informe o nome do serviço.','erro');bt.disabled=false;return}
       const sidM=await servicoDoModelo({...x,id},{nome:nomeM,preco:+$('#cfPreco').value||0,duracao:+$('#cfDur').value||duracaoDoTempo($('#cfTempo').value),servicoId:$('#cfServ').value});
-      await save('catalogo',id,{...x,nome:nomeM,tempo:$('#cfTempo').value.trim(),categoria:$('#cfCat').value.trim(),servicoId:sidM,descricao:$('#cfDesc').value.trim(),cuidados:$('#cfCuid').value.trim(),manutSem:+$('#cfManut').value||0,preco:+$('#cfPreco').value||0,mostrarPreco:$('#cfMostra').checked,botao:$('#cfBotao').value.trim()||'Quero este modelo',link,ativo:$('#cfAtivo').checked,fotos:ids});
+      await save('catalogo',id,{...x,nome:nomeM,tempo:$('#cfTempo').value.trim(),categoria:$('#cfCat').value.trim(),servicoId:sidM,descricao:$('#cfDesc').value.trim(),cuidados:$('#cfCuid').value.trim(),manutSem:+$('#cfManut').value||0,preco:+$('#cfPreco').value||0,mostrarPreco:$('#cfMostra').checked,botao:$('#cfBotao').value.trim()||'Quero este modelo',link,ativo:$('#cfAtivo').checked,fotos:ids,antesDepois});
       salvarVitrine();closeSheet();toast('Modelo salvo')}catch(err){bt.disabled=false;dbErr(err)}};
 }
 
@@ -1893,11 +1965,12 @@ function portalSnapshot(c,P,pb){const f=fidelidade(c);const nv=NIVEIS[f.nivel];c
     ultimos,avaliaveis,cuidados,indicacao,contratos:contratos.slice(0,12),pacotes,anamnese:{perguntas:ANAM_Q.map(([k,q])=>({k,q})),termo:termoAnamnese(),em:c.anamneseEm||''},
     regras:{prazoCancel:+P.campos.prazoCancel||48,tolerancia:+P.campos.tolerancia||0,sinalCancel:String(P.campos.sinalCancel||''),falta:String(P.campos.falta||''),preparo:String(P.campos.preparo||'')},
     atelie:{nome:pb.nome,responsavel:pb.responsavel,whatsapp:pb.whatsapp||'',instagram:pb.instagram||'',endereco:pb.endereco||'',municipio:pb.municipio||''}};
-  const prazo=(+P.campos.prazoCancel||48)*3600e3;const pend=new Set(arr('solicitacoes').filter(q=>!q.processado).map(q=>q.agendaId));const prox={};
+  const prazo=(+P.campos.prazoCancel||48)*3600e3;const pend=new Set(arr('solicitacoes').filter(q=>!q.processado&&(q.tipo||'cancelamento')==='cancelamento').map(q=>q.agendaId));const prox={};
   (agPorCli().get(c.id)||[]).filter(a=>a.data>=t&&(a.status==='agendado'||a.status==='confirmado'||(a.status==='cancelado'&&a.canceladoPor==='cliente'))).forEach(a=>{
     const [y,m,d]=a.data.split('-').map(Number);const [hh,mm]=String(a.hora||'00:00').split(':').map(Number);const ini=new Date(y,m-1,d,hh||0,mm||0).getTime();
     const sinal=soma((a.pagamentos||[]).filter(p=>p.tipo==='sinal'));
     const o={data:a.data,hora:a.hora||'',servico:nomeAg(a),duracao:+a.duracao||0,status:a.status,pacote:!!a.pacoteId,sinal,limiteMs:ini-prazo};
+    const pix=a.status==='cancelado'?'':pixDoSinal(a);o.pix=pix;o.sinalFalta=pix?Math.round(sinalFalta(a)*100)/100:0;
     if(a.status==='cancelado')o.cancelado=true;else if(!pend.has(a.id))o.cancelado=false;
     prox[a.id]=o});
   return {main,prox}}
@@ -1920,10 +1993,20 @@ async function registrarContratos(){for(const l of arr('contratosLink').filter(x
   await save('aceites','link-'+l.id,{tipo:'servico',clienteId:l.clienteId,agendaId:l.agendaId||'',versao:l.versao||0,texto:l.texto||'',hash:l.hash||'',nomeAssinante:ac.nome||l.nome,cpf:ac.cpf||'',meio:ac.meio==='assinatura'?'Assinatura pelo link':'Aceite pelo link ("Li e concordo")',aceitoEm:new Date(em).toISOString(),registradoPor:'link',assinatura:ac.assinatura||'',linkToken:l.id,dispositivo:String(ac.dispositivo||'').slice(0,200)},{quiet:true});
   await updateDoc(doc(FS,'contratosLink',l.id),{registrado:true}).catch(()=>{});S.contratosLink.set(l.id,{...l,registrado:true});
   const c=S.clientes.get(l.clienteId);if(c&&!c.cpf&&ac.cpf)await save('clientes',c.id,{...c,cpf:ac.cpf},{quiet:true})}}
-async function processarSolicitacoes(){for(const q of arr('solicitacoes').filter(x=>!x.processado)){const a=S.agenda.get(q.agendaId);const c=a&&S.clientes.get(a.clienteId);let resultado='ignorado';
-  if(a&&c&&c.portalToken===q.token&&(a.status==='agendado'||a.status==='confirmado')){const quando=new Date(toMs(q.criadoEm)||Date.now());
+async function processarSolicitacoes(){for(const q of arr('solicitacoes').filter(x=>!x.processado&&x.tipo!=='horario')){const a=S.agenda.get(q.agendaId);const c=a&&S.clientes.get(a.clienteId);let resultado='ignorado';
+  if(q.tipo==='confirmacao'){if(a&&c&&c.portalToken===q.token&&a.status==='agendado'){await save('agenda',a.id,{...a,status:'confirmado',confirmadoPor:'cliente',confirmadoEm:new Date(toMs(q.criadoEm)||Date.now()).toISOString()},{quiet:true});resultado='confirmado'}}
+  else if(a&&c&&c.portalToken===q.token&&(a.status==='agendado'||a.status==='confirmado')){const quando=new Date(toMs(q.criadoEm)||Date.now());
     await save('agenda',a.id,{...a,status:'cancelado',canceladoPor:'cliente',canceladoEm:quando.toISOString(),obs:[a.obs,`Cancelado pela cliente no espaço dela em ${quando.toLocaleString('pt-BR')}${q.motivo?`. Motivo: ${q.motivo}`:''}`].filter(Boolean).join(' · ')},{quiet:true});resultado='cancelado'}
   await updateDoc(doc(FS,'solicitacoes',q.id),{processado:true,resultado,processadoEm:nowIso()}).catch(()=>{});S.solicitacoes.set(q.id,{...q,processado:true,resultado})}}
+/* Horários livres das próximas 3 semanas (a partir de amanhã), publicados para o catálogo e o espaço da cliente (vitrine/horarios).
+   Só as janelas livres de cada dia e a duração de cada modelo; nada sobre quem está marcado. Grava só quando muda. */
+function horariosPublicos(){const pb=pub();if(pb.horariosOnline===false)return {ligado:false};const t=today();const dias=[];
+  for(let i=1;i<=21;i++){const d=addDays(t,i);const l=livresDia(d,30);if(l.length)dias.push({d,livres:l.map(([i,f])=>({i,f}))})}
+  const servicos=catOrdenado().filter(x=>x.ativo!==false).map(x=>({id:x.id,sid:x.servicoId||'',nome:String(x.nome||'').slice(0,80),dur:+S.servicos.get(x.servicoId)?.duracao||duracaoDoTempo(x.tempo)||120}));
+  return {ligado:true,dias,servicos}}
+async function publicarHorarios(){if(!pode('base')||!['agenda','servicos','catalogo','publico'].every(c=>loaded.has(c)))return;
+  const h=horariosPublicos();const k=hashStr(JSON.stringify(h));let ant='';try{ant=localStorage.getItem('smt-hor')||''}catch(e){}
+  if(ant===k)return;await setDoc(doc(FS,'vitrine','horarios'),{...h,atualizadoEm:nowIso()});try{localStorage.setItem('smt-hor',k)}catch(e){}}
 let procT=0,processando=false;
 function agendaProcessar(){clearTimeout(procT);procT=setTimeout(processar,1500)}
 async function processar(){if(processando||!FS||!pode('portal')||[...NEED].some(c=>!loaded.has(c))||navigator.onLine===false)return;processando=true;
@@ -1931,6 +2014,7 @@ async function processar(){if(processando||!FS||!pode('portal')||[...NEED].some(
   try{await processarSolicitacoes()}catch(e){console.error(e)}
   try{await processarAnamnesesPortal()}catch(e){console.error('anamnese',e)}
   try{await sincronizarPortais()}catch(e){console.error('portal',e)}
+  try{await publicarHorarios()}catch(e){console.error('horarios',e)}
   if(isOwner()&&!processar.vit){processar.vit=true;salvarVitrine();try{await sincronizarCatalogo()}catch(e){console.error('catalogo',e)}}
   processando=false}
 let VEZ=0;const AVP={vez:-1,html:''};
@@ -1941,10 +2025,15 @@ function avisosPortal2(){if(!pode('portal'))return '';const lim=Date.now()-14*86
   const ans=pode('anamnese')?arr('anamnesePortal').filter(x=>x.processado&&x.resultado==='importado'&&!x.visto).map(x=>{const c=S.clientes.get(x.clienteId);const al=anamAlertas(anamDe(x.clienteId));
     return `<div class="item"><div class="avatar" style="--lv:${al.length?'var(--lv-bronze)':'var(--lv-nova)'}">${ic('shield')}</div><div class="grow"><div class="t" style="white-space:normal">${esc(primeiro(c?.nome||'Cliente'))} preencheu a ficha de anamnese</div><div class="s" style="white-space:normal">${al.length?`atenção: ${esc(al.map(z=>z.k).join(', '))}`:'nenhum ponto de atenção marcado'} · consentimento registrado</div></div><button class="btn sm soft" data-act="anamnese" data-id="${x.clienteId}">Ver ficha</button><button class="btn sm ghost" data-act="avisoVisto" data-k="anam" data-id="${x.id}">Ok</button></div>`}):[];
   cads.push(...ans);if(pode('base'))cads.push(...avisosAvaliacao(),...avisosIndicacao());
+  const ped=arr('solicitacoes').filter(q=>q.tipo==='horario'&&!q.processado&&q.pedido).sort((a,b)=>toMs(a.criadoEm)-toMs(b.criadoEm)).map(q=>{const c=arr('clientes').find(x=>x.portalToken===q.token);const p=q.pedido;
+    const ocupado=arr('agenda').some(x=>x.data===p.data&&x.status!=='cancelado'&&x.status!=='faltou'&&hm2min(x.hora)<hm2min(p.hora)+(+p.duracao||120)&&hm2min(p.hora)<hm2min(x.hora)+(+x.duracao||120));
+    const w=c?waLink(c.telefone,`Oi, ${primeiro(c.nome)}! 💕 Vi seu pedido de ${p.servico} ${dataLonga(p.data)} às ${p.hora}. `):null;
+    return `<div class="item wrap"><div class="avatar" style="--lv:var(--lv-ouro)">${ic('cal')}</div><div class="grow"><div class="t" style="white-space:normal">${esc(primeiro(c?.nome||'Uma cliente'))} pediu um horário</div><div class="s" style="white-space:normal">${esc(p.servico)} · ${dataCurta(p.data)} às ${esc(p.hora)}${ocupado?' · <b>esse horário já foi ocupado</b>':''}${q.motivo?` · "${esc(q.motivo)}"`:''}</div></div><div class="item-acoes">${c?`<button class="btn sm primary" data-act="pedidoMarcar" data-id="${q.id}">${ic('check')}Marcar</button>`:''}${w?`<a class="btn sm soft" href="${w}" target="_blank" rel="noopener">${ic('chat')}Responder</a>`:''}<button class="btn sm ghost" data-act="pedidoRecusar" data-id="${q.id}">Dispensar</button></div></div>`});
+  cads.unshift(...ped);
   if(!canc.length&&!acc.length&&!cads.length)return '';
   const rows=[...canc.map(q=>{const a=S.agenda.get(q.agendaId);const sinal=a?soma((a.pagamentos||[]).filter(p=>p.tipo==='sinal')):0;
       return `<div class="item"><div class="avatar" style="--lv:var(--lv-bronze)">${ic('x')}</div><div class="grow"><div class="t" style="white-space:normal">${esc(primeiro(nomeCli(a?.clienteId)))} cancelou ${a?`${esc(nomeAg(a))} de ${dataCurta(a.data)} às ${esc(a.hora)}`:'um atendimento'}</div><div class="s" style="white-space:normal">pelo espaço da cliente, dentro do prazo${sinal?` · sinal de ${BRL(sinal)}: veja o que a política define para cancelamento no prazo`:''}${q.motivo?` · "${esc(q.motivo)}"`:''}</div></div>${a?`<button class="btn sm soft" data-act="avisoEspera" data-id="${a.id}">${ic('list')}Lista de espera</button>`:''}<button class="btn sm ghost" data-act="avisoVisto" data-k="sol" data-id="${q.id}">Ok</button></div>`}),
-    ...acc.map(l=>{const w=waLink(l.telefone,`Oi, ${primeiro(l.nome)}! Recebi o seu aceite do contrato, obrigada 💕 Segue o link para o pagamento do sinal: `);
+    ...acc.map(l=>{const ag=S.agenda.get(l.agendaId);const cod=ag?pixDoSinal(ag):'';const w=waLink(l.telefone,cod?`Oi, ${primeiro(l.nome)}! Recebi o seu aceite do contrato, obrigada 💕 O sinal é de ${BRL(sinalFalta(ag))}. Copie o código abaixo e cole no app do seu banco, em Pix › Copia e cola:\n\n${cod}`:`Oi, ${primeiro(l.nome)}! Recebi o seu aceite do contrato, obrigada 💕 Segue o link para o pagamento do sinal: `);
       return `<div class="item"><div class="avatar" style="--lv:var(--lv-perola)">${ic('check')}</div><div class="grow"><div class="t" style="white-space:normal">${esc(primeiro(l.nome))} aceitou o contrato</div><div class="s" style="white-space:normal">${esc(l.servico)}${l.data?` · ${dataCurta(l.data)} ${esc(l.hora||'')}`:''} · agora envie o link de pagamento do sinal</div></div>${w?`<a class="btn sm primary" href="${w}" target="_blank" rel="noopener">${ic('chat')}Pagamento</a>`:''}<button class="btn sm ghost" data-act="avisoVisto" data-k="link" data-id="${l.id}">Ok</button></div>`})];
   rows.push(...cads);return `<section class="card aviso-portal"><h3>Novidades das clientes <small>${rows.length}</small></h3><div class="list">${rows.join('')}</div></section>`}
 async function avisoVisto(k,id){const col=k==='sol'?'solicitacoes':k==='anam'?'anamnesePortal':k==='aval'?'avaliacoes':'contratosLink';const x=S[col].get(id);if(x)S[col].set(id,{...x,visto:true});touch(col);updateDoc(doc(FS,col,id),{visto:true}).catch(dbErr)}
@@ -2002,6 +2091,14 @@ function avisosCadastro(){return arr('cadastros').filter(x=>x.status==='enviado'
 /* ================= ações ================= */
 const ACT={
  go:t=>go(t.dataset.v),mais:()=>mais(),close:()=>closeSheet(),
+ pixSinal:t=>pixSinal(t.dataset.id),
+ repassePagar:t=>{const id=t.dataset.id,v=+t.dataset.v,m=UI.finMes;confirmar(`Registrar o pagamento de ${BRL(v)} para ${esc(nomeProf(id))} referente a ${esc(mesNome(m))}?`,async()=>{await save('lancamentos',null,{tipo:'despesa',data:today(),valor:v,categoria:'Repasse a parceira',descricao:`Repasse ${nomeProf(id)} · ${mesNome(m)}`,forma:'Pix',repasseRef:`${id}|${m}`});toast('Pagamento registrado')})},
+ repAdd:()=>{$('#repLista').insertAdjacentHTML('beforeend',repLinha({id:uid(),nome:''},{tipo:'pct',valor:40}))},
+ repRm:t=>t.closest('.rep-linha').remove(),
+ pedidoMarcar:t=>{const q=S.solicitacoes.get(t.dataset.id);if(!q||!q.pedido)return;const c=arr('clientes').find(x=>x.portalToken===q.token);const p=q.pedido;
+   const sid=S.servicos.has(p.servicoId)?p.servicoId:(arr('servicos').find(x=>normNome(x.nome)===normNome(p.servico))||{}).id||'';
+   formAgenda(null,{d:p.data,h:p.hora,c:c?.id||'',s:sid,obs:['Pedido pelo espaço da cliente',q.motivo].filter(Boolean).join(': '),pedido:q.id})},
+ pedidoRecusar:t=>confirmar('Dispensar este pedido de horário? Lembre de avisar a cliente pelo WhatsApp.',async()=>{const id=t.dataset.id;const q=S.solicitacoes.get(id);if(q)S.solicitacoes.set(id,{...q,processado:true,resultado:'recusado'});touch('solicitacoes');await updateDoc(doc(FS,'solicitacoes',id),{processado:true,resultado:'recusado',processadoEm:nowIso()}).catch(dbErr)}),pixCopiar:t=>copiar(t.dataset.pix,'Código Pix copiado'),pixTeste:()=>{const c=pixCodigo(1,'TESTE');if(c)copiar(c,'Código de R$ 1,00 copiado. Cole no app do banco para testar.')},
  seed:t=>seed(t.dataset.ex==='1'),
  avLigar:()=>avLigar(),avDesligar:()=>avDesligar(),avTestar:()=>avTestar(),
  errosApagar:()=>confirmar('Apagar todos os registros de erros?',async()=>{const ids=arr('erros').map(x=>x.id);await pool(ids.map(id=>()=>del('erros',id)),8);toast('Registros apagados')}),
@@ -2106,9 +2203,11 @@ document.addEventListener('submit',async e=>{
     return}
   if(e.target.id==='fAvChave'){e.preventDefault();const v=$('#avChave').value.trim();if(v&&!/^B[A-Za-z0-9_-]{60,}$/.test(v)){toast('A chave parece incompleta. Ela começa com B e é bem longa.','erro');return}await save('publico','avisos',{vapid:v});toast('Chave salva');return}
   if(e.target.id==='fCfg'){e.preventDefault();const v=i=>$('#'+i).value.trim();
-    await save('publico','config',{...pub(),nome:v('gNome')||DEF_PUB.nome,responsavel:v('gResp'),cnpj:v('gCnpj'),endereco:v('gEnd'),municipio:v('gMun'),whatsapp:v('gWa'),instagram:v('gIg'),descAniv:+v('gAniv')||0,indBenef:v('gIndB'),indBenefNova:v('gIndN'),started:true});
+    await save('publico','config',{...pub(),nome:v('gNome')||DEF_PUB.nome,responsavel:v('gResp'),cnpj:v('gCnpj'),endereco:v('gEnd'),municipio:v('gMun'),whatsapp:v('gWa'),instagram:v('gIg'),descAniv:+v('gAniv')||0,indBenef:v('gIndB'),indBenefNova:v('gIndN'),pixTipo:v('gPixT'),pixChave:v('gPix'),pixNome:v('gPixN'),pixCidade:v('gPixC'),horariosOnline:$('#gHorOn').checked,started:true});
     salvarVitrine();
     await save('privado','config',{...priv(),inicioMei:v('gIni'),limite:+v('gLim')||81000,das:+v('gDas')||DEF_PRIV.das,meta:+v('gMeta')||0,taxaDebito:+v('gTd')||0,taxaCredito:+v('gTc')||0,taxaParcelado:+v('gTp')||0});toast('Ajustes salvos')}
+  else if(e.target.id==='fRep'){e.preventDefault();const L=$$('#repLista .rep-linha').map(el=>({id:el.dataset.id,nome:$('[data-k=nome]',el).value.trim(),tipo:$('[data-k=tipo]',el).value,valor:+$('[data-k=valor]',el).value||0})).filter(x=>x.nome);
+    await save('publico','config',{...pub(),profissionais:L.map(x=>({id:x.id,nome:x.nome}))});const rp={};L.forEach(x=>rp[x.id]={tipo:x.tipo,valor:x.valor});await save('privado','config',{...priv(),repasse:rp});toast('Parceiras salvas')}
   else if(e.target.id==='fHor'){e.preventDefault();const sm=[];let erro='';
     $$('#fHor .hr-row').forEach(r=>{const i=+r.dataset.d;const g=k=>r.querySelector(`[data-k="${k}"]`).value;const on=r.querySelector('[data-hdia]').getAttribute('aria-pressed')==='true';
       const x={on,ini:g('ini')||'08:00',fim:g('fim')||'18:00',pIni:g('pIni'),pFim:g('pFim')};

@@ -31,7 +31,8 @@ const agenda = (await db.collection('agenda').where('data', '>=', addDays(hoje, 
 // Novidades das clientes pelo link nas últimas 48 horas
 const desde = Date.now() - 48 * 3600e3, tsDesde = F.Timestamp.fromMillis(desde);
 const novidades = [];
-(await db.collection('solicitacoes').where('criadoEm', '>=', tsDesde).get()).forEach(x => novidades.push({ id: 'sol:' + x.id, tipo: 'cancelamento' }));
+// Confirmação de presença não vira aviso (o horário só passa a "confirmado"); pedido de horário sim.
+(await db.collection('solicitacoes').where('criadoEm', '>=', tsDesde).get()).forEach(x => { const t = x.data().tipo || 'cancelamento'; if (t !== 'confirmacao') novidades.push({ id: 'sol:' + x.id, tipo: t === 'horario' ? 'horario' : 'cancelamento' }); });
 (await db.collection('contratosLink').where('status', '==', 'aceito').get()).forEach(x => { if (ms(x.data().aceite && x.data().aceite.em) >= desde) novidades.push({ id: 'ctr:' + x.id, tipo: 'contrato' }); });
 (await db.collection('cadastros').where('status', '==', 'enviado').get()).forEach(x => { if (ms(x.data().enviadoEm) >= desde) novidades.push({ id: 'cad:' + x.id, tipo: 'cadastro' }); });
 (await db.collection('anamnesePortal').where('em', '>=', tsDesde).get()).forEach(x => novidades.push({ id: 'ana:' + x.id + ':' + ms(x.data().em), tipo: 'anamnese' }));

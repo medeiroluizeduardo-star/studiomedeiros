@@ -64,3 +64,9 @@ test('quem desligou um tipo não recebe aquele tipo', () => {
   assert.equal(r.msgs.length, 0);
   assert.ok(r.marcar.includes('amanha|2026-11-10'));
 });
+
+test('pedido de horário pelo espaço da cliente entra nas novidades', () => {
+  const r = planejar({ pessoas: [dona], novidades: [{ id: 'sol:9', tipo: 'horario' }], agora: em(10, 10) });
+  const m = r.msgs.find(x => x.tag === 'novidades');
+  assert.ok(m && /1 pedido de horário/.test(m.corpo));
+});

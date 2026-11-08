@@ -9,3 +9,7 @@ export const firebaseConfig = {
   appId: "1:186922539237:web:666c80cbcd1cd17edddc0c",
   measurementId: "G-VZGHN230ZX"
 };
+
+// App Check (proteção extra): chave do site do reCAPTCHA v3, criada no console do Firebase em App Check.
+// Esta chave também não é secreta. Vazia = App Check desligado.
+export const appCheckChave = '';

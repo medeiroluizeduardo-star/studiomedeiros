@@ -116,6 +116,13 @@ service cloud.firestore {
       allow delete: if dona();
     }
     match /vitrine/{id} { allow read: if true; allow write: if dona(); }
+    // Horários livres: quem atende atualiza ao mexer na agenda. Só janelas de horário e modelos, sem dados de clientes.
+    match /vitrine/horarios {
+      allow read: if true;
+      allow write: if atendimento() && request.resource.data.keys().hasOnly(['ligado', 'dias', 'servicos', 'atualizadoEm'])
+        && request.resource.data.get('dias', []) is list && request.resource.data.get('dias', []).size() <= 31
+        && request.resource.data.get('servicos', []) is list && request.resource.data.get('servicos', []).size() <= 80;
+    }
 
     // ===== Contrato por link =====
     // Quem tem o link lê o contrato. A cliente só pode aceitar uma vez, dentro da validade,
@@ -163,16 +170,37 @@ service cloud.firestore {
     }
 
     // Pedidos de cancelamento feitos pela cliente, conferidos contra o prazo no servidor.
+    // Também: confirmação de presença (qualquer hora antes de cancelar) e pedido de horário livre (só quem tem o link do espaço).
+    function solBase(d) {
+      return d.criadoEm == request.time
+        && d.token is string && d.token.size() <= 64
+        && d.agendaId is string && d.agendaId.size() <= 64
+        && d.motivo is string && d.motivo.size() <= 300;
+    }
+    function proxDe(d) { return /databases/$(database)/documents/portal/$(d.token)/proximos/$(d.agendaId); }
     match /solicitacoes/{id} {
-      allow create: if request.resource.data.keys().hasOnly(['token', 'agendaId', 'tipo', 'criadoEm', 'motivo'])
-        && request.resource.data.tipo == 'cancelamento'
-        && request.resource.data.criadoEm == request.time
-        && request.resource.data.token is string && request.resource.data.token.size() <= 64
-        && request.resource.data.agendaId is string && request.resource.data.agendaId.size() <= 64
-        && request.resource.data.motivo is string && request.resource.data.motivo.size() <= 300
-        && exists(/databases/$(database)/documents/portal/$(request.resource.data.token)/proximos/$(request.resource.data.agendaId))
-        && get(/databases/$(database)/documents/portal/$(request.resource.data.token)/proximos/$(request.resource.data.agendaId)).data.cancelado == false
-        && request.time < get(/databases/$(database)/documents/portal/$(request.resource.data.token)/proximos/$(request.resource.data.agendaId)).data.limiteCancelamento;
+      allow create: if solBase(request.resource.data) && (
+        (request.resource.data.keys().hasOnly(['token', 'agendaId', 'tipo', 'criadoEm', 'motivo'])
+          && request.resource.data.tipo == 'cancelamento'
+          && exists(proxDe(request.resource.data))
+          && get(proxDe(request.resource.data)).data.cancelado == false
+          && request.time < get(proxDe(request.resource.data)).data.limiteCancelamento)
+        || (request.resource.data.keys().hasOnly(['token', 'agendaId', 'tipo', 'criadoEm', 'motivo'])
+          && request.resource.data.tipo == 'confirmacao'
+          && exists(proxDe(request.resource.data))
+          && get(proxDe(request.resource.data)).data.cancelado == false)
+        || (request.resource.data.keys().hasOnly(['token', 'agendaId', 'tipo', 'criadoEm', 'motivo', 'pedido'])
+          && request.resource.data.tipo == 'horario'
+          && request.resource.data.agendaId == ''
+          && exists(/databases/$(database)/documents/portal/$(request.resource.data.token))
+          && request.resource.data.pedido is map
+          && request.resource.data.pedido.keys().hasOnly(['data', 'hora', 'servico', 'servicoId', 'duracao'])
+          && request.resource.data.pedido.data is string && request.resource.data.pedido.data.size() == 10
+          && request.resource.data.pedido.hora is string && request.resource.data.pedido.hora.size() == 5
+          && request.resource.data.pedido.servico is string && request.resource.data.pedido.servico.size() <= 80
+          && txt(request.resource.data.pedido, 'servicoId', 64)
+          && request.resource.data.pedido.duracao is int && request.resource.data.pedido.duracao <= 1440)
+      );
       allow read, update: if atendimento();
       allow delete: if dona();
     }

@@ -3,7 +3,7 @@
 // Os avisos não mostram nomes de clientes na tela bloqueada do celular.
 //
 // Tipos (cada pessoa liga ou desliga cada um no sistema, em Ajustes › Avisos no celular):
-//   novidades  de hora em hora: cancelamento, contrato aceito, cadastro, ficha de anamnese ou avaliação pelo link
+//   novidades  de hora em hora: pedido de horário, cancelamento, contrato aceito, cadastro, ficha de anamnese ou avaliação pelo link
 //   concluir   às 20h: atendimentos de hoje que já terminaram e não foram concluídos
 //   amanha     às 19h: atendimentos de amanhã e quantos ainda não confirmaram
 //   contas     às 8h (proprietária e contador): contas que vencem hoje ou estão vencidas, DAS perto do dia 20
@@ -43,7 +43,7 @@ export function ocorrencias(contas, ate, hoje) {
 /**
  * @param p.pessoas   [{ uid, papel, tokens, prefs }]  quem ligou os avisos (prefs: { tipo: false } desliga)
  * @param p.agenda    atendimentos (data, hora, duracao, status)
- * @param p.novidades [{ id, tipo }] itens novos vindos das clientes pelo link (cancelamento, contrato, cadastro, anamnese, avaliacao)
+ * @param p.novidades [{ id, tipo }] itens novos vindos das clientes pelo link (horario, cancelamento, contrato, cadastro, anamnese, avaliacao)
  * @param p.contas, p.privado  para contas e DAS
  * @param p.enviados  { chave: 'AAAA-MM-DD' } o que já foi enviado
  * @param p.agora     Date (horário de Brasília)
@@ -61,6 +61,7 @@ export function planejar({ pessoas, agenda = [], novidades = [], contas = [], pr
   if (novas.length) {
     const cont = {}; novas.forEach(n => { cont[n.tipo] = (cont[n.tipo] || 0) + 1; });
     const partes = [
+      cont.horario && plural(cont.horario, 'pedido de horário', 'pedidos de horário'),
       cont.cancelamento && plural(cont.cancelamento, 'cancelamento', 'cancelamentos'),
       cont.contrato && plural(cont.contrato, 'contrato aceito', 'contratos aceitos'),
       cont.cadastro && plural(cont.cadastro, 'cadastro novo', 'cadastros novos'),
