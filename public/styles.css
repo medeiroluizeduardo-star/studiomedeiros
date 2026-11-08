@@ -1,4 +1,9 @@
 
+/* Letras guardadas no próprio site (antes vinham do Google): abrem mais rápido e também sem internet. Licença OFL. */
+@font-face{font-family:"Cormorant Garamond";font-style:normal;font-weight:500 600;font-display:swap;src:url(fontes/cormorant.woff2) format("woff2")}
+@font-face{font-family:"Cormorant Garamond";font-style:italic;font-weight:500 600;font-display:swap;src:url(fontes/cormorant-italico.woff2) format("woff2")}
+@font-face{font-family:"Figtree";font-style:normal;font-weight:400 700;font-display:swap;src:url(fontes/figtree.woff2) format("woff2")}
+
 /* Layout: casca de app — barra lateral no PC, barra de abas inferior no celular; conteúdo em cartões rosados suaves */
 :root{
   --bg:#F8EFE6; --surface:#FFFBF7; --surface-2:#F4E6D9; --line:#EAD8C7;

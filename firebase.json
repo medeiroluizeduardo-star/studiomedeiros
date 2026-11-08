@@ -11,7 +11,7 @@
     ],
     "headers": [
       {
-        "source": "**/*.@(webp|png)",
+        "source": "**/*.@(webp|png|woff2)",
         "headers": [
           {
             "key": "Cache-Control",

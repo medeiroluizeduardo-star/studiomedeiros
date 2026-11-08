@@ -13,9 +13,11 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Stéfany Trancista">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500;1,600&family=Figtree:wght@400;500;600;700&display=swap">
+<link rel="preload" href="fontes/figtree.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fontes/cormorant.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="modulepreload" href="fb.js">
+<link rel="modulepreload" href="firebase-config.js">
+<script>/* Firebase pedido já no começo (fora do modo demonstração). A versão tem que ser a mesma de fb.js. */try{var q=new URLSearchParams(location.search),d=/--[a-z0-9-]+\.(web\.app|firebaseapp\.com)$/i.test(location.hostname)||(q.has('demo')?q.get('demo')!=='0':sessionStorage.getItem('smt-demo')==='1');if(!d)['app','auth','firestore'].forEach(function(m){var l=document.createElement('link');l.rel='modulepreload';l.href='https://www.gstatic.com/firebasejs/10.12.2/firebase-'+m+'.js';document.head.appendChild(l)})}catch(e){}</script>
 <link rel="stylesheet" href="styles.css">
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 <script>try{var t=localStorage.getItem('smt-tema');if(t==='claro')document.documentElement.setAttribute('data-theme','light');else if(t==='escuro')document.documentElement.setAttribute('data-theme','dark')}catch(e){}</script>

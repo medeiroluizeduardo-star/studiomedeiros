@@ -1,7 +1,7 @@
 // Ponto único de acesso ao Firebase.
 // No modo demonstração (endereço com ?demo, ou a prévia de uma proposta) usa um banco de mentira,
 // guardado só neste navegador, com clientes fictícias. Nada é lido nem gravado nos dados reais.
-const V = '10.12.2';
+const V = '10.12.2'; // se mudar, mude também em index.html (pedido antecipado do Firebase)
 const BASE = `https://www.gstatic.com/firebasejs/${V}`;
 
 function detectarDemo() {
@@ -24,9 +24,12 @@ if (DEMO) {
   const m = await import('./demo/firebase-demo.js');
   app = m; auth = m; fs = m;
 } else {
+  // As páginas abertas às clientes (catálogo, espaço da cliente, contrato, cadastro) não usam login:
+  // não baixam a parte de login do Firebase, e abrem mais rápido no celular delas.
+  const publica = /^\/(catalogo|cliente|contrato|cadastro)(\.html)?$/.test(location.pathname);
   [app, auth, fs] = await Promise.all([
     import(`${BASE}/firebase-app.js`),
-    import(`${BASE}/firebase-auth.js`),
+    publica ? {} : import(`${BASE}/firebase-auth.js`),
     import(`${BASE}/firebase-firestore.js`)
   ]);
 }
