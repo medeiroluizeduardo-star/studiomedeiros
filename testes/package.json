@@ -4,7 +4,7 @@
   "type": "module",
   "description": "Testes automáticos: regras de segurança do Firestore (emulador do Firebase) e as telas do site no modo demonstração (navegador Chromium)",
   "scripts": {
-    "test": "node --test --test-concurrency=1 --test-reporter=spec --test-reporter-destination=stdout --test-reporter=tap --test-reporter-destination=resultado.tap regras.test.mjs rotinas.test.mjs",
+    "test": "node --test --test-concurrency=1 --test-reporter=spec --test-reporter-destination=stdout --test-reporter=tap --test-reporter-destination=resultado.tap regras.test.mjs rotinas.test.mjs avisos.test.mjs",
     "regras": "firebase emulators:exec --only firestore --project demo-stefany --config ../firebase.json \"npm test\"",
     "telas": "node --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=tap --test-reporter-destination=resultado.tap telas.test.mjs"
   },

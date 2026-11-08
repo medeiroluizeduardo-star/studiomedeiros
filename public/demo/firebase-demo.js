@@ -193,3 +193,11 @@ export async function signOut() {
   avisarLogin();
 }
 export async function sendPasswordResetEmail() { }
+
+// Avisos no celular: no modo demonstração não liga de verdade (não há servidor para mandar).
+export const mensagensDemo = {
+  getMessaging: () => ({}),
+  getToken: async () => { throw new Error('No modo demonstração os avisos não são ligados de verdade. Use "Testar neste aparelho" para ver como ficam.'); },
+  deleteToken: async () => true,
+  suportado: async () => 'Notification' in self && 'serviceWorker' in navigator
+};

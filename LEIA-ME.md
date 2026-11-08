@@ -164,6 +164,25 @@ O plano gratuito do Firebase (**Spark**) costuma atender com folga um ateliê co
 
 No topo do Início, o quadro **Agora** junta o que precisa ser resolvido, do mais urgente para o menos, cada item com o botão que resolve: atendimentos de hoje que já terminaram e não foram concluídos, DAS ou contas vencidas, clientes de hoje que ainda não confirmaram, horários de amanhã sem confirmação, pedidos de acesso, novidades das clientes, DAS e contas perto do vencimento, estoque baixo, clientes para reativar e a política da empresa. Aparecem até 3; o resto fica em **Mais**. Quando não há nada, aparece "Tudo em dia".
 
+## Avisos no celular
+
+Uma rotina do GitHub (**Avisos no celular**, `.github/workflows/avisos.yml`) roda de hora em hora, das 7h às 22h, e manda avisos para quem ligou no próprio aparelho. Cada pessoa recebe só o que é do perfil dela, sem nomes de clientes na tela bloqueada:
+- **Novidades das clientes pelo link** (toda hora): cancelamento, contrato aceito, cadastro, ficha de anamnese ou avaliação. Para a proprietária, parceira e recepção.
+- **Contas e DAS a pagar** (8h): contas que vencem hoje ou estão vencidas e o DAS perto do dia 20. Para a proprietária e o contador.
+- **Agenda de amanhã** (19h): quantos atendimentos, o primeiro horário e quantas clientes não confirmaram.
+- **Atendimentos de hoje sem concluir** (20h).
+- **Resumo da semana** (segunda, 8h): só para a proprietária.
+- Tocar no aviso abre a tela certa.
+
+**Ligar (uma vez só, proprietária)**
+1. Firebase › ⚙ Configurações do projeto › **Cloud Messaging** › Configuração da Web › **Certificados push da Web** › **Gerar par de chaves**. Copie a chave (começa com B…).
+2. No sistema: **Ajustes › Conta e dados › Avisos no celular**, cole a chave e toque em **Salvar chave**. É uma chave pública.
+3. No [IAM do Google Cloud](https://console.cloud.google.com/iam-admin/iam?project=stefany-medeiros-trancista), a conta de serviço do GitHub precisa dos papéis **Usuário do Cloud Datastore** (o mesmo da cópia de segurança) e **Administrador da API Firebase Cloud Messaging**.
+
+**Cada pessoa, no próprio celular:** Ajustes › **Ligar avisos neste aparelho** e permitir as notificações. Dá para escolher quais avisos receber. Android (Chrome) funciona direto; no iPhone, primeiro **Compartilhar › Adicionar à Tela de Início** e abrir o sistema por esse ícone (iOS 16.4 ou mais novo). **Testar neste aparelho** mostra um aviso na hora.
+
+**Testar a rotina:** GitHub › Actions › **Avisos no celular** › Run workflow com **Só testar** marcado: o registro mostra o que seria enviado, sem enviar.
+
 ## Erros nos aparelhos
 
 Quando uma tela falha no celular ou no computador de alguém da equipe, o sistema anota o erro, a tela e o tipo de aparelho (coleção `erros`). No máximo 5 registros por vez que a pessoa abre o sistema, sem nada do que foi digitado. Só a proprietária vê e apaga: **Ajustes › Conta e dados › Erros nos aparelhos**. Basta mandar um print dessa lista para corrigir.
@@ -185,8 +204,8 @@ stefany-trancista/
     ├── demo/              banco de mentira do modo demonstração
     ├── manifest.webmanifest, sw.js, ícones  (instalação no celular)
 testes/                    testes automáticos (regras do banco, rotinas e telas)
-integracao/admin/          cópia de segurança e restauração (rodam no GitHub)
-.github/workflows/         publicar, prévia, testes, cópia de segurança e restaurar
+integracao/admin/          cópia de segurança, restauração e avisos no celular (rodam no GitHub)
+.github/workflows/         publicar, prévia, testes, cópia de segurança, restaurar e avisos
 ```
 
 ## Problemas comuns

@@ -248,6 +248,16 @@ service cloud.firestore {
       allow delete: if dona();
     }
 
+    // ===== Avisos no celular =====
+    // Cada pessoa da equipe liga os avisos no próprio aparelho: guarda só os próprios tokens e preferências.
+    // A rotina do GitHub lê e envia com a chave de serviço. O estado da rotina só a proprietária lê.
+    match /avisos/{uid} {
+      allow read, write: if (dona() || eh('parceira') || eh('recepcao') || eh('contador'))
+        && request.auth.uid == uid;
+      allow delete: if dona();
+    }
+    match /avisosEstado/{id} { allow read: if dona(); }
+
     // ===== Erros nos aparelhos (app.js, "erros nos aparelhos") =====
     // Cada pessoa da equipe grava só os próprios, com campos curtos. Só a proprietária lê e apaga.
     match /erros/{id} {

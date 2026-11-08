@@ -152,3 +152,15 @@ test('erros nos aparelhos: equipe grava só os próprios; só a proprietária l�
   await assertSucceeds(getDoc(doc(db(DONA), 'erros/e1')));
   await assertSucceeds(deleteDoc(doc(db(DONA), 'erros/e1')));
 });
+
+test('avisos no celular: cada pessoa da equipe mexe só nos próprios; estado da rotina só a proprietária lê', async () => {
+  await assertSucceeds(setDoc(doc(db(RECEPCAO), 'avisos', RECEPCAO), { tokens: ['t'], prefs: { amanha: false } }));
+  await assertSucceeds(getDoc(doc(db(RECEPCAO), 'avisos', RECEPCAO)));
+  await assertFails(setDoc(doc(db(RECEPCAO), 'avisos', PARCEIRA), { tokens: ['t'] }));
+  await assertFails(getDoc(doc(db(PARCEIRA), 'avisos', RECEPCAO)));
+  await assertFails(setDoc(doc(db(ESTRANHA), 'avisos', ESTRANHA), { tokens: ['t'] }));
+  await assertFails(setDoc(doc(db(INATIVA), 'avisos', INATIVA), { tokens: ['t'] }));
+  await assertSucceeds(getDoc(doc(db(DONA), 'avisosEstado/estado')));
+  await assertFails(getDoc(doc(db(RECEPCAO), 'avisosEstado/estado')));
+  await assertFails(setDoc(doc(db(DONA), 'avisosEstado/estado'), { enviados: {} }));
+});
