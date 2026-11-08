@@ -1,0 +1,8 @@
+{
+  "name": "stefany-admin",
+  "private": true,
+  "type": "module",
+  "description": "Rotinas de administração do sistema da Stéfany (rodam no GitHub Actions): cópia de segurança e restauração",
+  "engines": { "node": ">=20" },
+  "dependencies": { "firebase-admin": "^12.7.0" }
+}

@@ -1,0 +1,75 @@
+name: Restaurar cópia de segurança
+
+# Volta dados de uma cópia. Por padrão só mostra o que mudaria (nada é gravado).
+# O número da execução aparece no resumo da cópia (Actions › Cópia de segurança › abrir a execução) e no endereço dela
+# (.../actions/runs/NÚMERO).
+on:
+  workflow_dispatch:
+    inputs:
+      execucao:
+        description: 'Número da execução da cópia (ex.: 12345678901)'
+        required: true
+      colecoes:
+        description: 'Coleções: "todas" ou nomes separados por vírgula (ex.: clientes,agenda)'
+        required: true
+        default: todas
+      documentos:
+        description: 'Opcional: só estes documentos (ids separados por vírgula; informe uma coleção só)'
+        required: false
+        default: ''
+      apagar:
+        description: 'Apagar o que foi criado depois da cópia (nas coleções escolhidas)'
+        type: boolean
+        default: false
+      aplicar:
+        description: 'Aplicar de verdade (desmarcado = só conferir)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: banco
+  cancel-in-progress: false
+
+jobs:
+  restaurar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Baixar a cópia
+        uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ inputs.execucao }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: copia
+          merge-multiple: true
+
+      - name: Restaurar
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          RESTAURAR_PASTA: copia
+          RESTAURAR_COLECOES: ${{ inputs.colecoes }}
+          RESTAURAR_DOCUMENTOS: ${{ inputs.documentos }}
+          RESTAURAR_APAGAR: ${{ inputs.apagar && '1' || '' }}
+          RESTAURAR_APLICAR: ${{ inputs.aplicar && '1' || '' }}
+        run: |
+          npm install --no-audit --no-fund --prefix integracao/admin
+          node integracao/admin/restaurar.mjs
+
+      - name: Guardar o estado de antes (para desfazer)
+        if: ${{ inputs.aplicar }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: estado-antes-da-restauracao
+          path: antes/
+          retention-days: 30
+          if-no-files-found: ignore

@@ -138,3 +138,17 @@ test('qualquer coleção fora da lista fica fechada', async () => {
   await assertFails(setDoc(doc(db(DONA), 'qualquer/x'), { a: 1 }));
   await assertFails(getDoc(doc(db(DONA), 'qualquer/x')));
 });
+
+test('erros nos aparelhos: equipe grava só os próprios; só a proprietária lê e apaga', async () => {
+  const erro = uid => ({ quando: serverTimestamp(), uid, msg: 'TypeError: x', onde: 'app.js:10', tela: 'agenda', versao: 'smt-v10', aparelho: 'Android 14', vezes: 1 });
+  await assertSucceeds(setDoc(doc(db(RECEPCAO), 'erros/e1'), erro(RECEPCAO)));
+  await assertFails(setDoc(doc(db(RECEPCAO), 'erros/e2'), erro(PARCEIRA)));
+  await assertFails(setDoc(doc(db(ESTRANHA), 'erros/e3'), erro(ESTRANHA)));
+  await assertFails(setDoc(doc(db(null), 'erros/e4'), erro('x')));
+  await assertFails(setDoc(doc(db(RECEPCAO), 'erros/e5'), { ...erro(RECEPCAO), senha: '123' }));
+  await assertFails(setDoc(doc(db(RECEPCAO), 'erros/e6'), { ...erro(RECEPCAO), msg: 'x'.repeat(301) }));
+  await assertFails(getDoc(doc(db(RECEPCAO), 'erros/e1')));
+  await assertFails(updateDoc(doc(db(RECEPCAO), 'erros/e1'), { vezes: 2 }));
+  await assertSucceeds(getDoc(doc(db(DONA), 'erros/e1')));
+  await assertSucceeds(deleteDoc(doc(db(DONA), 'erros/e1')));
+});

@@ -1,4 +1,4 @@
-import { DEMO, initializeApp, getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, onSnapshot, setDoc, deleteDoc, getDoc, updateDoc, query, where, Timestamp, arrayUnion, arrayRemove, deleteField } from './fb.js';
+import { DEMO, initializeApp, getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, onSnapshot, setDoc, deleteDoc, getDoc, updateDoc, query, where, Timestamp, arrayUnion, arrayRemove, deleteField, serverTimestamp } from './fb.js';
 import { firebaseConfig } from './firebase-config.js';
 /* Stéfany Medeiros Trancista · sistema de gestão (Firebase) */
 /* ================= utilidades ================= */
@@ -99,7 +99,7 @@ const ANAM_Q=[
 ];
 
 /* ================= armazenamento (Firestore) e perfis ================= */
-const ALL_COLS=['clientes','servicos','agenda','estoque','pacotes','vales','espera','anamneses','aceites','ideias','publico','equipe','pedidos','lancamentos','contas','privado','catalogo','contratosLink','solicitacoes','cadastros','anamnesePortal','avaliacoes'];
+const ALL_COLS=['clientes','servicos','agenda','estoque','pacotes','vales','espera','anamneses','aceites','ideias','publico','equipe','pedidos','lancamentos','contas','privado','catalogo','contratosLink','solicitacoes','cadastros','anamnesePortal','avaliacoes','erros'];
 const COLS_POR_PAPEL={
   owner:ALL_COLS,
   parceira:['clientes','servicos','agenda','estoque','pacotes','vales','espera','anamneses','aceites','ideias','publico','catalogo','contratosLink','solicitacoes','cadastros','anamnesePortal','avaliacoes'],
@@ -155,7 +155,7 @@ function subscribe(cols){
 }
 const configPendente=()=>!DEMO&&!firebaseConfig||!firebaseConfig.apiKey||/COLE|SUA_/i.test(firebaseConfig.apiKey);
 
-function virarPapel(papel){if(ROLE===papel)return;pararDados();ROLE=papel;if(COLS_POR_PAPEL[papel]){if(!visiveis().some(v=>v[0]===UI.view))UI.view=visiveis()[0][0];subscribe(COLS_POR_PAPEL[papel])}render()}
+function virarPapel(papel){if(ROLE===papel)return;pararDados();ROLE=papel;errEnviar();if(COLS_POR_PAPEL[papel]){if(!visiveis().some(v=>v[0]===UI.view))UI.view=visiveis()[0][0];subscribe(COLS_POR_PAPEL[papel])}render()}
 function vigiarEquipe(user){
   if(ctl.equipe)return;
   ctl.equipe=onSnapshot(doc(FS,'equipe',ME),s=>{
@@ -165,6 +165,38 @@ function vigiarEquipe(user){
     else if(ROLE!=='pendente'){virarPapel('pendente');setDoc(doc(FS,'pedidos',ME),{email:EMAIL,nome:user.displayName||'',pedidoEm:nowIso()}).catch(()=>{})}
   },()=>virarPapel('pendente'));
 }
+/* ================= erros nos aparelhos =================
+   Quando uma tela falha no celular ou no computador de alguém da equipe, o erro fica anotado na coleção "erros"
+   (só a proprietária vê, em Ajustes › Conta e dados). No máximo 5 registros por abertura, o mesmo erro uma vez só
+   (as repetições viram "vezes"), sem nada do que foi digitado, e nada de erros de extensões do navegador ou de internet. */
+const ERR={vistos:new Map(),gravados:0,t:null,versao:''};
+try{caches.keys().then(k=>{ERR.versao=(k.find(n=>n.startsWith('smt-'))||'').slice(0,40)}).catch(()=>{})}catch(e){}
+const ERR_IGNORA=/ResizeObserver loop|Script error\.?$|Failed to fetch|NetworkError|Load failed|network-request-failed|unavailable|offline|AbortError|The operation was aborted|QuotaExceeded/i;
+const corta=(x,n)=>String(x==null?'':x).replace(/\s+/g,' ').trim().slice(0,n);
+function errAparelho(){const ua=navigator.userAgent||'';
+  const so=(/Android [\d.]+/.exec(ua)||[])[0]||((/iPhone OS [\d_]+/.exec(ua)||[])[0]||'').replace(/_/g,'.')||(/Windows/.test(ua)?'Windows':/Mac OS X/.test(ua)?'Mac':/Linux/.test(ua)?'Linux':'');
+  const nav=((/(Edg|SamsungBrowser|Chrome|Firefox|Version)\/\d+/.exec(ua)||[])[0]||'').replace('Version','Safari');
+  return corta(`${so} · ${nav} · ${innerWidth}x${innerHeight}`,200)}
+function errAnotar(msg,onde){msg=corta(msg,300);onde=corta(onde,200);
+  if(!msg||ERR_IGNORA.test(msg))return;
+  if(onde&&/^(chrome|moz|safari)-extension:|^https?:/.test(onde)&&!onde.includes(location.host))return;
+  const k=msg+'|'+onde;const v=ERR.vistos.get(k);if(v){v.dados.vezes=Math.min(1000,v.dados.vezes+1);return}
+  if(ERR.vistos.size>=50)return;
+  ERR.vistos.set(k,{dados:{msg,onde:onde.replace(location.origin+'/',''),tela:corta(typeof UI!=='undefined'?UI.view:'',40),aparelho:errAparelho(),vezes:1},gravado:false});errEnviar()}
+function errEnviar(){if(ERR.t||!FS||!ME||!PAPEIS[ROLE])return;
+  // espera um pouco para juntar repetições do mesmo erro num registro só
+  ERR.t=setTimeout(()=>{ERR.t=null;if(!FS||!ME||!PAPEIS[ROLE])return;for(const v of ERR.vistos.values()){if(v.gravado||ERR.gravados>=5)continue;v.gravado=true;ERR.gravados++;
+    setDoc(doc(collection(FS,'erros')),{quando:serverTimestamp(),uid:ME,...v.dados,versao:ERR.versao}).catch(()=>{})}},3000)}
+window.addEventListener('error',ev=>{if(!ev.error&&!ev.message)return;const er=ev.error;
+  const onde=ev.filename?`${ev.filename}:${ev.lineno||0}`:er&&er.stack?(String(er.stack).split('\n')[1]||'').trim():'';
+  errAnotar(er instanceof Error?`${er.name}: ${er.message}`:String(ev.message||er),onde)});
+window.addEventListener('unhandledrejection',ev=>{const r=ev.reason;if(!r||(r.code&&!(r instanceof Error)))return;
+  errAnotar(r instanceof Error?`${r.name}: ${r.message}`:String(r),r&&r.stack?(String(r.stack).split('\n')[1]||'').trim():'')});
+function cardErros(){const L=arr('erros').sort((a,b)=>toMs(b.quando)-toMs(a.quando));
+  const quando=x=>{const ms=toMs(x.quando);if(!ms)return '';const d=new Date(ms);return `${dataCurta(ymd(d))} ${pad(d.getHours())}:${pad(d.getMinutes())}`};
+  return `<section class="card"><h3>Erros nos aparelhos <small>${L.length?`${L.length} registro(s)`:'nenhum'}</small></h3><p class="small muted" style="margin-top:0">Quando uma tela falha no celular ou no computador de alguém da equipe, fica anotado aqui (a tela, o tipo de aparelho e a mensagem técnica). Sem nada do que foi digitado. Serve para corrigir o sistema.</p>
+   ${L.length?`<div class="list">${L.slice(0,30).map(x=>`<div class="item"><div class="avatar" style="--lv:var(--bad)">${ic('alert')}</div><div class="grow" style="min-width:0"><div class="t" style="overflow-wrap:anywhere">${esc(x.msg)}</div><div class="s" style="overflow-wrap:anywhere">${esc(quando(x))} · ${esc(nomePessoa(x.uid)||'—')}${x.tela?` · tela ${esc(x.tela)}`:''}${x.vezes>1?` · ${x.vezes} vezes`:''}<br>${esc(x.aparelho||'')}${x.onde?` · ${esc(x.onde)}`:''}</div></div></div>`).join('')}</div>
+   <div class="row" style="margin-top:10px"><button class="btn danger soft" data-act="errosApagar">${ic('trash')}Apagar todos</button></div>`:''}</section>`}
 async function boot(){
   if(configPendente()){ROLE='config';render();return}
   APP=initializeApp(firebaseConfig);AUTH=getAuth(APP);
@@ -1032,9 +1064,9 @@ function ajEquipe(){const ped=arr('pedidos'),eq=arr('equipe');const donas=(ACESS
     <tr><td><b>Contador(a)</b></td><td>Finanças, contas, relatórios e MEI, somente leitura. Sem clientes nem fichas.</td></tr></table>
     <p>Todas essas separações são aplicadas pelas regras de segurança do Firestore, no servidor. Para bloquear alguém de vez, desative o acesso aqui e também desative o usuário em Authentication no console.</p></details></section>`}
 function ajDados(){const nEx=ALL_COLS.reduce((s,k)=>s+arr(k).filter(r=>r.exemplo).length,0);
-  return contaCard()+`<section class="card"><h3>Cópia de segurança</h3><p class="small muted" style="margin-top:0">Os dados ficam no Firestore e aparecem no PC e no celular. Mesmo assim, baixe uma cópia por mês.</p>
+  return contaCard()+`<section class="card"><h3>Cópia de segurança</h3><p class="small muted" style="margin-top:0">Os dados ficam no Firestore e aparecem no PC e no celular. Além disso, o GitHub faz uma cópia automática todo dia de madrugada (guardada 30 dias; a de domingo, 90 dias), que pode ser restaurada pela rotina <b>Restaurar cópia de segurança</b> (veja o LEIA-ME). Se quiser uma cópia sua, baixe aqui.</p>
    <div class="row"><button class="btn soft" data-act="backup">${ic('down')}Baixar cópia (JSON)</button><label class="btn ghost">${ic('up')}Restaurar cópia<input type="file" id="restFile" accept=".json,application/json" hidden></label></div></section>
-  ${nEx?`<section class="card"><h3>Dados de exemplo</h3><p class="small muted" style="margin-top:0">Há ${nEx} registros de exemplo. Apague antes de começar a usar de verdade. Os serviços cadastrados são mantidos.</p><button class="btn danger soft" data-act="limparEx">${ic('trash')}Apagar dados de exemplo</button></section>`:''}`}
+  ${nEx?`<section class="card"><h3>Dados de exemplo</h3><p class="small muted" style="margin-top:0">Há ${nEx} registros de exemplo. Apague antes de começar a usar de verdade. Os serviços cadastrados são mantidos.</p><button class="btn danger soft" data-act="limparEx">${ic('trash')}Apagar dados de exemplo</button></section>`:''}`+cardErros()}
 
 /* ================= folhas (sheets), avisos e arquivos ================= */
 function sheet(title,html){
@@ -1854,6 +1886,7 @@ function avisosCadastro(){return arr('cadastros').filter(x=>x.status==='enviado'
 const ACT={
  go:t=>go(t.dataset.v),mais:()=>mais(),close:()=>closeSheet(),
  seed:t=>seed(t.dataset.ex==='1'),
+ errosApagar:()=>confirmar('Apagar todos os registros de erros?',async()=>{const ids=arr('erros').map(x=>x.id);await pool(ids.map(id=>()=>del('erros',id)),8);toast('Registros apagados')}),
  demoRecomecar:()=>confirmar('Apagar os dados de demonstração e começar de novo?',async()=>{const m=await import('./demo/firebase-demo.js');m.recomecarDemo();location.replace(location.pathname+(DEMO_PREVIA?'':'?demo'))}),
  novoAg:t=>formAgenda(null,{d:t.dataset.d,h:t.dataset.h,c:t.dataset.c}),editAg:t=>formAgenda(t.dataset.id),
  agDia:t=>{UI.agDia=t.dataset.d;if(UI.view!=='agenda')go('agenda');else render()},agNav:t=>{UI.agDia=addDays(UI.agDia,+t.dataset.n);render()},agHoje:()=>{UI.agDia=today();render()},agVis:t=>{UI.agVis=t.dataset.t;render()},agVerDia:t=>{UI.agDia=t.dataset.d;UI.agVis='dia';render()},agMes:t=>{const p=parse(UI.agDia);const n=new Date(p.getFullYear(),p.getMonth()+ +t.dataset.n,1);UI.agDia=ymd(n);render()},
@@ -1909,7 +1942,7 @@ const ACT={
  esqueci:async()=>{const em=($('#lgEmail')?.value||'').trim();if(!em){$('#lgMsg').textContent='Digite seu e-mail acima e toque de novo em "Esqueci minha senha".';return}try{await sendPasswordResetEmail(AUTH,em);$('#lgMsg').style.color='var(--good)';$('#lgMsg').textContent='Enviamos um link para redefinir a senha. Confira também o spam.'}catch(e){$('#lgMsg').textContent='Não foi possível enviar. Confira o e-mail digitado.'}},
  trocarSenha:async()=>{try{await sendPasswordResetEmail(AUTH,EMAIL);toast('Link para trocar a senha enviado para '+EMAIL)}catch(e){toast('Não foi possível enviar o e-mail')}},
  imprimirDoc:()=>window.print(),
- backup:()=>{const o={versao:3,gerado:nowIso()};ALL_COLS.filter(c=>c!=='pedidos').forEach(c=>o[c]=arr(c));baixar(`backup-stefany-trancista-${today()}.json`,JSON.stringify(o,null,1))},
+ backup:()=>{const o={versao:3,gerado:nowIso()};ALL_COLS.filter(c=>c!=='pedidos'&&c!=='erros').forEach(c=>o[c]=arr(c));baixar(`backup-stefany-trancista-${today()}.json`,JSON.stringify(o,null,1))},
  limparEx:()=>confirmar('Apagar todos os registros marcados como exemplo?',limparEx),
  tornarDona:t=>{const id=t.dataset.id;const e=S.equipe.get(id)||S.pedidos.get(id)||{};confirmar(`Dar acesso total de proprietária para <b>${esc(e.apelido||e.nome||e.email||'esta pessoa')}</b>? Ela passa a ver finanças, contratos, equipe e configurações.`,()=>tornarDona(id))},
  removerDona:t=>confirmar('Remover o acesso de proprietária desta conta? Ela deixará de entrar no sistema até receber um perfil.',()=>removerDona(t.dataset.id)),
@@ -1947,7 +1980,7 @@ let buscaT;document.addEventListener('input',e=>{if(e.target.id==='cliBusca'){UI
 document.addEventListener('change',e=>{const id=e.target.id;
   if(id==='ctTipo'){UI.ctTipo=e.target.value;render()}else if(id==='ctCli'){UI.ctCli=e.target.value;UI.ctAg='';render()}else if(id==='ctAg'){UI.ctAg=e.target.value;render()}
   else if(id==='restFile'&&e.target.files[0]){const fr=new FileReader();fr.onload=()=>{let o;try{o=JSON.parse(fr.result)}catch(_){toast('Arquivo inválido');return}
-    confirmar('Restaurar esta cópia? Registros com o mesmo identificador serão substituídos.',async()=>{const ops=[];ALL_COLS.filter(c=>!['equipe','pedidos','contratosLink','solicitacoes','cadastros','anamnesePortal','avaliacoes'].includes(c)).forEach(c=>(o[c]||[]).forEach(r=>{if(r&&r.id)ops.push([c,r.id,r])}));await pool(ops.map(([c,id,r])=>()=>save(c,id,r,{quiet:true})),8);toast(`${ops.length} registros restaurados`)})};fr.readAsText(e.target.files[0])}});
+    confirmar('Restaurar esta cópia? Registros com o mesmo identificador serão substituídos.',async()=>{const ops=[];ALL_COLS.filter(c=>!['equipe','pedidos','contratosLink','solicitacoes','cadastros','anamnesePortal','avaliacoes','erros'].includes(c)).forEach(c=>(o[c]||[]).forEach(r=>{if(r&&r.id)ops.push([c,r.id,r])}));await pool(ops.map(([c,id,r])=>()=>save(c,id,r,{quiet:true})),8);toast(`${ops.length} registros restaurados`)})};fr.readAsText(e.target.files[0])}});
 document.addEventListener('submit',async e=>{
   if(e.target.id==='fLogin'){e.preventDefault();const m=$('#lgMsg');m.style.color='var(--bad)';m.textContent='Entrando…';
     try{await signInWithEmailAndPassword(AUTH,$('#lgEmail').value.trim(),$('#lgSenha').value)}catch(err){const c=err.code||'';m.textContent=/invalid-credential|wrong-password|user-not-found|invalid-email/.test(c)?'E-mail ou senha incorretos.':/too-many-requests/.test(c)?'Muitas tentativas. Aguarde alguns minutos.':/network/.test(c)?'Sem internet. Tente de novo.':'Não foi possível entrar.'}

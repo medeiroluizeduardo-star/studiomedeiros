@@ -248,6 +248,23 @@ service cloud.firestore {
       allow delete: if dona();
     }
 
+    // ===== Erros nos aparelhos (app.js, "erros nos aparelhos") =====
+    // Cada pessoa da equipe grava só os próprios, com campos curtos. Só a proprietária lê e apaga.
+    match /erros/{id} {
+      allow read, delete: if dona();
+      allow create: if (dona() || eh('parceira') || eh('recepcao') || eh('contador'))
+        && request.resource.data.keys().hasOnly(['quando', 'uid', 'msg', 'onde', 'tela', 'versao', 'aparelho', 'vezes'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.quando == request.time
+        && request.resource.data.msg is string && request.resource.data.msg.size() <= 300
+        && txt(request.resource.data, 'onde', 200)
+        && txt(request.resource.data, 'tela', 40)
+        && txt(request.resource.data, 'versao', 40)
+        && txt(request.resource.data, 'aparelho', 200)
+        && request.resource.data.get('vezes', 1) is int && request.resource.data.get('vezes', 1) <= 1000;
+      allow update: if false;
+    }
+
     // Qualquer outro caminho é bloqueado.
     match /{documento=**} { allow read, write: if false; }
   }
