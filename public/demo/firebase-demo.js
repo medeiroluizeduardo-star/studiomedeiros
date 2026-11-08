@@ -96,13 +96,21 @@ function avisar() {
 }
 export function onSnapshot(ref, prox, erro) {
   if (prox && typeof prox === 'object') ({ next: prox, error: erro } = prox);
-  let ultimo = null;
+  let ultimo = null; let antes = new Map();
   const o = {
     rodar() {
       try {
         const f = ref.type === 'doc' ? fotoDoc(ref.path) : fotoConsulta(ref);
         const marca = ref.type === 'doc' ? paraTexto(BANCO[ref.path] ?? null) : paraTexto(f.docs.map(d => [d.id, BANCO[d.ref.path]]));
-        if (marca === ultimo) return; ultimo = marca; prox && prox(f);
+        if (marca === ultimo) return; ultimo = marca;
+        if (ref.type !== 'doc') {
+          // como no Firebase: docChanges() lista só o que entrou, mudou ou saiu desde a última vez
+          const agora = new Map(f.docs.map(d => [d.id, paraTexto(BANCO[d.ref.path])])); const mud = [];
+          f.docs.forEach(d => { const a = antes.get(d.id); if (a === undefined) mud.push({ type: 'added', doc: d }); else if (a !== agora.get(d.id)) mud.push({ type: 'modified', doc: d }); });
+          antes.forEach((_, id) => { if (!agora.has(id)) mud.push({ type: 'removed', doc: fotoDoc(ref.path + '/' + id) }); });
+          antes = agora; f.docChanges = () => mud;
+        }
+        prox && prox(f);
       } catch (e) { console.error(e); erro && erro(e); }
     }
   };

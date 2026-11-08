@@ -417,6 +417,8 @@ button.badge{border:0;cursor:pointer;font:inherit;font-size:.72rem;font-weight:6
 .cad-box .cad-pend{margin-top:8px}.cad-box .cad-pend summary{cursor:pointer;padding:4px 0}
 /* itens com vários botões quebram linha no celular em vez de vazar */
 @media (max-width:520px){div.item{flex-wrap:wrap}div.item>.grow{flex:1 1 150px}div.item>.btn,div.item>a.btn{flex:none}}
+/* no celular, o último botão que desce para a linha de baixo fica à direita, e não solto embaixo da foto */
+@media (max-width:520px){div.item>.btn:last-child,div.item>a.btn:last-child{margin-left:auto}}
 
 /* identidade v7 — marca da Stéfany */
 .marca{border-radius:50%;object-fit:cover;flex:none;background:var(--rose);box-shadow:0 0 0 2px var(--surface),0 0 0 3px color-mix(in srgb,var(--accent) 55%,transparent)}

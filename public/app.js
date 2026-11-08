@@ -110,7 +110,8 @@ const S={};ALL_COLS.forEach(c=>S[c]=new Map());
 let MODE='db',ROLE='carregando',ME=null,EMAIL='',APP=null,AUTH=null,FS=null,ACESSO=null;const ctl={acesso:null,equipe:null,avisos:null,avEstado:null};let MEUS_AVISOS=null,AV_ESTADO=null;
 let NEED=new Set();const loaded=new Set();const unsubs=[];
 let DATAV=0;const MEMO=new Map();
-const memo=(k,fn)=>{const m=MEMO.get(k);if(m&&m.v===DATAV)return m.r;const r=fn();MEMO.set(k,{v:DATAV,r});return r};
+// a versão inclui o dia: depois da meia-noite os cálculos que usam "hoje" são refeitos
+const memo=(k,fn)=>{const v=DATAV+'|'+today();const m=MEMO.get(k);if(m&&m.v===v)return m.r;const r=fn();MEMO.set(k,{v,r});return r};
 const arr=c=>[...S[c].values()];
 const isOwner=()=>ROLE==='owner';
 function pode(f){const own=isOwner(),r=ROLE;
@@ -129,15 +130,18 @@ function limpaUndef(o){return JSON.parse(JSON.stringify(o))}
 function save(col,id,data,{quiet}={}){
   id=id||uid();const rec=limpaUndef({...data});delete rec.id;
   rec.atualizadoEm=nowIso();rec.atualizadoPor=ME||'';
-  S[col].set(id,{id,...rec});touch();
+  S[col].set(id,{id,...rec});touch(col);
   // Não esperamos a confirmação do servidor: sem internet, o Firestore guarda e envia depois.
   setDoc(doc(FS,col,id),rec).catch(e=>{if(!quiet)dbErr(e)});
   return Promise.resolve(id);
 }
-function del(col,id){S[col].delete(id);touch();deleteDoc(doc(FS,col,id)).catch(dbErr);return Promise.resolve()}
+function del(col,id){S[col].delete(id);touch(col);deleteDoc(doc(FS,col,id)).catch(dbErr);return Promise.resolve()}
 async function pool(tasks,n=8){const q=[...tasks];const run=async()=>{while(q.length){const t=q.shift();try{await t()}catch(e){}}};await Promise.all([...Array(n)].map(run))}
 function dbErr(e){const c=e&&e.code;toast(c==='permission-denied'?'Seu perfil não tem permissão para esta alteração.':c==='resource-exhausted'?'Limite diário do plano gratuito atingido. Tente amanhã ou mude de plano.':'Não foi possível salvar. Verifique a internet e tente de novo.','erro');console.error(e)}
-function touch(){DATAV++;schedule()}
+// Os cálculos guardados (memo) só dependem destas coleções; mudança nas outras (ideias, estoque, erros, avisos…)
+// redesenha a tela sem refazer fidelidade, finanças e retornos de todas as clientes.
+const MEMO_COLS=new Set(['clientes','agenda','servicos','lancamentos','pacotes','vales','privado','publico']);
+function touch(col){if(!col||MEMO_COLS.has(col))DATAV++;schedule()}
 
 function pararDados(){unsubs.splice(0).forEach(u=>{try{u()}catch(e){}});loaded.clear();ALL_COLS.forEach(c=>S[c]=new Map());NEED=new Set()}
 function pararTudo(){pararDados();MEUS_AVISOS=null;AV_ESTADO=null;['acesso','equipe','avisos','avEstado'].forEach(k=>{if(ctl[k]){try{ctl[k]()}catch(e){}ctl[k]=null}});ACESSO=null}
@@ -148,8 +152,13 @@ function subscribe(cols){
     if(c==='aceites'&&ROLE==='recepcao')q=query(q,where('tipo','in',['servico','politica']));
     if(c==='contratosLink')q=query(q,where('criadoEm','>=',addDays(today(),-120)));
     if(c==='cadastros')q=query(q,where('criadoEm','>=',addDays(today(),-90)));
-    const u=onSnapshot(q,snap=>{const m=new Map();snap.docs.forEach(d=>m.set(d.id,{id:d.id,...d.data()}));S[c]=m;loaded.add(c);touch();agendaProcessar()},
-      err=>{console.error(c,err);loaded.add(c);touch();if(err.code==='permission-denied')toast('Seu acesso mudou. Entre novamente.')});
+    // Na primeira leitura monta a coleção inteira; depois só aplica o que mudou (uma agenda com milhares de
+    // atendimentos não é refeita inteira a cada horário marcado).
+    const u=onSnapshot(q,snap=>{
+        if(loaded.has(c)&&typeof snap.docChanges==='function')snap.docChanges().forEach(ch=>{if(ch.type==='removed')S[c].delete(ch.doc.id);else S[c].set(ch.doc.id,{id:ch.doc.id,...ch.doc.data()})});
+        else{const m=new Map();snap.docs.forEach(d=>m.set(d.id,{id:d.id,...d.data()}));S[c]=m}
+        loaded.add(c);touch(c);agendaProcessar()},
+      err=>{console.error(c,err);loaded.add(c);touch(c);if(err.code==='permission-denied')toast('Seu acesso mudou. Entre novamente.')});
     unsubs.push(u);
   });
 }
@@ -172,8 +181,8 @@ const AV_TIPOS={novidades:['Novidades das clientes pelo link',['owner','parceira
 const AV_LS='smt-aviso-token';
 function vigiarAvisos(){['avisos','avEstado'].forEach(k=>{if(ctl[k]){try{ctl[k]()}catch(e){}ctl[k]=null}});MEUS_AVISOS=null;AV_ESTADO=null;
   if(!FS||!ME||!PAPEIS[ROLE])return;
-  ctl.avisos=onSnapshot(doc(FS,'avisos',ME),s=>{MEUS_AVISOS=s.exists()?s.data():{};touch()},()=>{});
-  if(ROLE==='owner')ctl.avEstado=onSnapshot(doc(FS,'avisosEstado','estado'),s=>{AV_ESTADO=s.exists()?s.data():null;touch()},()=>{})}
+  ctl.avisos=onSnapshot(doc(FS,'avisos',ME),s=>{MEUS_AVISOS=s.exists()?s.data():{};touch('avisos')},()=>{});
+  if(ROLE==='owner')ctl.avEstado=onSnapshot(doc(FS,'avisosEstado','estado'),s=>{AV_ESTADO=s.exists()?s.data():null;touch('avisos')},()=>{})}
 const avToken=()=>{try{return localStorage.getItem(AV_LS)||''}catch(e){return ''}};
 const avLigadoAqui=()=>{const t=avToken();return !!t&&!!(MEUS_AVISOS&&(MEUS_AVISOS.tokens||[]).includes(t))};
 const avPrefs=()=>(MEUS_AVISOS&&MEUS_AVISOS.prefs)||{};
@@ -358,7 +367,7 @@ const NTH=['','primeira','segunda','terceira','quarta'];
 const recTexto=f=>f.rec==='semanal'?`toda ${SEMX[f.dow]}`:`${+f.nth===-1?'última':NTH[f.nth]} ${SEMX[f.dow]} do mês`;
 function expediente(d){const ex=excecoesDe(d);const fe=ex.find(f=>(f.tipo||'fechado')==='fechado');if(fe)return {aberto:false,motivo:fe.motivo||'Agenda bloqueada'};
   const es=ex.find(f=>f.tipo==='horario'&&f.abre&&f.fecha);if(es)return {aberto:true,abre:es.abre,fecha:es.fecha,pausa:null,especial:es.motivo||'Horário especial'};
-  const x=semana()[parse(d).getDay()];if(!x.on)return {aberto:false,motivo:'Dia sem atendimento'};
+  const x=semana()[parse(d).getDay()];if(!x.on)return {aberto:false,motivo:'Fora do expediente'};
   const pausa=x.pIni&&x.pFim&&x.pFim>x.pIni?[hm2min(x.pIni),hm2min(x.pFim)]:null;return {aberto:true,abre:x.ini,fecha:x.fim,pausa}}
 function diaFechado(d){const e=expediente(d);return e.aberto?'':e.motivo}
 const textoExpediente=e=>e.aberto?`${e.abre}–${e.fecha}${e.pausa?` · pausa ${min2hm(e.pausa[0])}–${min2hm(e.pausa[1])}`:''}${e.especial?` · ${e.especial}`:''}`:e.motivo;
@@ -548,7 +557,7 @@ function docPolitica(){
 async function hashTexto(t){try{const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(t));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('').slice(0,16)}catch(e){return ''}}
 
 /* ================= interface: casca ================= */
-const UI={view:'inicio',agDia:today(),calMes:ym(today()),calDia:today(),finTab:'visao',finMes:ym(today()),lanTipo:'todos',cliBusca:'',cliNivel:'todos',cliOrd:'score',ctTab:'links',agVis:'dia',reatTodos:false,ajTab:'horarios',cliTab:'lista',ctTipo:'servico',ctCli:'',ctAg:'',acFiltro:'todos',pkTab:'pacotes',relPer:6,lastView:null};
+const UI={view:'inicio',agDia:today(),calMes:ym(today()),calDia:today(),finTab:'visao',finMes:ym(today()),lanTipo:'todos',cliBusca:'',cliLim:60,cliNivel:'todos',cliOrd:'score',ctTab:'links',agVis:'dia',reatTodos:false,ajTab:'horarios',cliTab:'lista',ctTipo:'servico',ctCli:'',ctAg:'',acFiltro:'todos',pkTab:'pacotes',relPer:6,lastView:null};
 const VIEWS=[['inicio','Início','home',()=>pode('base')],['agenda','Agenda','cal',()=>pode('base')],['clientes','Clientes','users',()=>pode('base')],['catalogo','Catálogo','image',()=>pode('base')],['financeiro','Finanças','wallet',()=>pode('fin')],['contratos','Contratos','file',()=>pode('contratos')],['pacotes','Pacotes e vales','ticket',()=>pode('base')],['estoque','Estoque','box',()=>pode('estoque')],['calendario','Datas e ideias','spark',()=>pode('base')],['ajustes','Ajustes','gear',()=>true]];
 const visiveis=()=>VIEWS.filter(v=>v[3]());
 let rq=0;function schedule(){if(rq)return;rq=requestAnimationFrame(()=>{rq=0;render()})}
@@ -576,12 +585,28 @@ function render(){
   const top=shell();
   const fn={inicio:vInicio,agenda:vAgenda,clientes:vClientes,catalogo:vCatalogo,financeiro:vFinanceiro,contratos:vContratos,pacotes:vPacotes,estoque:vEstoque,calendario:vCalendario,ajustes:vAjustes}[UI.view]||vInicio;
   const changed=UI.lastView!==UI.view;UI.lastView=UI.view;const y=window.scrollY;
-  const ae=document.activeElement;const aid=ae&&main.contains(ae)?ae.id:null;
+  const ae=document.activeElement;const aid=ae&&main.contains(ae)?ae.id:null;let pos=null;try{pos=aid?ae.selectionStart:null}catch(_){}
+  const tela=changed?null:guardarTela();
   main.innerHTML=demoFaixa()+top+`<div class="stack ${changed?'enter':''}" id="view">${fn()}</div>`;
+  if(tela)devolverTela(tela);
   if(changed)countUps();else window.scrollTo(0,y);
-  if(aid){const el=document.getElementById(aid);if(el&&el.focus)el.focus()}
+  if(aid){const el=document.getElementById(aid);if(el&&el.focus){el.focus();if(pos!=null)try{el.setSelectionRange(pos,pos)}catch(_){}}}
   afterRender();
 }
+/* A tela inteira é redesenhada quando chega novidade (de outro aparelho, de um link de cliente…).
+   O que a pessoa digitou e ainda não salvou, e as caixas que ela abriu, voltam para o lugar depois do redesenho.
+   Ao enviar o formulário (Salvar), o campo deixa de ser "rascunho" e volta a mostrar o que está salvo. */
+const marcaRascunho=e=>{const el=e.target;if(el&&el.id&&el.id!=='cliBusca'&&el.closest&&el.closest('#view'))el.dataset.sujo='1'};
+document.addEventListener('input',marcaRascunho,true);document.addEventListener('change',marcaRascunho,true);
+document.addEventListener('submit',e=>{const f=e.target;if(f&&f.querySelectorAll)f.querySelectorAll('[data-sujo]').forEach(el=>delete el.dataset.sujo)},true);
+const chaveCaixa=d=>((d.querySelector('summary')||{}).textContent||'').trim();
+function guardarTela(){const v=document.getElementById('view');if(!v)return null;
+  const campos=[...v.querySelectorAll('[data-sujo]')].map(el=>[el.id,el.type==='checkbox'||el.type==='radio'?{c:el.checked}:{v:el.value}]);
+  const caixas=new Map([...v.querySelectorAll('details')].map(d=>[chaveCaixa(d),d.open]));
+  return {campos,caixas}}
+function devolverTela({campos,caixas}){
+  campos.forEach(([id,x])=>{const el=document.getElementById(id);if(!el||!el.closest('#view'))return;if('c' in x)el.checked=x.c;else el.value=x.v;el.dataset.sujo='1'});
+  if(caixas.size)document.querySelectorAll('#view details').forEach(d=>{const k=chaveCaixa(d);if(caixas.has(k))d.open=caixas.get(k)})}
 /* modo demonstração (?demo e prévias): faixa no topo para ninguém confundir com o sistema real */
 let DEMO_SEMEADO=false;
 const DEMO_PREVIA=/--[a-z0-9-]+\.(web\.app|firebaseapp\.com)$/i.test(location.hostname);
@@ -696,7 +721,7 @@ function vAgenda(){if(UI.agVis==='semana')return vAgendaSemana();if(UI.agVis==='
     const exd=expediente(x);const fe=exd.aberto?'':exd.motivo;return `<button class="day ${x===t?'today':''} ${fe?'fechado':''} ${exd.especial?'especial':''}" data-act="agDia" data-d="${x}" aria-pressed="${x===d}" title="${esc(fe)}"><span class="w">${SEM[dd.getDay()]}</span><span class="n">${dd.getDate()}</span><span class="c">${fe&&!n?'<span class="fx">fechado</span>':'<i></i>'.repeat(Math.min(n,4))}</span></button>`}).join('')}</div>`;
   out+=`<section class="card" style="padding:14px 16px">${linhaTempo(d)}</section>`;
   out+=`<div class="grid g2"><section class="stack" style="gap:10px">${doDia.length?doDia.map(apptCard).join(''):`<div class="card empty">Nenhum atendimento neste dia.<br><button class="btn soft" style="margin-top:10px" data-act="novoAg" data-d="${d}">${ic('plus')}Marcar horário</button></div>`}</section>
-  <section class="stack"><div class="card"><h3>Horários livres <small>${esc(textoExpediente(expediente(d)))}</small></h3>${diaFechado(d)?`<div class="empty">${esc(diaFechado(d))}.<br><button class="btn sm ghost" style="margin-top:6px" data-act="novoAg" data-d="${d}">Agendar mesmo assim</button></div>`:d<today()?'<div class="empty">Dia que já passou.</div>':livres.length?`<div class="row">${livres.map(([a,b])=>`<button class="free" data-act="novoAg" data-d="${d}" data-h="${min2hm(a)}">${min2hm(a)} às ${min2hm(b)}</button>`).join('')}</div>`:`<div class="empty">Dia cheio.</div>`}</div>
+  <section class="stack"><div class="card"><h3>Horários livres <small>${esc(textoExpediente(expediente(d)))}</small></h3>${diaFechado(d)?`<div class="empty">${esc(diaFechado(d))}: sem horários livres para oferecer.<br><button class="btn sm ghost" style="margin-top:6px" data-act="novoAg" data-d="${d}">Agendar mesmo assim</button></div>`:d<today()?'<div class="empty">Dia que já passou.</div>':livres.length?`<div class="row">${livres.map(([a,b])=>`<button class="free" data-act="novoAg" data-d="${d}" data-h="${min2hm(a)}">${min2hm(a)} às ${min2hm(b)}</button>`).join('')}</div>`:`<div class="empty">Dia cheio.</div>`}</div>
   <div class="card"><h3>Lista de espera <button class="btn sm soft" data-act="novaEspera">${ic('plus')}Adicionar</button></h3>${esp.length?`<div class="list">${esp.map(esperaRow).join('')}</div><p class="small muted" style="margin-bottom:0">O botão Avisar já sugere o primeiro horário livre que comporta o serviço.</p>`:'<div class="empty">Ninguém aguardando. Quando a agenda lotar, anote aqui quem quer um encaixe.</div>'}</div>
   <div class="card"><h3>Próximos 7 dias</h3><div class="list">${ag.filter(a=>a.data>d&&a.data<=addDays(d,7)&&a.status!=='cancelado').sort((a,b)=>(a.data+a.hora)<(b.data+b.hora)?-1:1).slice(0,6).map(a=>`<button class="item" data-act="agDia" data-d="${a.data}"><span class="time">${dataCurta(a.data)}</span><div class="grow"><div class="t">${esc(nomeCli(a.clienteId))}</div><div class="s">${esc(a.hora)} · ${esc(nomeAg(a))}</div></div></button>`).join('')||'<div class="empty">Nada marcado.</div>'}</div></div></section></div>`;
   return out;
@@ -857,7 +882,7 @@ function vClientes(){
   return head('Clientes','Suas <em>clientes</em>','Fidelidade calculada pelos últimos 12 meses.',`<div class="row">${pode('base')?`<button class="btn soft" data-act="cadLink">${ic('send')}Link de cadastro</button>`:''}<button class="btn primary" data-act="novaCli">${ic('plus')}Nova cliente</button></div>`)+cadastrosBloco()+reativarBloco()+
   `<div class="row"><label class="searchbox">${ic('search')}<input id="cliBusca" type="search" placeholder="Buscar por nome ou telefone" value="${esc(UI.cliBusca)}" aria-label="Buscar cliente"></label>${seg('cliOrd',UI.cliOrd,[['score','Fidelidade'],['gasto','Mais gastou'],['recente','Recentes'],['nome','A–Z']],'o')}</div>
   <div class="chips">${ch.map(([k,n,q])=>`<button class="chip" data-act="cliNivel" data-n="${k}" aria-pressed="${UI.cliNivel===k}">${n} · ${q}</button>`).join('')}</div>
-  <section class="card" style="padding:8px 14px">${fl.length?`<div class="list">${fl.map(({c,f})=>`<button class="item" data-act="verCli" data-id="${c.id}"><div class="avatar" style="--lv:${NIVEIS[f.nivel].c}">${iniciais(c.nome)}</div><div class="grow"><div class="t">${esc(c.nome)}${c.exemplo?' <span class="badge">exemplo</span>':''}</div><div class="s">${f.ult?`Última visita ${dataCurta(f.ult)} · `:''}${f.visitas} atendimento${f.visitas===1?'':'s'}${pode('fin')?` · ${BRL(f.total)}`:''}</div></div>${f.risco?'<span class="badge warn">em risco</span>':''}<span class="badge lv" style="--lv:${NIVEIS[f.nivel].c}">${NIVEIS[f.nivel].n} · ${f.score}</span></button>`).join('')}</div>`:`<div class="empty">Nenhuma cliente encontrada.</div>`}</section>
+  <section class="card" style="padding:8px 14px">${fl.length?`<div class="list">${fl.slice(0,UI.cliLim).map(({c,f})=>`<button class="item" data-act="verCli" data-id="${c.id}"><div class="avatar" style="--lv:${NIVEIS[f.nivel].c}">${iniciais(c.nome)}</div><div class="grow"><div class="t">${esc(c.nome)}${c.exemplo?' <span class="badge">exemplo</span>':''}</div><div class="s">${f.ult?`Última visita ${dataCurta(f.ult)} · `:''}${f.visitas} atendimento${f.visitas===1?'':'s'}${pode('fin')?` · ${BRL(f.total)}`:''}</div></div>${f.risco?'<span class="badge warn">em risco</span>':''}<span class="badge lv" style="--lv:${NIVEIS[f.nivel].c}">${NIVEIS[f.nivel].n} · ${f.score}</span></button>`).join('')}</div>${fl.length>UI.cliLim?`<div class="row" style="justify-content:center;padding:10px 0 4px"><button class="btn soft" data-act="cliMais">Ver mais clientes (faltam ${fl.length-UI.cliLim})</button></div>`:''}`:`<div class="empty">Nenhuma cliente encontrada.</div>`}</section>
   <details class="how card"><summary>Como funciona a pontuação de fidelidade</summary>
   <p>Cada cliente recebe de 0 a 100 pontos, recalculados automaticamente com base nos últimos 12 meses:</p>
   <table><tr><td><b>Frequência</b></td><td>7 pontos por atendimento concluído, até 35.</td></tr><tr><td><b>Valor</b></td><td>R$ 1.500 gastos no ano valem 30 pontos (máximo), proporcional.</td></tr>
@@ -1594,7 +1619,7 @@ function buscaIr(k,id){closeSheet(true);
 function retornos(){return memo('ret',()=>{const t=today();const max=+pol().campos.semanasMax||8;const out=[];
   const futuras=new Set(arr('agenda').filter(a=>a.data>=t&&(a.status==='agendado'||a.status==='confirmado')).map(a=>a.clienteId));
   arr('clientes').forEach(c=>{if(futuras.has(c.id))return;
-    const ult=arr('agenda').filter(a=>a.clienteId===c.id&&a.status==='concluido'&&a.data<=t).sort((a,b)=>a.data<b.data?1:-1)[0];
+    const ult=(agPorCli().get(c.id)||[]).filter(a=>a.status==='concluido'&&a.data<=t).sort((a,b)=>a.data<b.data?1:-1)[0];
     if(!ult||/retirada/i.test(nomeAg(ult)))return;
     const sem=Math.floor(diffDays(ult.data,t)/7);if(sem<Math.max(3,max-3)||sem>max+6)return;
     out.push({c,ult,sem,retirar:sem>=max-1})});
@@ -1666,7 +1691,7 @@ const toMs=x=>!x?0:typeof x.toMillis==='function'?x.toMillis():x.seconds?x.secon
 function gerarToken(n=24){const b=new Uint8Array(n);crypto.getRandomValues(b);return btoa(String.fromCharCode(...b)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')}
 const urlPublica=(pag,token)=>`${location.origin}/${pag}${token?'#'+token:''}`;
 function hashStr(t){let h=5381;for(let i=0;i<t.length;i++)h=((h<<5)+h+t.charCodeAt(i))|0;return (h>>>0).toString(36)}
-function saveRaw(col,id,data){id=id||uid();const rec={...data,atualizadoEm:nowIso(),atualizadoPor:ME||''};delete rec.id;S[col].set(id,{id,...rec});touch();setDoc(doc(FS,col,id),rec).catch(dbErr);return id}
+function saveRaw(col,id,data){id=id||uid();const rec={...data,atualizadoEm:nowIso(),atualizadoPor:ME||''};delete rec.id;S[col].set(id,{id,...rec});touch(col);setDoc(doc(FS,col,id),rec).catch(dbErr);return id}
 function htmlParaTexto(html){const t=document.createElement('div');t.innerHTML=html.replace(/<br\s*\/?>/gi,'\n').replace(/<\/(h1|h2|p|li|div|tr)>/gi,'\n').replace(/<li>/gi,'• ').replace(/<\/td>/gi,'  ');return t.textContent.replace(/[ \t]+\n/g,'\n').replace(/\n{3,}/g,'\n\n').trim()}
 const semRevisao=html=>html.replace(/<span class="rev"[^>]*>([\s\S]*?)<\/span>/g,'$1');
 const mascaraCpf=c=>{const d=digits(c);return d.length===11?`***.${d.slice(3,6)}.${d.slice(6,9)}-**`:''};
@@ -1834,12 +1859,12 @@ async function portalCriar(cid,novo=false,silencioso=false){const c=S.clientes.g
 function proximoNivel(score,nivel){if(nivel==='nova')return {nome:'Bronze',faltam:0,texto:'Depois do primeiro atendimento você ganha seu nível.'};
   const alvo=[['Prata',25],['Ouro Rosé',50],['Pérola',75]].find(([,m])=>m>score);return alvo?{nome:alvo[0],faltam:alvo[1]-score}:null}
 function portalSnapshot(c,P,pb){const f=fidelidade(c);const nv=NIVEIS[f.nivel];const t=today();
-  const concl=arr('agenda').filter(a=>a.clienteId===c.id&&(a.status==='concluido'||a.status==='faltou')&&a.data<=t).sort((a,b)=>(a.data+a.hora)<(b.data+b.hora)?1:-1);
+  const concl=(agPorCli().get(c.id)||[]).filter(a=>(a.status==='concluido'||a.status==='faltou')&&a.data<=t).sort((a,b)=>(a.data+a.hora)<(b.data+b.hora)?1:-1);
   const avaliado=a=>S.avaliacoes.has(`${c.portalToken}_${a.id}`);const lim60=addDays(t,-60);
   const avaliaveis=concl.filter(a=>a.status==='concluido'&&a.data>=lim60&&!avaliado(a)).map(a=>a.id);
   const ultimos=concl.slice(0,6).map(a=>({id:a.id,data:a.data,servico:nomeAg(a),status:a.status,pacote:!!a.pacoteId,avaliar:avaliaveis.includes(a.id)}));
   const ua=concl.find(a=>a.status==='concluido');let cuidados=null;
-  if(ua&&ua.data>=addDays(t,-150)){const m=manutDe(ua.servicoId);const cat=catDoServ(ua.servicoId);cuidados={servico:nomeAg(ua),data:ua.data,texto:(cat&&cat.cuidados)||CUIDADOS_PADRAO,semanas:m,manutAte:addDays(ua.data,m*7),temFuturo:arr('agenda').some(a=>a.clienteId===c.id&&a.data>=t&&(a.status==='agendado'||a.status==='confirmado'))}}
+  if(ua&&ua.data>=addDays(t,-150)){const m=manutDe(ua.servicoId);const cat=catDoServ(ua.servicoId);cuidados={servico:nomeAg(ua),data:ua.data,texto:(cat&&cat.cuidados)||CUIDADOS_PADRAO,semanas:m,manutAte:addDays(ua.data,m*7),temFuturo:(agPorCli().get(c.id)||[]).some(a=>a.data>=t&&(a.status==='agendado'||a.status==='confirmado'))}}
   const indicacao={codigo:c.indicacaoCodigo||'',indicadas:indPorCli().get(c.id)||0,beneficio:pb.indBenef||IND_PADRAO[0],beneficioNova:pb.indBenefNova||IND_PADRAO[1]};
   const contratos=[];const vistos=new Set();
   arr('contratosLink').filter(l=>l.clienteId===c.id).sort((a,b)=>a.criadoEm<b.criadoEm?1:-1).forEach(l=>{vistos.add(l.id);contratos.push({token:l.id,servico:l.servico||'',data:l.data||'',status:linkStatus(l),criadoEm:String(l.criadoEm).slice(0,10)})});
@@ -1851,7 +1876,7 @@ function portalSnapshot(c,P,pb){const f=fidelidade(c);const nv=NIVEIS[f.nivel];c
     regras:{prazoCancel:+P.campos.prazoCancel||48,tolerancia:+P.campos.tolerancia||0,sinalCancel:String(P.campos.sinalCancel||''),falta:String(P.campos.falta||''),preparo:String(P.campos.preparo||'')},
     atelie:{nome:pb.nome,responsavel:pb.responsavel,whatsapp:pb.whatsapp||'',instagram:pb.instagram||'',endereco:pb.endereco||'',municipio:pb.municipio||''}};
   const prazo=(+P.campos.prazoCancel||48)*3600e3;const pend=new Set(arr('solicitacoes').filter(q=>!q.processado).map(q=>q.agendaId));const prox={};
-  arr('agenda').filter(a=>a.clienteId===c.id&&a.data>=t&&(a.status==='agendado'||a.status==='confirmado'||(a.status==='cancelado'&&a.canceladoPor==='cliente'))).forEach(a=>{
+  (agPorCli().get(c.id)||[]).filter(a=>a.data>=t&&(a.status==='agendado'||a.status==='confirmado'||(a.status==='cancelado'&&a.canceladoPor==='cliente'))).forEach(a=>{
     const [y,m,d]=a.data.split('-').map(Number);const [hh,mm]=String(a.hora||'00:00').split(':').map(Number);const ini=new Date(y,m-1,d,hh||0,mm||0).getTime();
     const sinal=soma((a.pagamentos||[]).filter(p=>p.tipo==='sinal'));
     const o={data:a.data,hora:a.hora||'',servico:nomeAg(a),duracao:+a.duracao||0,status:a.status,pacote:!!a.pacoteId,sinal,limiteMs:ini-prazo};
@@ -1896,7 +1921,7 @@ function avisosPortal(){if(!pode('portal'))return '';const lim=Date.now()-14*864
     ...acc.map(l=>{const w=waLink(l.telefone,`Oi, ${primeiro(l.nome)}! Recebi o seu aceite do contrato, obrigada 💕 Segue o link para o pagamento do sinal: `);
       return `<div class="item"><div class="avatar" style="--lv:var(--lv-perola)">${ic('check')}</div><div class="grow"><div class="t" style="white-space:normal">${esc(primeiro(l.nome))} aceitou o contrato</div><div class="s" style="white-space:normal">${esc(l.servico)}${l.data?` · ${dataCurta(l.data)} ${esc(l.hora||'')}`:''} · agora envie o link de pagamento do sinal</div></div>${w?`<a class="btn sm primary" href="${w}" target="_blank" rel="noopener">${ic('chat')}Pagamento</a>`:''}<button class="btn sm ghost" data-act="avisoVisto" data-k="link" data-id="${l.id}">Ok</button></div>`})];
   rows.push(...cads);return `<section class="card aviso-portal"><h3>Novidades das clientes <small>${rows.length}</small></h3><div class="list">${rows.join('')}</div></section>`}
-async function avisoVisto(k,id){const col=k==='sol'?'solicitacoes':k==='anam'?'anamnesePortal':k==='aval'?'avaliacoes':'contratosLink';const x=S[col].get(id);if(x)S[col].set(id,{...x,visto:true});touch();updateDoc(doc(FS,col,id),{visto:true}).catch(dbErr)}
+async function avisoVisto(k,id){const col=k==='sol'?'solicitacoes':k==='anam'?'anamnesePortal':k==='aval'?'avaliacoes':'contratosLink';const x=S[col].get(id);if(x)S[col].set(id,{...x,visto:true});touch(col);updateDoc(doc(FS,col,id),{visto:true}).catch(dbErr)}
 
 
 /* ---------- cadastro pela própria cliente ---------- */
@@ -1970,7 +1995,7 @@ const ACT={
  avisada:t=>{const e=S.espera.get(t.dataset.id);if(e)save('espera',e.id,{...e,status:'avisada'})},
  novaCli:()=>formCliente(),editCli:t=>formCliente(t.dataset.id),verCli:t=>abrirCliente(t.dataset.id),
  delCli:t=>confirmar('Excluir esta cliente? O histórico fica sem nome. Pela LGPD, apague também a ficha de anamnese se ela pediu exclusão dos dados.',async()=>{await del('clientes',t.dataset.id);if(S.anamneses.has(t.dataset.id))await del('anamneses',t.dataset.id)}),
- cliNivel:t=>{UI.cliNivel=t.dataset.n;render()},cliOrd:t=>{UI.cliOrd=t.dataset.o;render()},
+ cliNivel:t=>{UI.cliNivel=t.dataset.n;UI.cliLim=60;render()},cliOrd:t=>{UI.cliOrd=t.dataset.o;UI.cliLim=60;render()},cliMais:()=>{UI.cliLim+=100;render()},
  anamnese:t=>formAnamnese(t.dataset.id),
  docCli:t=>{UI.ctCli=t.dataset.id;UI.ctAg='';UI.ctTab='emitir';UI.ctTipo='servico';go('contratos')},
  finTab:t=>{UI.finTab=t.dataset.t;if(UI.view!=='financeiro')go('financeiro');else render()},finMes:t=>{UI.finMes=addMonths(UI.finMes,+t.dataset.n);render()},
@@ -2043,7 +2068,7 @@ document.addEventListener('click',e=>{const t=e.target.closest('[data-act]');if(
 document.addEventListener('click',e=>{const h=e.target.closest('[data-hdia]');if(h){e.preventDefault();const on=h.getAttribute('aria-pressed')!=='true';h.setAttribute('aria-pressed',on);h.closest('.hr-row').classList.toggle('off',!on);return}
   const rr=e.target.closest('#fgRep');if(rr)return;const t=e.target.closest('#exTipo [data-t]');if(t){e.preventDefault();$$('#exTipo [data-t]').forEach(b=>b.setAttribute('aria-pressed',b===t));$$('#fExc .exh').forEach(l=>l.hidden=t.dataset.t!=='horario')}});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeSheet();const tag=(e.target.tagName||'').toLowerCase();const digitando=tag==='input'||tag==='textarea'||tag==='select'||e.target.isContentEditable;if(!digitando&&pode('base')&&!$('.sheet-back')&&(e.key==='/'||((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'))){e.preventDefault();busca()}});
-let buscaT;document.addEventListener('input',e=>{if(e.target.id==='cliBusca'){UI.cliBusca=e.target.value;clearTimeout(buscaT);buscaT=setTimeout(()=>{const pos=e.target.selectionStart;render();const i=$('#cliBusca');if(i){i.focus();try{i.setSelectionRange(pos,pos)}catch(_){}}},200)}});
+let buscaT;document.addEventListener('input',e=>{if(e.target.id==='cliBusca'){UI.cliBusca=e.target.value;UI.cliLim=60;clearTimeout(buscaT);buscaT=setTimeout(()=>{const pos=e.target.selectionStart;render();const i=$('#cliBusca');if(i){i.focus();try{i.setSelectionRange(pos,pos)}catch(_){}}},200)}});
 document.addEventListener('change',e=>{const id=e.target.id;
   const ap=e.target.dataset&&e.target.dataset.avpref;if(ap){setDoc(doc(FS,'avisos',ME),{prefs:{...avPrefs(),[ap]:e.target.checked},atualizadoEm:serverTimestamp()},{merge:true}).then(()=>toast('Preferência salva')).catch(dbErr);return}
   if(id==='ctTipo'){UI.ctTipo=e.target.value;render()}else if(id==='ctCli'){UI.ctCli=e.target.value;UI.ctAg='';render()}else if(id==='ctAg'){UI.ctAg=e.target.value;render()}
