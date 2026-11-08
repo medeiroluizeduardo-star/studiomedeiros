@@ -1,9 +1,11 @@
 // Mantém o sistema abrindo rápido mesmo com internet fraca.
 // Tenta a versão mais nova primeiro; se a rede demorar mais de 2,5 s, usa a cópia guardada
 // e atualiza em segundo plano para a próxima abertura.
-const CACHE = 'smt-v13';
-const ARQUIVOS = ['./', 'img/marca.webp', 'img/logo.webp', 'img/faixa.webp', 'index.html', 'styles.css', 'app.js', 'firebase-config.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png',
-  'publico.css', 'publico.js', 'catalogo.js', 'cliente.js', 'contrato.js', 'cadastro.js', 'fb.js', 'demo/firebase-demo.js'];
+const CACHE = 'smt-v14';
+// Só o que o sistema precisa para abrir. O ícone grande e o modo demonstração não entram: quem usa, guarda ao abrir.
+const ARQUIVOS = ['./', 'img/marca.webp', 'img/logo.webp', 'img/faixa.webp', 'index.html', 'styles.css', 'app.js', 'firebase-config.js', 'manifest.webmanifest', 'icon-192.png',
+  'fontes/figtree.woff2', 'fontes/cormorant.woff2', 'fontes/cormorant-italico.woff2',
+  'publico.css', 'publico.js', 'catalogo.js', 'cliente.js', 'contrato.js', 'cadastro.js', 'fb.js'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(ARQUIVOS).catch(() => {})).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', e => {
