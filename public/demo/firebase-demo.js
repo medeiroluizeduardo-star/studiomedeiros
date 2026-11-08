@@ -94,8 +94,10 @@ function avisar() {
   if (avisoT) return;
   avisoT = setTimeout(() => { avisoT = null; for (const o of [...OUVINTES]) o.rodar(); }, 0);
 }
-export function onSnapshot(ref, prox, erro) {
-  if (prox && typeof prox === 'object') ({ next: prox, error: erro } = prox);
+export function onSnapshot(ref, prox, erro, erro2) {
+  // como no Firebase: onSnapshot(ref, opções, próximo, erro) também vale
+  if (prox && typeof prox === 'object' && typeof erro === 'function') { prox = erro; erro = erro2; }
+  else if (prox && typeof prox === 'object') ({ next: prox, error: erro } = prox);
   let ultimo = null; let antes = new Map();
   const o = {
     rodar() {

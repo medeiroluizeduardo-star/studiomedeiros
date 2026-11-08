@@ -3,7 +3,7 @@
 import { test, before, after, beforeEach } from 'node:test';
 import { readFileSync } from 'node:fs';
 import { initializeTestEnvironment, assertSucceeds, assertFails } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs, query, where, serverTimestamp, Timestamp } from 'firebase/firestore';
 
 let env;
 const DONA = 'dona', PARCEIRA = 'parc', RECEPCAO = 'recep', CONTADOR = 'cont', INATIVA = 'inat', ESTRANHA = 'estranha';
@@ -163,4 +163,13 @@ test('avisos no celular: cada pessoa da equipe mexe só nos próprios; estado da
   await assertSucceeds(getDoc(doc(db(DONA), 'avisosEstado/estado')));
   await assertFails(getDoc(doc(db(RECEPCAO), 'avisosEstado/estado')));
   await assertFails(setDoc(doc(db(DONA), 'avisosEstado/estado'), { enviados: {} }));
+});
+
+// O sistema lê agenda e lançamentos só a partir de um corte de data (histórico sob demanda).
+test('agenda e lançamentos a partir de uma data: cada perfil lê o que já podia ler', async () => {
+  const desde = (uid, c) => getDocs(query(collection(db(uid), c), where('data', '>=', '2025-01-01')));
+  for (const uid of [DONA, PARCEIRA, RECEPCAO, CONTADOR]) await assertSucceeds(desde(uid, 'agenda'));
+  for (const uid of [DONA, CONTADOR]) await assertSucceeds(desde(uid, 'lancamentos'));
+  for (const uid of [PARCEIRA, RECEPCAO, null]) await assertFails(desde(uid, 'lancamentos'));
+  await assertFails(desde(null, 'agenda'));
 });
