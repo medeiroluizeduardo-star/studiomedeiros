@@ -1,6 +1,4 @@
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
-import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, onSnapshot, setDoc, deleteDoc, getDoc, updateDoc, query, where, Timestamp, arrayUnion, arrayRemove, deleteField } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { DEMO, initializeApp, getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, onSnapshot, setDoc, deleteDoc, getDoc, updateDoc, query, where, Timestamp, arrayUnion, arrayRemove, deleteField } from './fb.js';
 import { firebaseConfig } from './firebase-config.js';
 /* Stéfany Medeiros Trancista · sistema de gestão (Firebase) */
 /* ================= utilidades ================= */
@@ -155,7 +153,7 @@ function subscribe(cols){
     unsubs.push(u);
   });
 }
-const configPendente=()=>!firebaseConfig||!firebaseConfig.apiKey||/COLE|SUA_/i.test(firebaseConfig.apiKey);
+const configPendente=()=>!DEMO&&!firebaseConfig||!firebaseConfig.apiKey||/COLE|SUA_/i.test(firebaseConfig.apiKey);
 
 function virarPapel(papel){if(ROLE===papel)return;pararDados();ROLE=papel;if(COLS_POR_PAPEL[papel]){if(!visiveis().some(v=>v[0]===UI.view))UI.view=visiveis()[0][0];subscribe(COLS_POR_PAPEL[papel])}render()}
 function vigiarEquipe(user){
@@ -496,19 +494,24 @@ function shell(){
 }
 function render(){
   const main=$('#main');
-  if(['config','login','primeiro','pendente','erro'].includes(ROLE)){$('#tabbar').innerHTML='';$('#navSide').innerHTML='';$('#syncSide').innerHTML='';if(!main.dataset.gate||main.dataset.gate!==ROLE){main.dataset.gate=ROLE;main.innerHTML=gate()}return}
+  if(['config','login','primeiro','pendente','erro'].includes(ROLE)){$('#tabbar').innerHTML='';$('#navSide').innerHTML='';$('#syncSide').innerHTML='';if(!main.dataset.gate||main.dataset.gate!==ROLE){main.dataset.gate=ROLE;main.innerHTML=demoFaixa()+gate()}return}
   main.dataset.gate='';
   if(ROLE==='carregando'||[...NEED].some(c=>!loaded.has(c))){if(!$('#loadMark')){main.innerHTML=`<div class="sk-wrap" aria-busy="true" aria-label="Carregando"><div id="loadMark" class="row" style="gap:12px">${marcaImg(40)}<div class="sk" style="width:180px;height:28px"></div></div><div class="sk" style="height:96px"></div><div class="kpis">${'<div class="sk" style="height:84px"></div>'.repeat(4)}</div><div class="grid g2"><div class="sk" style="height:220px"></div><div class="sk" style="height:220px"></div></div></div>`}return}
   if(!visiveis().some(v=>v[0]===UI.view))UI.view=visiveis()[0][0];
+  if(DEMO&&!DEMO_SEMEADO&&isOwner()&&!pub().started&&S.clientes.size===0){DEMO_SEMEADO=true;setTimeout(()=>seed(true),0)}
   const top=shell();
   const fn={inicio:vInicio,agenda:vAgenda,clientes:vClientes,catalogo:vCatalogo,financeiro:vFinanceiro,contratos:vContratos,pacotes:vPacotes,estoque:vEstoque,calendario:vCalendario,ajustes:vAjustes}[UI.view]||vInicio;
   const changed=UI.lastView!==UI.view;UI.lastView=UI.view;const y=window.scrollY;
   const ae=document.activeElement;const aid=ae&&main.contains(ae)?ae.id:null;
-  main.innerHTML=top+`<div class="stack ${changed?'enter':''}" id="view">${fn()}</div>`;
+  main.innerHTML=demoFaixa()+top+`<div class="stack ${changed?'enter':''}" id="view">${fn()}</div>`;
   if(changed)countUps();else window.scrollTo(0,y);
   if(aid){const el=document.getElementById(aid);if(el&&el.focus)el.focus()}
   afterRender();
 }
+/* modo demonstração (?demo e prévias): faixa no topo para ninguém confundir com o sistema real */
+let DEMO_SEMEADO=false;
+const DEMO_PREVIA=/--[a-z0-9-]+\.(web\.app|firebaseapp\.com)$/i.test(location.hostname);
+function demoFaixa(){if(!DEMO)return '';return `<div class="demo-faixa" role="note">${ic('info')}<span class="grow"><b>Modo demonstração.</b> Clientes e valores fictícios, guardados só neste aparelho. Nada vai para o sistema real.${ROLE==='login'?' Entre com qualquer e-mail e senha.':''}</span><button class="btn ghost sm" data-act="demoRecomecar">Recomeçar</button>${DEMO_PREVIA?'':'<a class="btn ghost sm" href="/?demo=0">Sair</a>'}</div>`}
 function afterRender(){const c=$('#sigPad');if(c&&!c.dataset.on)sigInit(c);carregaFotos()}
 function gate(){
   const card=(t,body)=>`<div class="gate"><div class="stack" style="align-items:stretch;max-width:420px;width:100%"><img class="gate-logo" src="/img/logo.webp" width="420" height="280" alt="Stéfany Medeiros"><div class="card stack" style="align-items:center;width:100%"><h2 class="page-title" style="font-size:1.6rem">${t}</h2>${body}</div></div></div>`;
@@ -1851,6 +1854,7 @@ function avisosCadastro(){return arr('cadastros').filter(x=>x.status==='enviado'
 const ACT={
  go:t=>go(t.dataset.v),mais:()=>mais(),close:()=>closeSheet(),
  seed:t=>seed(t.dataset.ex==='1'),
+ demoRecomecar:()=>confirmar('Apagar os dados de demonstração e começar de novo?',async()=>{const m=await import('./demo/firebase-demo.js');m.recomecarDemo();location.replace(location.pathname+(DEMO_PREVIA?'':'?demo'))}),
  novoAg:t=>formAgenda(null,{d:t.dataset.d,h:t.dataset.h,c:t.dataset.c}),editAg:t=>formAgenda(t.dataset.id),
  agDia:t=>{UI.agDia=t.dataset.d;if(UI.view!=='agenda')go('agenda');else render()},agNav:t=>{UI.agDia=addDays(UI.agDia,+t.dataset.n);render()},agHoje:()=>{UI.agDia=today();render()},agVis:t=>{UI.agVis=t.dataset.t;render()},agVerDia:t=>{UI.agDia=t.dataset.d;UI.agVis='dia';render()},agMes:t=>{const p=parse(UI.agDia);const n=new Date(p.getFullYear(),p.getMonth()+ +t.dataset.n,1);UI.agDia=ymd(n);render()},
  stAg:async t=>{const a=S.agenda.get(t.dataset.id);await save('agenda',a.id,{...a,status:t.dataset.s});toast('Atendimento confirmado')},

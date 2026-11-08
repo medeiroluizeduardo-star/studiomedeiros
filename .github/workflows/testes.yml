@@ -1,0 +1,83 @@
+name: Testes automáticos
+
+# regras: testa as regras de segurança do Firestore, perfil por perfil, no emulador do Firebase.
+# telas: abre o site no modo demonstração num navegador e passa por todas as telas, no computador e no celular.
+# Roda em toda proposta de mudança (pull request) e antes de cada publicação (chamado pelo firebase-hosting.yml).
+on:
+  pull_request:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regras:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Instalar
+        working-directory: testes
+        run: npm install --no-audit --no-fund
+
+      - name: Regras de segurança (emulador do Firebase)
+        working-directory: testes
+        run: npm run regras
+
+      - name: Resultado
+        if: always()
+        working-directory: testes
+        run: |
+          if [ ! -f resultado.tap ]; then echo "::error title=Regras::Os testes não chegaram a rodar."; exit 1; fi
+          ok=$(grep -cE '^ *ok [0-9]+ ' resultado.tap || true)
+          falhou=$(grep -cE '^ *not ok [0-9]+ ' resultado.tap || true)
+          grep -E '^ *not ok [0-9]+ ' resultado.tap | sed -E 's/^ *not ok [0-9]+ - /::error title=Teste falhou::/' || true
+          echo "::notice title=Regras::$ok passaram, $falhou falharam"
+          { echo "### Regras de segurança"; echo "$ok passaram, $falhou falharam"; } >> "$GITHUB_STEP_SUMMARY"
+          [ "$falhou" = "0" ] && [ "$ok" -gt 0 ]
+
+  telas:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Instalar o navegador (Chromium)
+        run: |
+          # Só o Playwright, numa pasta à parte (sem as ferramentas do Firebase, que este teste não usa).
+          V=$(jq -r .devDependencies.playwright testes/package.json)
+          npm install --no-audit --no-fund --prefix "$RUNNER_TEMP/pw" "playwright@$V"
+          "$RUNNER_TEMP/pw/node_modules/.bin/playwright" install --with-deps chromium
+          echo "NODE_PATH=$RUNNER_TEMP/pw/node_modules" >> "$GITHUB_ENV"
+
+      - name: Todas as telas no modo demonstração (computador e celular)
+        working-directory: testes
+        run: npm run telas
+
+      - name: Resultado
+        if: always()
+        working-directory: testes
+        run: |
+          if [ ! -f resultado.tap ]; then echo "::error title=Telas::O teste das telas não chegou a rodar."; exit 1; fi
+          ok=$(grep -cE '^ *ok [0-9]+ ' resultado.tap || true)
+          falhou=$(grep -cE '^ *not ok [0-9]+ ' resultado.tap || true)
+          grep -E '^ *not ok [0-9]+ ' resultado.tap | sed -E 's/^ *not ok [0-9]+ - /::error title=Tela com problema::/' || true
+          awk '/^ *not ok [0-9]+ /{f=1; n=$0; d=""; next} f && /^ *\.\.\.$/{print "::error title=Detalhe::" n " | " d; f=0; next} f{gsub(/^ +/,""); if (length(d) < 900) d=d " " $0}' resultado.tap || true
+          echo "::notice title=Telas::$ok passaram, $falhou falharam"
+          { echo "### Teste das telas"; echo "$ok passaram, $falhou falharam"; } >> "$GITHUB_STEP_SUMMARY"
+          [ "$falhou" = "0" ] && [ "$ok" -gt 0 ]

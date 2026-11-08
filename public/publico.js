@@ -1,6 +1,5 @@
 // Base compartilhada das páginas abertas às clientes (catálogo, contrato e espaço da cliente).
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
-import { getFirestore } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { initializeApp, getFirestore } from './fb.js';
 import { firebaseConfig } from './firebase-config.js';
 
 export const FS = getFirestore(initializeApp(firebaseConfig));
