@@ -1,0 +1,61 @@
+name: Cópia de segurança
+
+# Todo dia às 3h (Brasília): cópia diária (tudo, menos as fotos do catálogo), guardada 30 dias.
+# Domingo: cópia semanal (inclui as fotos do catálogo), guardada 90 dias.
+# Manual (Run workflow): escolha o tipo.
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    inputs:
+      tipo:
+        description: 'Tipo da cópia'
+        type: choice
+        options: [diaria, semanal]
+        default: diaria
+
+permissions:
+  contents: read
+
+concurrency:
+  group: banco
+  cancel-in-progress: false
+
+jobs:
+  copia:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Escolher o tipo
+        run: |
+          T="${{ inputs.tipo }}"
+          if [ -z "$T" ]; then
+            if [ "$(TZ=America/Sao_Paulo date +%u)" = "7" ]; then T=semanal; else T=diaria; fi
+          fi
+          case "$T" in diaria) D=30;; *) D=90;; esac
+          echo "BACKUP_TIPO=$T" >> "$GITHUB_ENV"
+          echo "DIAS=$D" >> "$GITHUB_ENV"
+          echo "NOME=copia-$T-$(TZ=America/Sao_Paulo date +%Y-%m-%d_%Hh%M)" >> "$GITHUB_ENV"
+
+      - name: Copiar o banco
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          BACKUP_PASTA: copia
+        run: |
+          npm install --no-audit --no-fund --prefix integracao/admin
+          node integracao/admin/backup.mjs
+
+      - name: Guardar no GitHub
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.NOME }}
+          path: copia/
+          retention-days: ${{ env.DIAS }}
+          compression-level: 0
+          if-no-files-found: error

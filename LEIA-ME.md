@@ -145,7 +145,24 @@ O plano gratuito do Firebase (**Spark**) costuma atender com folga um ateliê co
 
 ## Cópias de segurança
 
-Baixe uma cópia por mês em **Ajustes › Baixar cópia (JSON)** e guarde no Google Drive ou no computador.
+**Automática, pelo GitHub** (rotina **Cópia de segurança**, `.github/workflows/backup.yml`), todo dia às 3h:
+- **Diária:** todas as coleções, inclusive o espaço das clientes, menos as fotos do catálogo e os erros dos aparelhos. Fica guardada 30 dias.
+- **Semanal (domingo):** inclui as fotos do catálogo. Fica guardada 90 dias.
+- O resumo de cada execução mostra quantos documentos foram lidos (contam na cota grátis de 50 mil leituras por dia) e o tamanho do pacote.
+- Para baixar: GitHub › Actions › Cópia de segurança › abra a execução e clique no pacote em **Artifacts**.
+
+**Restaurar** (rotina **Restaurar cópia de segurança**, Run workflow):
+1. Pegue o número da execução da cópia (está no resumo dela e no endereço: `.../actions/runs/NÚMERO`).
+2. Informe as coleções (`todas` ou, por exemplo, `clientes,agenda`) e, se for um item só, o código do documento.
+3. Rode primeiro **sem** marcar *Aplicar de verdade*: o resumo mostra quantos documentos voltariam e quantos já estão iguais.
+4. Rode de novo marcando *Aplicar de verdade*. O estado de antes fica no pacote **estado-antes-da-restauracao** daquela execução; para desfazer, restaure informando o número dela.
+- *Apagar o que foi criado depois da cópia* remove, nas coleções escolhidas, os documentos que não existiam na cópia.
+
+**Manual:** em **Ajustes › Conta e dados › Baixar cópia (JSON)**, para guardar uma cópia sua no Google Drive ou no computador.
+
+## Erros nos aparelhos
+
+Quando uma tela falha no celular ou no computador de alguém da equipe, o sistema anota o erro, a tela e o tipo de aparelho (coleção `erros`). No máximo 5 registros por vez que a pessoa abre o sistema, sem nada do que foi digitado. Só a proprietária vê e apaga: **Ajustes › Conta e dados › Erros nos aparelhos**. Basta mandar um print dessa lista para corrigir.
 
 ## Estrutura da pasta
 
@@ -163,8 +180,9 @@ stefany-trancista/
     ├── fb.js              escolhe entre o Firebase de verdade e o de demonstração
     ├── demo/              banco de mentira do modo demonstração
     ├── manifest.webmanifest, sw.js, ícones  (instalação no celular)
-testes/                    testes automáticos (regras do banco e telas)
-.github/workflows/         publicar, prévia e testes
+testes/                    testes automáticos (regras do banco, rotinas e telas)
+integracao/admin/          cópia de segurança e restauração (rodam no GitHub)
+.github/workflows/         publicar, prévia, testes, cópia de segurança e restaurar
 ```
 
 ## Problemas comuns

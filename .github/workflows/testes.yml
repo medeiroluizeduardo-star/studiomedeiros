@@ -1,6 +1,6 @@
 name: Testes automáticos
 
-# regras: testa as regras de segurança do Firestore, perfil por perfil, no emulador do Firebase.
+# regras: testa as regras de segurança do Firestore, perfil por perfil, e as rotinas de cópia e restauração, no emulador do Firebase.
 # telas: abre o site no modo demonstração num navegador e passa por todas as telas, no computador e no celular.
 # Roda em toda proposta de mudança (pull request) e antes de cada publicação (chamado pelo firebase-hosting.yml).
 on:
@@ -28,10 +28,11 @@ jobs:
           java-version: 21
 
       - name: Instalar
-        working-directory: testes
-        run: npm install --no-audit --no-fund
+        run: |
+          npm install --no-audit --no-fund --prefix integracao/admin
+          npm install --no-audit --no-fund --prefix testes
 
-      - name: Regras de segurança (emulador do Firebase)
+      - name: Regras de segurança e rotinas (emulador do Firebase)
         working-directory: testes
         run: npm run regras
 
@@ -44,7 +45,7 @@ jobs:
           falhou=$(grep -cE '^ *not ok [0-9]+ ' resultado.tap || true)
           grep -E '^ *not ok [0-9]+ ' resultado.tap | sed -E 's/^ *not ok [0-9]+ - /::error title=Teste falhou::/' || true
           echo "::notice title=Regras::$ok passaram, $falhou falharam"
-          { echo "### Regras de segurança"; echo "$ok passaram, $falhou falharam"; } >> "$GITHUB_STEP_SUMMARY"
+          { echo "### Regras de segurança e rotinas"; echo "$ok passaram, $falhou falharam"; } >> "$GITHUB_STEP_SUMMARY"
           [ "$falhou" = "0" ] && [ "$ok" -gt 0 ]
 
   telas:
