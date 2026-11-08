@@ -71,3 +71,29 @@ for (const [nome, viewport] of TAMANHOS) {
     } finally { await ctx.close(); }
   });
 }
+
+// A tela se redesenha quando chega novidade de outro aparelho. O que estava sendo digitado (e ainda não foi salvo)
+// não pode sumir, e uma caixa aberta não pode fechar sozinha.
+test('texto digitado não some quando chega novidade', async () => {
+  const { ctx, pg, problemas } = await abrir({ width: 390, height: 844 });
+  try {
+    await pg.goto(srv.url + '/?demo');
+    await pg.waitForFunction(() => /Ana Beatriz|Jéssica|Camila/.test(document.body.innerText), null, { timeout: 15000 });
+    const novidade = () => pg.evaluate(async () => {
+      const m = await import('/demo/firebase-demo.js');
+      await m.setDoc(m.doc(null, 'agenda/teste-' + Math.random().toString(36).slice(2)), { clienteId: '', data: '2030-01-02', hora: '10:00', status: 'agendado', valor: 0 });
+      await new Promise(r => setTimeout(r, 300));
+    });
+    await pg.evaluate(() => document.querySelector('#navSide [data-v="ajustes"]').click());
+    await pg.evaluate(() => document.querySelector('#view [data-act="ajTab"][data-t="negocio"]').click());
+    await pg.waitForSelector('#gEnd');
+    await pg.fill('#gEnd', 'Rua do Teste, 10');
+    await novidade();
+    assert.equal(await pg.$eval('#gEnd', e => e.value), 'Rua do Teste, 10', 'o endereço digitado sumiu');
+    await pg.evaluate(() => document.querySelector('#navSide [data-v="clientes"]').click());
+    await pg.evaluate(() => { document.querySelector('#view details').open = true; });
+    await novidade();
+    assert.ok(await pg.$eval('#view details', d => d.open), 'a caixa aberta fechou sozinha');
+    assert.deepEqual(problemas, []);
+  } finally { await ctx.close(); }
+});
