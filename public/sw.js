@@ -1,7 +1,7 @@
 // Mantém o sistema abrindo rápido mesmo com internet fraca.
 // Tenta a versão mais nova primeiro; se a rede demorar mais de 2,5 s, usa a cópia guardada
 // e atualiza em segundo plano para a próxima abertura.
-const CACHE = 'smt-v14';
+const CACHE = 'smt-v15';
 // Só o que o sistema precisa para abrir. O ícone grande e o modo demonstração não entram: quem usa, guarda ao abrir.
 const ARQUIVOS = ['./', 'img/marca.webp', 'img/logo.webp', 'img/faixa.webp', 'index.html', 'styles.css', 'app.js', 'firebase-config.js', 'manifest.webmanifest', 'icon-192.png',
   'fontes/figtree.woff2', 'fontes/cormorant.woff2', 'fontes/cormorant-italico.woff2',

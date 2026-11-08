@@ -108,7 +108,14 @@ const COLS_POR_PAPEL={
 };
 const S={};ALL_COLS.forEach(c=>S[c]=new Map());
 let MODE='db',ROLE='carregando',ME=null,EMAIL='',APP=null,AUTH=null,FS=null,ACESSO=null;const ctl={acesso:null,equipe:null,avisos:null,avEstado:null};let MEUS_AVISOS=null,AV_ESTADO=null;
-let NEED=new Set();const loaded=new Set();const unsubs=[];
+let NEED=new Set();const loaded=new Set();const OUV=new Map();
+/* Histórico sob demanda: agenda e lançamentos vêm só a partir de 1º de janeiro do ano passado (cobre fidelidade de
+   12 meses, limite do MEI do ano e do anterior, retornos). Cada abertura do sistema relê do Firebase só esse período,
+   e não tudo desde o começo; isso poupa a cota grátis de leituras. Os anos anteriores são buscados quando alguém abre
+   um mês antigo (Finanças, Agenda, Datas), pede o histórico de uma cliente ou baixa a cópia de segurança. */
+const JANELA=new Set(['agenda','lancamentos']);
+const corte=()=>(+today().slice(0,4)-1)+'-01-01';
+let HIST=false,histProm=null;
 let DATAV=0;const MEMO=new Map();
 // a versão inclui o dia: depois da meia-noite os cálculos que usam "hoje" são refeitos
 const memo=(k,fn)=>{const v=DATAV+'|'+today();const m=MEMO.get(k);if(m&&m.v===v)return m.r;const r=fn();MEMO.set(k,{v,r});return r};
@@ -143,25 +150,35 @@ function dbErr(e){const c=e&&e.code;toast(c==='permission-denied'?'Seu perfil n�
 const MEMO_COLS=new Set(['clientes','agenda','servicos','lancamentos','pacotes','vales','privado','publico']);
 function touch(col){if(!col||MEMO_COLS.has(col))DATAV++;schedule()}
 
-function pararDados(){unsubs.splice(0).forEach(u=>{try{u()}catch(e){}});loaded.clear();ALL_COLS.forEach(c=>S[c]=new Map());NEED=new Set()}
+function pararDados(){OUV.forEach(u=>{try{u()}catch(e){}});OUV.clear();loaded.clear();HIST=false;histProm=null;ALL_COLS.forEach(c=>S[c]=new Map());NEED=new Set()}
 function pararTudo(){pararDados();MEUS_AVISOS=null;AV_ESTADO=null;['acesso','equipe','avisos','avEstado'].forEach(k=>{if(ctl[k]){try{ctl[k]()}catch(e){}ctl[k]=null}});ACESSO=null}
-function subscribe(cols){
-  NEED=new Set(cols);
-  cols.forEach(c=>{
-    let q=collection(FS,c);
-    if(c==='aceites'&&ROLE==='recepcao')q=query(q,where('tipo','in',['servico','politica']));
-    if(c==='contratosLink')q=query(q,where('criadoEm','>=',addDays(today(),-120)));
-    if(c==='cadastros')q=query(q,where('criadoEm','>=',addDays(today(),-90)));
-    // Na primeira leitura monta a coleção inteira; depois só aplica o que mudou (uma agenda com milhares de
-    // atendimentos não é refeita inteira a cada horário marcado).
-    const u=onSnapshot(q,snap=>{
-        if(loaded.has(c)&&typeof snap.docChanges==='function')snap.docChanges().forEach(ch=>{if(ch.type==='removed')S[c].delete(ch.doc.id);else S[c].set(ch.doc.id,{id:ch.doc.id,...ch.doc.data()})});
-        else{const m=new Map();snap.docs.forEach(d=>m.set(d.id,{id:d.id,...d.data()}));S[c]=m}
-        loaded.add(c);touch(c);agendaProcessar()},
-      err=>{console.error(c,err);loaded.add(c);touch(c);if(err.code==='permission-denied')toast('Seu acesso mudou. Entre novamente.')});
-    unsubs.push(u);
-  });
-}
+function consulta(c){let q=collection(FS,c);
+  if(c==='aceites'&&ROLE==='recepcao')q=query(q,where('tipo','in',['servico','politica']));
+  if(c==='contratosLink')q=query(q,where('criadoEm','>=',addDays(today(),-120)));
+  if(c==='cadastros')q=query(q,where('criadoEm','>=',addDays(today(),-90)));
+  if(JANELA.has(c)&&!HIST)q=query(q,where('data','>=',corte()));
+  return q}
+function ouvir(c,pronto){
+  // Na primeira leitura monta a coleção inteira; depois só aplica o que mudou (uma agenda com milhares de
+  // atendimentos não é refeita inteira a cada horário marcado).
+  // quem espera o histórico (pronto) precisa saber quando a resposta veio do servidor, e não só do aparelho
+  const u=onSnapshot(consulta(c),{includeMetadataChanges:!!pronto},snap=>{
+      if(pronto&&snap.metadata&&snap.metadata.fromCache&&loaded.has(c)&&snap.docChanges&&!snap.docChanges().length)return;
+      if(loaded.has(c)&&typeof snap.docChanges==='function')snap.docChanges().forEach(ch=>{if(ch.type==='removed')S[c].delete(ch.doc.id);else S[c].set(ch.doc.id,{id:ch.doc.id,...ch.doc.data()})});
+      else{const m=new Map();snap.docs.forEach(d=>m.set(d.id,{id:d.id,...d.data()}));S[c]=m}
+      loaded.add(c);touch(c);agendaProcessar();if(pronto&&!(snap.metadata&&snap.metadata.fromCache)){pronto();pronto=null}},
+    err=>{console.error(c,err);loaded.add(c);touch(c);if(pronto)pronto();if(err.code==='permission-denied')toast('Seu acesso mudou. Entre novamente.')});
+  const antigo=OUV.get(c);OUV.set(c,u);if(antigo)try{antigo()}catch(e){}}
+function subscribe(cols){NEED=new Set(cols);cols.forEach(c=>ouvir(c))}
+/** Busca também os anos anteriores ao corte (uma vez por abertura). Responde quando chegaram (ou em até 15 s). */
+function carregarHistorico(){if(histProm)return histProm;if(HIST||!FS)return Promise.resolve();HIST=true;
+  const cs=[...JANELA].filter(c=>NEED.has(c));if(cs.length)toast('Buscando os anos anteriores…');
+  histProm=Promise.all(cs.map(c=>new Promise(ok=>{const t=setTimeout(ok,15000);ouvir(c,()=>{clearTimeout(t);ok()})}))).then(()=>{touch()});
+  return histProm}
+const histAte=()=>HIST?'':corte();
+/* telas que mostram um período antes do corte pedem o histórico sozinhas */
+function histPelaTela(){if(HIST)return;const cm=corte().slice(0,7);
+  if((UI.view==='financeiro'&&UI.finMes<cm)||(UI.view==='calendario'&&UI.calMes<cm)||(UI.view==='agenda'&&UI.agDia<corte()))carregarHistorico()}
 const configPendente=()=>!DEMO&&!firebaseConfig||!firebaseConfig.apiKey||/COLE|SUA_/i.test(firebaseConfig.apiKey);
 
 function virarPapel(papel){if(ROLE===papel)return;pararDados();ROLE=papel;errEnviar();vigiarAvisos();if(COLS_POR_PAPEL[papel]){if(!visiveis().some(v=>v[0]===UI.view))UI.view=visiveis()[0][0];subscribe(COLS_POR_PAPEL[papel])}render()}
@@ -582,6 +599,7 @@ function render(){
   if(ROLE==='carregando'||[...NEED].some(c=>!loaded.has(c))){if(!$('#loadMark')){main.innerHTML=`<div class="sk-wrap" aria-busy="true" aria-label="Carregando"><div id="loadMark" class="row" style="gap:12px">${marcaImg(40)}<div class="sk" style="width:180px;height:28px"></div></div><div class="sk" style="height:96px"></div><div class="kpis">${'<div class="sk" style="height:84px"></div>'.repeat(4)}</div><div class="grid g2"><div class="sk" style="height:220px"></div><div class="sk" style="height:220px"></div></div></div>`}return}
   if(!visiveis().some(v=>v[0]===UI.view))UI.view=visiveis()[0][0];
   if(DEMO&&!DEMO_SEMEADO&&isOwner()&&!pub().started&&S.clientes.size===0){DEMO_SEMEADO=true;setTimeout(()=>seed(true),0)}
+  histPelaTela();
   const top=shell();
   const fn={inicio:vInicio,agenda:vAgenda,clientes:vClientes,catalogo:vCatalogo,financeiro:vFinanceiro,contratos:vContratos,pacotes:vPacotes,estoque:vEstoque,calendario:vCalendario,ajustes:vAjustes}[UI.view]||vInicio;
   const changed=UI.lastView!==UI.view;UI.lastView=UI.view;const y=window.scrollY;
@@ -1202,7 +1220,7 @@ function abrirCliente(id){
    ${c.indicacaoCodigo||(indPorCli().get(id)||0)?`<div class="small"><b>Indicação:</b> código <b>${esc(c.indicacaoCodigo||'— (criado ao ativar o espaço)')}</b> · indicou ${indPorCli().get(id)||0} cliente(s)</div>`:''}
    ${pode('portal')?portalBloco(c):''}
    <div class="row"><button class="btn primary" data-act="novoAg" data-c="${id}">${ic('cal')}Agendar</button>${l?`<a class="btn soft" href="${l}" target="_blank" rel="noopener">${ic('chat')}WhatsApp</a>`:''}${pode('base')?`<button class="btn soft" data-act="cadLink" data-c="${id}">${ic('send')}Atualizar cadastro</button>`:''}<button class="btn soft" data-act="linkContrato" data-c="${id}">${ic('file')}Enviar contrato</button><button class="btn ghost" data-act="editCli" data-id="${id}">${ic('edit')}Editar</button></div>
-   <div><div class="eyebrow" style="margin-bottom:6px">Histórico</div>${hist.length?`<div class="list">${hist.map(a=>`<div class="item"><span class="time">${dataCurta(a.data)}</span><div class="grow"><div class="t">${esc(nomeAg(a))}</div><div class="s">${a.data.slice(0,4)} · ${a.pacoteId?'pacote':BRL(a.valor)}</div></div><span class="badge">${STATUS[a.status]?.n||''}</span></div>`).join('')}</div>`:'<div class="empty">Sem atendimentos ainda.</div>'}</div></div>`);
+   <div><div class="eyebrow" style="margin-bottom:6px">Histórico</div>${histAte()&&c.criadoEm&&c.criadoEm<histAte()?`<div class="small muted" style="margin-bottom:6px">Mostrando desde ${dataBR(histAte())}. <button class="btn sm ghost" data-act="verHist" data-id="${id}">Ver anos anteriores</button></div>`:''}${hist.length?`<div class="list">${hist.map(a=>`<div class="item"><span class="time">${dataCurta(a.data)}</span><div class="grow"><div class="t">${esc(nomeAg(a))}</div><div class="s">${a.data.slice(0,4)} · ${a.pacoteId?'pacote':BRL(a.valor)}</div></div><span class="badge">${STATUS[a.status]?.n||''}</span></div>`).join('')}</div>`:'<div class="empty">Sem atendimentos ainda.</div>'}</div></div>`);
 }
 function formCliente(id){
   const c=id?S.clientes.get(id):{};const outras=arr('clientes').filter(x=>x.id!==id).sort((a,b)=>a.nome.localeCompare(b.nome));
@@ -1580,7 +1598,7 @@ async function seed(ex){
   await pool(ops.map(([c,id,d])=>()=>save(c,id,d,{quiet:true})),8);
   toast(ex?'Dados de exemplo carregados':'Pronto! Ajuste preços em Finanças › Serviços e o estoque inicial');
 }
-async function limparEx(){const ops=[];ALL_COLS.forEach(c=>arr(c).filter(r=>r.exemplo).forEach(r=>ops.push([c,r.id])));
+async function limparEx(){await carregarHistorico();const ops=[];ALL_COLS.forEach(c=>arr(c).filter(r=>r.exemplo).forEach(r=>ops.push([c,r.id])));
   await pool(ops.map(([c,id])=>()=>del(c,id)),8);await save('privado','config',{...priv(),dasPagos:{}});toast('Exemplos apagados')}
 
 
@@ -1993,7 +2011,7 @@ const ACT={
  delAg:t=>confirmar('Excluir este atendimento? Os pagamentos registrados nele também saem do financeiro.',()=>del('agenda',t.dataset.id)),
  novaEspera:()=>formEspera(),editEspera:t=>formEspera(t.dataset.id),delEspera:t=>confirmar('Remover da lista de espera?',()=>del('espera',t.dataset.id)),
  avisada:t=>{const e=S.espera.get(t.dataset.id);if(e)save('espera',e.id,{...e,status:'avisada'})},
- novaCli:()=>formCliente(),editCli:t=>formCliente(t.dataset.id),verCli:t=>abrirCliente(t.dataset.id),
+ novaCli:()=>formCliente(),editCli:t=>formCliente(t.dataset.id),verCli:t=>abrirCliente(t.dataset.id),verHist:t=>{const id=t.dataset.id;carregarHistorico().then(()=>abrirCliente(id))},
  delCli:t=>confirmar('Excluir esta cliente? O histórico fica sem nome. Pela LGPD, apague também a ficha de anamnese se ela pediu exclusão dos dados.',async()=>{await del('clientes',t.dataset.id);if(S.anamneses.has(t.dataset.id))await del('anamneses',t.dataset.id)}),
  cliNivel:t=>{UI.cliNivel=t.dataset.n;UI.cliLim=60;render()},cliOrd:t=>{UI.cliOrd=t.dataset.o;UI.cliLim=60;render()},cliMais:()=>{UI.cliLim+=100;render()},
  anamnese:t=>formAnamnese(t.dataset.id),
@@ -2034,7 +2052,7 @@ const ACT={
  esqueci:async()=>{const em=($('#lgEmail')?.value||'').trim();if(!em){$('#lgMsg').textContent='Digite seu e-mail acima e toque de novo em "Esqueci minha senha".';return}try{await sendPasswordResetEmail(AUTH,em);$('#lgMsg').style.color='var(--good)';$('#lgMsg').textContent='Enviamos um link para redefinir a senha. Confira também o spam.'}catch(e){$('#lgMsg').textContent='Não foi possível enviar. Confira o e-mail digitado.'}},
  trocarSenha:async()=>{try{await sendPasswordResetEmail(AUTH,EMAIL);toast('Link para trocar a senha enviado para '+EMAIL)}catch(e){toast('Não foi possível enviar o e-mail')}},
  imprimirDoc:()=>window.print(),
- backup:()=>{const o={versao:3,gerado:nowIso()};ALL_COLS.filter(c=>c!=='pedidos'&&c!=='erros').forEach(c=>o[c]=arr(c));baixar(`backup-stefany-trancista-${today()}.json`,JSON.stringify(o,null,1))},
+ backup:async()=>{await carregarHistorico();const o={versao:3,gerado:nowIso()};ALL_COLS.filter(c=>c!=='pedidos'&&c!=='erros').forEach(c=>o[c]=arr(c));baixar(`backup-stefany-trancista-${today()}.json`,JSON.stringify(o,null,1))},
  limparEx:()=>confirmar('Apagar todos os registros marcados como exemplo?',limparEx),
  tornarDona:t=>{const id=t.dataset.id;const e=S.equipe.get(id)||S.pedidos.get(id)||{};confirmar(`Dar acesso total de proprietária para <b>${esc(e.apelido||e.nome||e.email||'esta pessoa')}</b>? Ela passa a ver finanças, contratos, equipe e configurações.`,()=>tornarDona(id))},
  removerDona:t=>confirmar('Remover o acesso de proprietária desta conta? Ela deixará de entrar no sistema até receber um perfil.',()=>removerDona(t.dataset.id)),
