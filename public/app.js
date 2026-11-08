@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 import { DEMO, initializeApp, getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, onSnapshot, setDoc, deleteDoc, getDoc, updateDoc, query, where, Timestamp, arrayUnion, arrayRemove, deleteField, serverTimestamp } from './fb.js';
-=======
-import { DEMO, initializeApp, getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, onSnapshot, setDoc, deleteDoc, getDoc, updateDoc, query, where, Timestamp, arrayUnion, arrayRemove, deleteField } from './fb.js';
->>>>>>> origin/claude/project-thread-g32wje
 import { firebaseConfig } from './firebase-config.js';
 /* Stéfany Medeiros Trancista · sistema de gestão (Firebase) */
 /* ================= utilidades ================= */
@@ -1890,10 +1886,7 @@ function avisosCadastro(){return arr('cadastros').filter(x=>x.status==='enviado'
 const ACT={
  go:t=>go(t.dataset.v),mais:()=>mais(),close:()=>closeSheet(),
  seed:t=>seed(t.dataset.ex==='1'),
-<<<<<<< HEAD
  errosApagar:()=>confirmar('Apagar todos os registros de erros?',async()=>{const ids=arr('erros').map(x=>x.id);await pool(ids.map(id=>()=>del('erros',id)),8);toast('Registros apagados')}),
-=======
->>>>>>> origin/claude/project-thread-g32wje
  demoRecomecar:()=>confirmar('Apagar os dados de demonstração e começar de novo?',async()=>{const m=await import('./demo/firebase-demo.js');m.recomecarDemo();location.replace(location.pathname+(DEMO_PREVIA?'':'?demo'))}),
  novoAg:t=>formAgenda(null,{d:t.dataset.d,h:t.dataset.h,c:t.dataset.c}),editAg:t=>formAgenda(t.dataset.id),
  agDia:t=>{UI.agDia=t.dataset.d;if(UI.view!=='agenda')go('agenda');else render()},agNav:t=>{UI.agDia=addDays(UI.agDia,+t.dataset.n);render()},agHoje:()=>{UI.agDia=today();render()},agVis:t=>{UI.agVis=t.dataset.t;render()},agVerDia:t=>{UI.agDia=t.dataset.d;UI.agVis='dia';render()},agMes:t=>{const p=parse(UI.agDia);const n=new Date(p.getFullYear(),p.getMonth()+ +t.dataset.n,1);UI.agDia=ymd(n);render()},

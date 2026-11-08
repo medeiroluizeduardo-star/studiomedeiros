@@ -20,20 +20,13 @@
 ## Estrutura (resumo)
 - Página estática sem build, JavaScript puro (módulos ES) em `public/`. `app.js` é o sistema da equipe; `publico.js` + `catalogo.js`, `cliente.js`, `contrato.js` e `cadastro.js` são as páginas abertas às clientes.
 - Todo acesso ao Firebase passa por `public/fb.js`: com `?demo` (ou na prévia, endereço com `--`) ele usa `public/demo/firebase-demo.js`, um banco de mentira no navegador. Funções novas do Firebase precisam existir nos dois.
-<<<<<<< HEAD
 - Rotinas no GitHub Actions: publicar, prévia, testes, `backup` (todo dia) e `restaurar` (manual), com scripts em `integracao/admin/`. Erros dos aparelhos vão para a coleção `erros` (só a proprietária lê, em Ajustes › Conta e dados).
-=======
->>>>>>> origin/claude/project-thread-g32wje
 - Perfis: proprietária (`sistema/acesso.donas`), parceira, recepção e contador(a) (`equipe/{uid}`). Coleções por perfil em `COLS_POR_PAPEL` (`app.js`).
 
 ## Testes (proporcionais ao tamanho da mudança)
 - Sempre: `node --check` nos .js alterados.
 - Telas (`testes/telas.test.mjs`, job `telas`): passa por todas as abas no `?demo` em 1366 e 390 (erros de JS, 404, tela em branco, rolagem lateral). `cd testes && npm run telas`. Aba nova entra sozinha (vem do menu).
-<<<<<<< HEAD
 - Regras e rotinas (`testes/regras.test.mjs` e `testes/rotinas.test.mjs`, job `regras`): `cd testes && npm run regras` (emulador, precisa de Java).
-=======
-- Regras (`testes/regras.test.mjs`, job `regras`): `cd testes && npm run regras` (emulador, precisa de Java).
->>>>>>> origin/claude/project-thread-g32wje
 
 ## Economia
 - Preferir fazer o trabalho direto, sem agentes auxiliares, salvo pedido do usuário.
