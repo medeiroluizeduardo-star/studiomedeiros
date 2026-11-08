@@ -180,9 +180,14 @@ stefany-trancista/
     ├── fb.js              escolhe entre o Firebase de verdade e o de demonstração
     ├── demo/              banco de mentira do modo demonstração
     ├── manifest.webmanifest, sw.js, ícones  (instalação no celular)
+<<<<<<< HEAD
 testes/                    testes automáticos (regras do banco, rotinas e telas)
 integracao/admin/          cópia de segurança e restauração (rodam no GitHub)
 .github/workflows/         publicar, prévia, testes, cópia de segurança e restaurar
+=======
+testes/                    testes automáticos (regras do banco e telas)
+.github/workflows/         publicar, prévia e testes
+>>>>>>> origin/claude/project-thread-g32wje
 ```
 
 ## Problemas comuns
