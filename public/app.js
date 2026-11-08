@@ -580,14 +580,7 @@ function vInicio(){
   if(vazio)out+=`<section class="card"><h3>Bem-vinda ao seu sistema</h3><p class="muted small" style="margin-top:0">Comece com serviços e estoque sugeridos. Para ver tudo funcionando antes, carregue dados de exemplo: eles ficam marcados e podem ser apagados em Ajustes.</p>
     <div class="row"><button class="btn primary" data-act="seed" data-ex="1">${ic('spark')}Ver com dados de exemplo</button><button class="btn soft" data-act="seed" data-ex="0">Começar do zero</button></div></section>`;
   out+=`<section class="quick"><button data-act="novoAg">${ic('cal')}Agendar</button><button data-act="novaCli">${ic('users')}Nova cliente</button>${own?`<button data-act="novoLan">${ic('wallet')}Lançar valor</button>`:`<button data-act="novaEspera">${ic('list')}Lista de espera</button>`}</section>`;
-  if(own){const c=priv();const dasMes=ym(addDays(t.slice(0,8)+'01',-1));const diasDas=diffDays(t,t.slice(0,8)+'20');
-    if(!(c.dasPagos||{})[dasMes]&&(S.agenda.size||S.lancamentos.size))out+=`<div class="alert ${diasDas<0?'bad':'warn'}">${ic('alert')}<div><b>DAS de ${MESES[+dasMes.slice(5)-1]}</b> ${diasDas<0?'venceu dia 20 e não está marcado como pago.':diasDas===0?'vence hoje.':`vence em ${diasDas} dia${diasDas>1?'s':''} (dia 20).`} <button class="btn sm ghost" data-act="finTab" data-t="mei">Ver obrigações</button></div></div>`;
-    const venc=ocorrencias(addDays(t,7)).filter(o=>!o.paga&&o.venc<=addDays(t,7));
-    if(venc.length)out+=`<div class="alert warn">${ic('clock')}<div><b>${venc.length} conta${venc.length>1?'s':''} a pagar</b> até ${dataCurta(addDays(t,7))}: ${venc.slice(0,3).map(o=>`${esc(o.conta.descricao)} (${dataCurta(o.venc)})`).join(', ')}. <button class="btn sm ghost" data-act="finTab" data-t="contas">Abrir contas</button></div></div>`;
-    if(pol().pend)out+=`<div class="alert info">${ic('shield')}<div><b>Política da empresa:</b> ${pol().pend} itens dos contratos ainda não foram revisados. <button class="btn sm ghost" data-act="ctTab" data-t="politica">Revisar</button></div></div>`;
-    const ped=arr('pedidos');if(ped.length)out+=`<div class="alert info">${ic('lock')}<div><b>${ped.length} pedido${ped.length>1?'s':''} de acesso</b> aguardando você definir o perfil. <button class="btn sm ghost" data-act="go" data-v="ajustes">Ver equipe</button></div></div>`;}
-  const reat=pode('base')?paraReativar():[];if(reat.length)out+=`<div class="alert info">${ic('repeat')}<div><b>${reat.length} cliente${reat.length===1?'':'s'} para reativar:</b> ${reat.slice(0,3).map(x=>esc(primeiro(x.c.nome))).join(', ')}${reat.length>3?'…':''} (manutenção vencida ou sumidas). <button class="btn sm ghost" data-act="go" data-v="clientes">Convidar</button></div></div>`;
-  if(est.length)out+=`<div class="alert warn">${ic('box')}<div><b>Estoque baixo:</b> ${est.slice(0,4).map(i=>`${esc(i.nome)} (${i.qtd} ${esc(i.unidade||'')})`).join(', ')}${est.length>4?'…':''} <button class="btn sm ghost" data-act="go" data-v="estoque">Ver estoque</button></div></div>`;
+  out+=agoraCard(t,own,est);
   if(own){const c=priv();const mes=ym(t);const rec=soma(receitas(l=>ym(l.data)===mes));const des=soma(despesas(l=>ym(l.data)===mes));const ano=t.slice(0,4);const recAno=soma(receitas(l=>l.data.slice(0,4)===ano));const lim=limiteAno(ano);
     out+=`<section class="kpis"><div class="kpi"><div class="l">Receita em ${MESES[+mes.slice(5)-1]}</div><div class="v">${cnt(rec)}</div><div class="d">Meta ${BRL(c.meta)}</div></div>
     <div class="kpi"><div class="l">Lucro do mês</div><div class="v" style="color:${rec-des>=0?'var(--good)':'var(--bad)'}">${cnt(rec-des)}</div><div class="d">Despesas ${BRL(des)}</div></div>
@@ -595,7 +588,7 @@ function vInicio(){
     <div class="kpi"><div class="l">A receber (30 dias)</div><div class="v">${cnt(soma(aReceber().filter(r=>r.data>=t&&r.data<=addDays(t,30)).map(r=>({valor:r.liquido}))))}</div><div class="d">cartões, já sem taxa</div></div></section>`}
   const amanha=arr('agenda').filter(a=>a.data===addDays(t,1)&&a.status==='agendado').sort((a,b)=>a.hora<b.hora?-1:1);
   out+=avisosPortal();
-  if(amanha.length)out+=`<section class="card"><h3>Confirmar amanhã <small>${amanha.length} sem confirmação</small></h3><div class="list">${amanha.map(confirmarRow).join('')}</div></section>`;
+  if(amanha.length)out+=`<section class="card" id="confAmanha"><h3>Confirmar amanhã <small>${amanha.length} sem confirmação</small></h3><div class="list">${amanha.map(confirmarRow).join('')}</div></section>`;
   const ret=retornos().slice(0,6);
   if(ret.length)out+=`<section class="card"><h3>Hora da manutenção ou retirada <small>sem horário marcado</small></h3><div class="list">${ret.map(retornoRow).join('')}</div><p class="small muted" style="margin-bottom:0">Baseado no tempo máximo recomendado na política (${pol().campos.semanasMax} semanas).</p></section>`;
   out+=`<div class="grid g2">
@@ -609,6 +602,37 @@ function vInicio(){
   </div>`;
   return out;
 }
+
+/* ---------- Agora: o que resolver primeiro (até 3 itens, do mais urgente; o resto fica em "Mais") ---------- */
+function agoraItens(t,own,est){const it=[];const agora=new Date();const minAgora=agora.getHours()*60+agora.getMinutes();
+  const add=(pri,tipo,icone,txt,botao)=>it.push({pri,tipo,icone,txt,botao});
+  const bt=(act,attrs,rot,cls='primary')=>`<button class="btn sm ${cls}" data-act="${act}" ${attrs}>${rot}</button>`;
+  const hoje=arr('agenda').filter(a=>a.data===t&&(a.status==='agendado'||a.status==='confirmado')).sort((a,b)=>a.hora<b.hora?-1:1);
+  // atendimentos de hoje que já terminaram e não foram concluídos
+  hoje.filter(a=>hm2min(a.hora)+(+a.duracao||60)<=minAgora).forEach(a=>add(10,'bad','check',`<b>Concluir ${esc(primeiro(nomeCli(a.clienteId)))}</b> · ${esc(a.hora)}, ${esc(nomeAg(a))}. Registre o pagamento.`,bt('concluir',`data-id="${a.id}"`,`${ic('check')}Concluir`)));
+  // hoje, ainda sem confirmação
+  hoje.filter(a=>a.status==='agendado'&&hm2min(a.hora)>minAgora).forEach(a=>{const cli=S.clientes.get(a.clienteId);const w=cli?waLink(cli.telefone,`Oi, ${primeiro(cli.nome)}! Tudo certo para hoje às ${a.hora}?`):null;
+    add(30,'warn','clock',`<b>${esc(primeiro(nomeCli(a.clienteId)))} hoje às ${esc(a.hora)}</b> ainda não confirmou.`,(w?`<a class="btn sm soft" href="${w}" target="_blank" rel="noopener">${ic('chat')}Perguntar</a>`:'')+bt('stAg',`data-id="${a.id}" data-s="confirmado"`,`${ic('check')}Confirmada`))});
+  const amanha=arr('agenda').filter(a=>a.data===addDays(t,1)&&a.status==='agendado').length;
+  if(amanha)add(45,'info','cal',`<b>${amanha} horário${amanha>1?'s':''} de amanhã</b> sem confirmação.`,bt('rolar','data-alvo="#confAmanha"','Confirmar','soft'));
+  if(avisosPortal())add(50,'info','users','<b>Novidades das clientes</b> pelo link (contratos aceitos, cancelamentos, fichas, cadastros).',bt('rolar','data-alvo=".aviso-portal"','Ver','soft'));
+  if(own){const c=priv();const dasMes=ym(addDays(t.slice(0,8)+'01',-1));const diasDas=diffDays(t,t.slice(0,8)+'20');
+    if(!(c.dasPagos||{})[dasMes]&&(S.agenda.size||S.lancamentos.size)&&diasDas<=10)add(diasDas<0?15:diasDas<=3?35:60,diasDas<0?'bad':'warn','alert',`<b>DAS de ${MESES[+dasMes.slice(5)-1]}</b> ${diasDas<0?'venceu dia 20 e não está marcado como pago.':diasDas===0?'vence hoje.':`vence em ${diasDas} dia${diasDas>1?'s':''} (dia 20).`}`,bt('finTab','data-t="mei"','Ver obrigações','soft'));
+    const venc=ocorrencias(addDays(t,7)).filter(o=>!o.paga&&o.venc<=addDays(t,7));const atras=venc.filter(o=>o.venc<t);
+    if(venc.length)add(atras.length?20:55,atras.length?'bad':'warn','clock',`<b>${venc.length} conta${venc.length>1?'s':''} a pagar</b>${atras.length?` (${atras.length} vencida${atras.length>1?'s':''})`:''}: ${venc.slice(0,3).map(o=>`${esc(o.conta.descricao)} (${dataCurta(o.venc)})`).join(', ')}.`,bt('finTab','data-t="contas"','Abrir contas','soft'));
+    const ped=arr('pedidos');if(ped.length)add(40,'info','lock',`<b>${ped.length} pedido${ped.length>1?'s':''} de acesso</b> aguardando você definir o perfil.`,bt('go','data-v="ajustes"','Ver equipe','soft'));
+    if(pol().pend)add(80,'info','shield',`<b>Política da empresa:</b> ${pol().pend} itens dos contratos ainda não foram revisados.`,bt('ctTab','data-t="politica"','Revisar','soft'));}
+  if(est.length)add(65,'warn','box',`<b>Estoque baixo:</b> ${est.slice(0,4).map(i=>`${esc(i.nome)} (${i.qtd} ${esc(i.unidade||'')})`).join(', ')}${est.length>4?'…':''}`,bt('go','data-v="estoque"','Ver estoque','soft'));
+  const reat=pode('base')?paraReativar():[];
+  if(reat.length)add(70,'info','repeat',`<b>${reat.length} cliente${reat.length===1?'':'s'} para reativar:</b> ${reat.slice(0,3).map(x=>esc(primeiro(x.c.nome))).join(', ')}${reat.length>3?'…':''} (manutenção vencida ou sumidas).`,bt('go','data-v="clientes"','Convidar','soft'));
+  return it.sort((a,b)=>a.pri-b.pri);
+}
+function agoraCard(t,own,est){const it=agoraItens(t,own,est);
+  const linha=x=>`<div class="agora-item ${x.tipo}"><span class="agora-ic">${ic(x.icone)}</span><div class="grow">${x.txt}</div><div class="row agora-bt">${x.botao}</div></div>`;
+  if(!it.length)return `<section class="card agora"><h3>Agora</h3><div class="agora-item ok"><span class="agora-ic">${ic('check')}</span><div class="grow">Tudo em dia. Nada urgente para resolver agora.</div></div></section>`;
+  const mais=it.slice(3);
+  return `<section class="card agora"><h3>Agora <small>${it.length===1?'1 coisa para resolver':`${it.length} coisas para resolver`}</small></h3>${it.slice(0,3).map(linha).join('')}
+   ${mais.length?`<details class="agora-mais"${UI.agoraMais?' open':''}><summary data-act="agoraMais">Mais ${mais.length}</summary>${mais.map(linha).join('')}</details>`:''}</section>`}
 
 /* ================= AGENDA ================= */
 function apptRow(a){const st=STATUS[a.status]||STATUS.agendado;
@@ -1891,7 +1915,7 @@ const ACT={
  novoAg:t=>formAgenda(null,{d:t.dataset.d,h:t.dataset.h,c:t.dataset.c}),editAg:t=>formAgenda(t.dataset.id),
  agDia:t=>{UI.agDia=t.dataset.d;if(UI.view!=='agenda')go('agenda');else render()},agNav:t=>{UI.agDia=addDays(UI.agDia,+t.dataset.n);render()},agHoje:()=>{UI.agDia=today();render()},agVis:t=>{UI.agVis=t.dataset.t;render()},agVerDia:t=>{UI.agDia=t.dataset.d;UI.agVis='dia';render()},agMes:t=>{const p=parse(UI.agDia);const n=new Date(p.getFullYear(),p.getMonth()+ +t.dataset.n,1);UI.agDia=ymd(n);render()},
  stAg:async t=>{const a=S.agenda.get(t.dataset.id);await save('agenda',a.id,{...a,status:t.dataset.s});toast('Atendimento confirmado')},
- concluir:t=>concluir(t.dataset.id),divulgar:()=>divulgar(),
+ concluir:t=>concluir(t.dataset.id),rolar:t=>{const el=document.querySelector(t.dataset.alvo);if(el)el.scrollIntoView({behavior:'smooth',block:'start'})},agoraMais:()=>{UI.agoraMais=!UI.agoraMais;render()},divulgar:()=>divulgar(),
  busca:()=>busca(),buscaIr:t=>buscaIr(t.dataset.k,t.dataset.id),
  tema:()=>{const o=['sistema','claro','escuro'];const n=o[(o.indexOf(temaAtual())+1)%3];aplicaTema(n);toast('Tema '+{sistema:'automático (segue o aparelho)',claro:'claro',escuro:'escuro'}[n]);render()},
  temaSet:t=>{aplicaTema(t.dataset.t);render()},

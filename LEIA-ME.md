@@ -160,6 +160,10 @@ O plano gratuito do Firebase (**Spark**) costuma atender com folga um ateliê co
 
 **Manual:** em **Ajustes › Conta e dados › Baixar cópia (JSON)**, para guardar uma cópia sua no Google Drive ou no computador.
 
+## Início › Agora
+
+No topo do Início, o quadro **Agora** junta o que precisa ser resolvido, do mais urgente para o menos, cada item com o botão que resolve: atendimentos de hoje que já terminaram e não foram concluídos, DAS ou contas vencidas, clientes de hoje que ainda não confirmaram, horários de amanhã sem confirmação, pedidos de acesso, novidades das clientes, DAS e contas perto do vencimento, estoque baixo, clientes para reativar e a política da empresa. Aparecem até 3; o resto fica em **Mais**. Quando não há nada, aparece "Tudo em dia".
+
 ## Erros nos aparelhos
 
 Quando uma tela falha no celular ou no computador de alguém da equipe, o sistema anota o erro, a tela e o tipo de aparelho (coleção `erros`). No máximo 5 registros por vez que a pessoa abre o sistema, sem nada do que foi digitado. Só a proprietária vê e apaga: **Ajustes › Conta e dados › Erros nos aparelhos**. Basta mandar um print dessa lista para corrigir.
