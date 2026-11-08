@@ -1,7 +1,7 @@
 // Mantém o sistema abrindo rápido mesmo com internet fraca.
 // Tenta a versão mais nova primeiro; se a rede demorar mais de 2,5 s, usa a cópia guardada
 // e atualiza em segundo plano para a próxima abertura.
-const CACHE = 'smt-v11';
+const CACHE = 'smt-v12';
 const ARQUIVOS = ['./', 'img/marca.webp', 'img/logo.webp', 'img/faixa.webp', 'index.html', 'styles.css', 'app.js', 'firebase-config.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png',
   'publico.css', 'publico.js', 'catalogo.js', 'cliente.js', 'contrato.js', 'cadastro.js', 'fb.js', 'demo/firebase-demo.js'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(ARQUIVOS).catch(() => {})).then(() => self.skipWaiting())); });
@@ -16,5 +16,24 @@ self.addEventListener('fetch', e => {
     const reserva = () => caches.match(r, { ignoreSearch: true }).then(m => m || (r.mode === 'navigate' && (url.pathname === '/' || url.pathname === '/index.html') ? caches.match('index.html') : null));
     const t = setTimeout(() => reserva().then(fim), 2500);
     rede.then(x => { clearTimeout(t); fim(x); }).catch(() => { clearTimeout(t); reserva().then(m => fim(m || Response.error())); });
+  }));
+});
+
+// ---------- avisos no celular (Firebase Cloud Messaging) ----------
+// A rotina "Avisos no celular" do GitHub manda mensagens só com dados: { titulo, corpo, url, tag }.
+self.addEventListener('push', e => {
+  let m = {};
+  try { const j = e.data ? e.data.json() : {}; m = j.data || j.notification || j; } catch (err) { m = { corpo: e.data ? e.data.text() : '' }; }
+  e.waitUntil(self.registration.showNotification(m.titulo || m.title || 'Stéfany Trancista', {
+    body: m.corpo || m.body || '', tag: m.tag || undefined, renotify: !!m.tag,
+    icon: 'icon-192.png', badge: 'icon-192.png', data: { url: m.url || '/#inicio' }
+  }));
+});
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  const alvo = new URL((e.notification.data && e.notification.data.url) || '/#inicio', self.location.origin).href;
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(cs => {
+    for (const c of cs) if (c.url.startsWith(self.location.origin)) { c.postMessage({ tipo: 'abrir', url: alvo }); return c.focus(); }
+    return self.clients.openWindow(alvo);
   }));
 });

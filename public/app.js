@@ -1,4 +1,4 @@
-import { DEMO, initializeApp, getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, onSnapshot, setDoc, deleteDoc, getDoc, updateDoc, query, where, Timestamp, arrayUnion, arrayRemove, deleteField, serverTimestamp } from './fb.js';
+import { DEMO, mensagens, initializeApp, getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, onSnapshot, setDoc, deleteDoc, getDoc, updateDoc, query, where, Timestamp, arrayUnion, arrayRemove, deleteField, serverTimestamp } from './fb.js';
 import { firebaseConfig } from './firebase-config.js';
 /* Stéfany Medeiros Trancista · sistema de gestão (Firebase) */
 /* ================= utilidades ================= */
@@ -107,7 +107,7 @@ const COLS_POR_PAPEL={
   contador:['servicos','agenda','pacotes','vales','publico','lancamentos','contas','privado']
 };
 const S={};ALL_COLS.forEach(c=>S[c]=new Map());
-let MODE='db',ROLE='carregando',ME=null,EMAIL='',APP=null,AUTH=null,FS=null,ACESSO=null;const ctl={acesso:null,equipe:null};
+let MODE='db',ROLE='carregando',ME=null,EMAIL='',APP=null,AUTH=null,FS=null,ACESSO=null;const ctl={acesso:null,equipe:null,avisos:null,avEstado:null};let MEUS_AVISOS=null,AV_ESTADO=null;
 let NEED=new Set();const loaded=new Set();const unsubs=[];
 let DATAV=0;const MEMO=new Map();
 const memo=(k,fn)=>{const m=MEMO.get(k);if(m&&m.v===DATAV)return m.r;const r=fn();MEMO.set(k,{v:DATAV,r});return r};
@@ -140,7 +140,7 @@ function dbErr(e){const c=e&&e.code;toast(c==='permission-denied'?'Seu perfil n�
 function touch(){DATAV++;schedule()}
 
 function pararDados(){unsubs.splice(0).forEach(u=>{try{u()}catch(e){}});loaded.clear();ALL_COLS.forEach(c=>S[c]=new Map());NEED=new Set()}
-function pararTudo(){pararDados();['acesso','equipe'].forEach(k=>{if(ctl[k]){try{ctl[k]()}catch(e){}ctl[k]=null}});ACESSO=null}
+function pararTudo(){pararDados();MEUS_AVISOS=null;AV_ESTADO=null;['acesso','equipe','avisos','avEstado'].forEach(k=>{if(ctl[k]){try{ctl[k]()}catch(e){}ctl[k]=null}});ACESSO=null}
 function subscribe(cols){
   NEED=new Set(cols);
   cols.forEach(c=>{
@@ -155,7 +155,7 @@ function subscribe(cols){
 }
 const configPendente=()=>!DEMO&&!firebaseConfig||!firebaseConfig.apiKey||/COLE|SUA_/i.test(firebaseConfig.apiKey);
 
-function virarPapel(papel){if(ROLE===papel)return;pararDados();ROLE=papel;errEnviar();if(COLS_POR_PAPEL[papel]){if(!visiveis().some(v=>v[0]===UI.view))UI.view=visiveis()[0][0];subscribe(COLS_POR_PAPEL[papel])}render()}
+function virarPapel(papel){if(ROLE===papel)return;pararDados();ROLE=papel;errEnviar();vigiarAvisos();if(COLS_POR_PAPEL[papel]){if(!visiveis().some(v=>v[0]===UI.view))UI.view=visiveis()[0][0];subscribe(COLS_POR_PAPEL[papel])}render()}
 function vigiarEquipe(user){
   if(ctl.equipe)return;
   ctl.equipe=onSnapshot(doc(FS,'equipe',ME),s=>{
@@ -165,6 +165,48 @@ function vigiarEquipe(user){
     else if(ROLE!=='pendente'){virarPapel('pendente');setDoc(doc(FS,'pedidos',ME),{email:EMAIL,nome:user.displayName||'',pedidoEm:nowIso()}).catch(()=>{})}
   },()=>virarPapel('pendente'));
 }
+/* ================= avisos no celular =================
+   Cada pessoa liga no próprio aparelho (Ajustes). O token do aparelho fica em avisos/{uid}; a rotina "Avisos no celular"
+   do GitHub decide e envia (integracao/admin/avisos.mjs). A chave Web Push (pública) fica em publico/avisos. */
+const AV_TIPOS={novidades:['Novidades das clientes pelo link',['owner','parceira','recepcao']],concluir:['Atendimentos de hoje sem concluir (20h)',['owner','parceira','recepcao']],amanha:['Agenda de amanhã (19h)',['owner','parceira','recepcao']],contas:['Contas e DAS a pagar (8h)',['owner','contador']],semana:['Resumo da semana (segunda, 8h)',['owner']]};
+const AV_LS='smt-aviso-token';
+function vigiarAvisos(){['avisos','avEstado'].forEach(k=>{if(ctl[k]){try{ctl[k]()}catch(e){}ctl[k]=null}});MEUS_AVISOS=null;AV_ESTADO=null;
+  if(!FS||!ME||!PAPEIS[ROLE])return;
+  ctl.avisos=onSnapshot(doc(FS,'avisos',ME),s=>{MEUS_AVISOS=s.exists()?s.data():{};touch()},()=>{});
+  if(ROLE==='owner')ctl.avEstado=onSnapshot(doc(FS,'avisosEstado','estado'),s=>{AV_ESTADO=s.exists()?s.data():null;touch()},()=>{})}
+const avToken=()=>{try{return localStorage.getItem(AV_LS)||''}catch(e){return ''}};
+const avLigadoAqui=()=>{const t=avToken();return !!t&&!!(MEUS_AVISOS&&(MEUS_AVISOS.tokens||[]).includes(t))};
+const avPrefs=()=>(MEUS_AVISOS&&MEUS_AVISOS.prefs)||{};
+async function avLigar(){try{
+    const vapid=(S.publico.get('avisos')||{}).vapid;if(!vapid&&!DEMO)throw new Error(isOwner()?'Primeiro cole a chave Web Push abaixo e salve.':'A proprietária ainda não configurou os avisos.');
+    const M=await mensagens();
+    if(!('Notification' in window)||!('serviceWorker' in navigator)||!(await M.suportado()))throw new Error('Este navegador não recebe avisos. No iPhone, primeiro use Compartilhar › Adicionar à Tela de Início e abra o sistema por esse ícone.');
+    const perm=await Notification.requestPermission();
+    if(perm!=='granted')throw new Error('Os avisos estão bloqueados neste aparelho. Libere nas configurações do navegador (cadeado ao lado do endereço › Notificações).');
+    const reg=await navigator.serviceWorker.register('sw.js');await navigator.serviceWorker.ready;
+    const token=await M.getToken(M.getMessaging(APP),{vapidKey:vapid,serviceWorkerRegistration:reg});
+    if(!token)throw new Error('Não foi possível ligar os avisos neste aparelho.');
+    try{localStorage.setItem(AV_LS,token)}catch(e){}
+    await setDoc(doc(FS,'avisos',ME),{tokens:arrayUnion(token),prefs:avPrefs(),atualizadoEm:serverTimestamp()},{merge:true});
+    toast('Avisos ligados neste aparelho')}catch(e){toast(e.message||'Não foi possível ligar os avisos.','erro');console.error(e)}}
+async function avDesligar(){const t=avToken();try{localStorage.removeItem(AV_LS)}catch(e){}
+  try{const M=await mensagens();await M.deleteToken(M.getMessaging(APP))}catch(e){}
+  try{await setDoc(doc(FS,'avisos',ME),{tokens:((MEUS_AVISOS&&MEUS_AVISOS.tokens)||[]).filter(x=>x!==t),atualizadoEm:serverTimestamp()},{merge:true});toast('Avisos desligados neste aparelho')}catch(e){dbErr(e)}}
+async function avTestar(){try{if(!('Notification' in window))throw new Error('Este navegador não mostra avisos.');
+    if(Notification.permission!=='granted'&&(await Notification.requestPermission())!=='granted')throw new Error('Os avisos estão bloqueados neste aparelho.');
+    const reg=await navigator.serviceWorker.register('sw.js');await navigator.serviceWorker.ready;
+    await reg.showNotification('Stéfany Trancista',{body:'Assim chegam os avisos neste aparelho.',icon:'icon-192.png',badge:'icon-192.png',tag:'teste',data:{url:'/#inicio'}});
+  }catch(e){toast(e.message||'Não foi possível testar.','erro')}}
+function cardAvisos(){if(!PAPEIS[ROLE])return '';const own=isOwner();const vapid=(S.publico.get('avisos')||{}).vapid||'';const aqui=avLigadoAqui();const pr=avPrefs();
+  const tipos=Object.entries(AV_TIPOS).filter(([,[,ps]])=>ps.includes(ROLE));
+  const est=AV_ESTADO;const quando=est&&toMs(est.ultimaExecucao)?new Date(toMs(est.ultimaExecucao)):null;
+  return `<section class="card"><h3>Avisos no celular <small>${aqui?'ligados neste aparelho':'desligados neste aparelho'}</small></h3>
+   <p class="small muted" style="margin-top:0">Recebe no celular o que é do seu perfil, sem nomes de clientes na tela bloqueada. No iPhone, primeiro use Compartilhar › Adicionar à Tela de Início e abra o sistema por esse ícone.</p>
+   <div class="row">${aqui?`<button class="btn soft" data-act="avDesligar">${ic('x')}Desligar neste aparelho</button>`:`<button class="btn primary" data-act="avLigar">${ic('send')}Ligar avisos neste aparelho</button>`}<button class="btn ghost" data-act="avTestar">Testar neste aparelho</button></div>
+   ${tipos.length?`<div class="stack" style="gap:6px;margin-top:12px">${tipos.map(([k,[n]])=>`<label class="row" style="gap:8px;font-size:.9rem"><input type="checkbox" data-avpref="${k}" ${pr[k]!==false?'checked':''}> ${esc(n)}</label>`).join('')}</div>`:''}
+   ${own?`<form class="form" id="fAvChave" style="margin-top:14px"><label class="fld">Chave Web Push (só a proprietária, uma vez)<input id="avChave" value="${esc(vapid)}" placeholder="começa com B…" autocomplete="off"></label><div class="small muted">Firebase › Configurações do projeto › Cloud Messaging › Certificados push da Web › Gerar par de chaves. É uma chave pública.</div><div class="row"><button class="btn soft">Salvar chave</button></div></form>
+   <p class="small muted" style="margin-bottom:0">${quando?`Rotina do GitHub rodou ${dataCurta(ymd(quando))} às ${pad(quando.getHours())}:${pad(quando.getMinutes())}: ${est.pessoas||0} pessoa(s) e ${est.aparelhos||0} aparelho(s) com aviso ligado, ${((est.ultimoResultado||{}).entregues)||0} aviso(s) entregue(s) na última vez.`:'A rotina "Avisos no celular" do GitHub ainda não rodou.'}</p>`:''}</section>`}
+
 /* ================= erros nos aparelhos =================
    Quando uma tela falha no celular ou no computador de alguém da equipe, o erro fica anotado na coleção "erros"
    (só a proprietária vê, em Ajustes › Conta e dados). No máximo 5 registros por abertura, o mesmo erro uma vez só
@@ -1048,7 +1090,7 @@ function ideiaCard(i){return `<div class="event" style="${i.feito?'opacity:.6':'
 function contaCard(){return `<section class="card"><h3>Sua conta</h3><p style="margin:0">${esc(EMAIL)} · <b>${esc(PAPEIS[ROLE]||'')}</b></p><div class="row" style="margin-top:10px"><button class="btn soft" data-act="trocarSenha">${ic('lock')}Trocar senha</button><button class="btn ghost" data-act="sair">Sair</button></div><div class="row" style="margin-top:12px"><span class="small muted">Aparência</span>${seg('temaSet',temaAtual(),[['sistema','Automática'],['claro','Clara'],['escuro','Escura']])}</div></section>`}
 function vAjustes(){
   const own=isOwner();
-  if(!own)return head('Ajustes','Sua <em>conta</em>')+contaCard()+`<section class="card"><h3>O que você acessa</h3><p class="small muted" style="margin:0">${ROLE==='parceira'?'Agenda, clientes, fichas de anamnese, estoque, pacotes, contratos e datas. Finanças e a política da empresa ficam só com a proprietária.':ROLE==='recepcao'?'Agenda, cadastro de clientes, pacotes, contratos de serviço e datas. Fichas de saúde, estoque e finanças ficam restritos.':'Finanças, contas, relatórios e obrigações do MEI, somente leitura. Clientes e fichas de saúde não ficam visíveis.'}</p></section>`+
+  if(!own)return head('Ajustes','Sua <em>conta</em>')+contaCard()+cardAvisos()+`<section class="card"><h3>O que você acessa</h3><p class="small muted" style="margin:0">${ROLE==='parceira'?'Agenda, clientes, fichas de anamnese, estoque, pacotes, contratos e datas. Finanças e a política da empresa ficam só com a proprietária.':ROLE==='recepcao'?'Agenda, cadastro de clientes, pacotes, contratos de serviço e datas. Fichas de saúde, estoque e finanças ficam restritos.':'Finanças, contas, relatórios e obrigações do MEI, somente leitura. Clientes e fichas de saúde não ficam visíveis.'}</p></section>`+
    (pode('contratos')?`<section class="card"><h3>Política do ateliê</h3><button class="btn soft" data-act="ctTab" data-t="politica">${ic('file')}Abrir política</button></section>`:'');
   const tabs=[['horarios','Horários'],['negocio','Negócio e MEI'],['equipe','Equipe e acesso'],['dados','Conta e dados']];
   if(!tabs.some(t=>t[0]===UI.ajTab))UI.ajTab='horarios';
@@ -1088,7 +1130,7 @@ function ajEquipe(){const ped=arr('pedidos'),eq=arr('equipe');const donas=(ACESS
     <tr><td><b>Contador(a)</b></td><td>Finanças, contas, relatórios e MEI, somente leitura. Sem clientes nem fichas.</td></tr></table>
     <p>Todas essas separações são aplicadas pelas regras de segurança do Firestore, no servidor. Para bloquear alguém de vez, desative o acesso aqui e também desative o usuário em Authentication no console.</p></details></section>`}
 function ajDados(){const nEx=ALL_COLS.reduce((s,k)=>s+arr(k).filter(r=>r.exemplo).length,0);
-  return contaCard()+`<section class="card"><h3>Cópia de segurança</h3><p class="small muted" style="margin-top:0">Os dados ficam no Firestore e aparecem no PC e no celular. Além disso, o GitHub faz uma cópia automática todo dia de madrugada (guardada 30 dias; a de domingo, 90 dias), que pode ser restaurada pela rotina <b>Restaurar cópia de segurança</b> (veja o LEIA-ME). Se quiser uma cópia sua, baixe aqui.</p>
+  return contaCard()+cardAvisos()+`<section class="card"><h3>Cópia de segurança</h3><p class="small muted" style="margin-top:0">Os dados ficam no Firestore e aparecem no PC e no celular. Além disso, o GitHub faz uma cópia automática todo dia de madrugada (guardada 30 dias; a de domingo, 90 dias), que pode ser restaurada pela rotina <b>Restaurar cópia de segurança</b> (veja o LEIA-ME). Se quiser uma cópia sua, baixe aqui.</p>
    <div class="row"><button class="btn soft" data-act="backup">${ic('down')}Baixar cópia (JSON)</button><label class="btn ghost">${ic('up')}Restaurar cópia<input type="file" id="restFile" accept=".json,application/json" hidden></label></div></section>
   ${nEx?`<section class="card"><h3>Dados de exemplo</h3><p class="small muted" style="margin-top:0">Há ${nEx} registros de exemplo. Apague antes de começar a usar de verdade. Os serviços cadastrados são mantidos.</p><button class="btn danger soft" data-act="limparEx">${ic('trash')}Apagar dados de exemplo</button></section>`:''}`+cardErros()}
 
@@ -1910,6 +1952,7 @@ function avisosCadastro(){return arr('cadastros').filter(x=>x.status==='enviado'
 const ACT={
  go:t=>go(t.dataset.v),mais:()=>mais(),close:()=>closeSheet(),
  seed:t=>seed(t.dataset.ex==='1'),
+ avLigar:()=>avLigar(),avDesligar:()=>avDesligar(),avTestar:()=>avTestar(),
  errosApagar:()=>confirmar('Apagar todos os registros de erros?',async()=>{const ids=arr('erros').map(x=>x.id);await pool(ids.map(id=>()=>del('erros',id)),8);toast('Registros apagados')}),
  demoRecomecar:()=>confirmar('Apagar os dados de demonstração e começar de novo?',async()=>{const m=await import('./demo/firebase-demo.js');m.recomecarDemo();location.replace(location.pathname+(DEMO_PREVIA?'':'?demo'))}),
  novoAg:t=>formAgenda(null,{d:t.dataset.d,h:t.dataset.h,c:t.dataset.c}),editAg:t=>formAgenda(t.dataset.id),
@@ -2002,6 +2045,7 @@ document.addEventListener('click',e=>{const h=e.target.closest('[data-hdia]');if
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeSheet();const tag=(e.target.tagName||'').toLowerCase();const digitando=tag==='input'||tag==='textarea'||tag==='select'||e.target.isContentEditable;if(!digitando&&pode('base')&&!$('.sheet-back')&&(e.key==='/'||((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'))){e.preventDefault();busca()}});
 let buscaT;document.addEventListener('input',e=>{if(e.target.id==='cliBusca'){UI.cliBusca=e.target.value;clearTimeout(buscaT);buscaT=setTimeout(()=>{const pos=e.target.selectionStart;render();const i=$('#cliBusca');if(i){i.focus();try{i.setSelectionRange(pos,pos)}catch(_){}}},200)}});
 document.addEventListener('change',e=>{const id=e.target.id;
+  const ap=e.target.dataset&&e.target.dataset.avpref;if(ap){setDoc(doc(FS,'avisos',ME),{prefs:{...avPrefs(),[ap]:e.target.checked},atualizadoEm:serverTimestamp()},{merge:true}).then(()=>toast('Preferência salva')).catch(dbErr);return}
   if(id==='ctTipo'){UI.ctTipo=e.target.value;render()}else if(id==='ctCli'){UI.ctCli=e.target.value;UI.ctAg='';render()}else if(id==='ctAg'){UI.ctAg=e.target.value;render()}
   else if(id==='restFile'&&e.target.files[0]){const fr=new FileReader();fr.onload=()=>{let o;try{o=JSON.parse(fr.result)}catch(_){toast('Arquivo inválido');return}
     confirmar('Restaurar esta cópia? Registros com o mesmo identificador serão substituídos.',async()=>{const ops=[];ALL_COLS.filter(c=>!['equipe','pedidos','contratosLink','solicitacoes','cadastros','anamnesePortal','avaliacoes','erros'].includes(c)).forEach(c=>(o[c]||[]).forEach(r=>{if(r&&r.id)ops.push([c,r.id,r])}));await pool(ops.map(([c,id,r])=>()=>save(c,id,r,{quiet:true})),8);toast(`${ops.length} registros restaurados`)})};fr.readAsText(e.target.files[0])}});
@@ -2009,6 +2053,7 @@ document.addEventListener('submit',async e=>{
   if(e.target.id==='fLogin'){e.preventDefault();const m=$('#lgMsg');m.style.color='var(--bad)';m.textContent='Entrando…';
     try{await signInWithEmailAndPassword(AUTH,$('#lgEmail').value.trim(),$('#lgSenha').value)}catch(err){const c=err.code||'';m.textContent=/invalid-credential|wrong-password|user-not-found|invalid-email/.test(c)?'E-mail ou senha incorretos.':/too-many-requests/.test(c)?'Muitas tentativas. Aguarde alguns minutos.':/network/.test(c)?'Sem internet. Tente de novo.':'Não foi possível entrar.'}
     return}
+  if(e.target.id==='fAvChave'){e.preventDefault();const v=$('#avChave').value.trim();if(v&&!/^B[A-Za-z0-9_-]{60,}$/.test(v)){toast('A chave parece incompleta. Ela começa com B e é bem longa.','erro');return}await save('publico','avisos',{vapid:v});toast('Chave salva');return}
   if(e.target.id==='fCfg'){e.preventDefault();const v=i=>$('#'+i).value.trim();
     await save('publico','config',{...pub(),nome:v('gNome')||DEF_PUB.nome,responsavel:v('gResp'),cnpj:v('gCnpj'),endereco:v('gEnd'),municipio:v('gMun'),whatsapp:v('gWa'),instagram:v('gIg'),descAniv:+v('gAniv')||0,indBenef:v('gIndB'),indBenefNova:v('gIndN'),started:true});
     salvarVitrine();
@@ -2029,6 +2074,7 @@ document.addEventListener('submit',async e=>{
     POL_CAMPOS.forEach(f=>{const el=$('#pol_'+f.k);campos[f.k]=f.t==='num'?+el.value||0:el.value.trim();const r=$('#rev_'+f.k);if(r&&r.checked)rev[f.k]=true});
     await save('publico','politica',{campos,revisados:rev,versao:P.versao+1,atualizadaEm:nowIso()});toast(`Política salva (versão ${P.versao+1})`);window.scrollTo({top:0,behavior:'smooth'})}
 });
+if('serviceWorker' in navigator)navigator.serviceWorker.addEventListener('message',ev=>{const d=ev.data||{};if(d.tipo!=='abrir')return;const v=String(d.url||'').split('#')[1];if(v&&VIEWS.some(x=>x[0]===v))go(v)});
 const hsh=(location.hash||'').slice(1);if(VIEWS.some(v=>v[0]===hsh))UI.view=hsh;
 if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
 boot();

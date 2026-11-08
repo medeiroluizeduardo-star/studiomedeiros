@@ -1,0 +1,37 @@
+name: Avisos no celular
+
+# De hora em hora, das 7h às 22h (Brasília). Cada pessoa recebe só o que é do perfil dela e o que deixou ligado:
+# novidades das clientes pelo link (toda hora), contas e DAS (8h), agenda de amanhã (19h), atendimentos sem concluir (20h)
+# e resumo da semana (segunda, 8h). Enquanto ninguém ligar os avisos no sistema, só registra "nada a enviar".
+on:
+  schedule:
+    - cron: '5 10-23,0,1 * * *'
+  workflow_dispatch:
+    inputs:
+      so_testar:
+        description: 'Só testar (mostra o que enviaria, sem enviar)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency: avisos-celular
+
+jobs:
+  avisar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Enviar avisos
+        env:
+          TZ: America/Sao_Paulo
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          AVISOS_SO_TESTAR: ${{ inputs.so_testar && '1' || '' }}
+        run: |
+          npm install --no-audit --no-fund --prefix integracao/admin
+          node integracao/admin/avisos.mjs

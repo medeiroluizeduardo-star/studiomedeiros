@@ -38,3 +38,10 @@ export const {
   collection, doc, onSnapshot, setDoc, deleteDoc, getDoc, getDocs, updateDoc, query, where,
   Timestamp, arrayUnion, arrayRemove, deleteField, writeBatch, serverTimestamp
 } = fs;
+
+// Avisos no celular (Firebase Cloud Messaging): carregado só quando alguém abre a parte de avisos.
+export async function mensagens() {
+  if (DEMO) return import('./demo/firebase-demo.js').then(m => m.mensagensDemo);
+  const m = await import(`${BASE}/firebase-messaging.js`);
+  return { getMessaging: m.getMessaging, getToken: m.getToken, deleteToken: m.deleteToken, suportado: m.isSupported };
+}
