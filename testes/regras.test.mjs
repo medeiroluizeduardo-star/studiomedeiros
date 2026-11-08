@@ -173,3 +173,34 @@ test('agenda e lançamentos a partir de uma data: cada perfil lê o que já podi
   for (const uid of [PARCEIRA, RECEPCAO, null]) await assertFails(desde(uid, 'lancamentos'));
   await assertFails(desde(null, 'agenda'));
 });
+
+test('espaço da cliente: confirmar presença e pedir horário livre, só com o link e só os campos previstos', async () => {
+  const a = db(null); const s = () => doc(collection(a, 'solicitacoes'));
+  const base = { token: 'p1', criadoEm: serverTimestamp(), motivo: '' };
+  // confirmação: só de horário que existe no espaço e não foi cancelado (mesmo depois do prazo de cancelar)
+  await assertSucceeds(setDoc(s(), { ...base, agendaId: 'a3', tipo: 'confirmacao' }));
+  await assertFails(setDoc(s(), { ...base, agendaId: 'nao-existe', tipo: 'confirmacao' }));
+  await assertFails(setDoc(s(), { ...base, token: 'outro', agendaId: 'a2', tipo: 'confirmacao' }));
+  await assertFails(setDoc(s(), { ...base, agendaId: 'a2', tipo: 'confirmacao', extra: 1 }));
+  // cancelamento continua preso ao prazo
+  await assertFails(setDoc(s(), { ...base, agendaId: 'a3', tipo: 'cancelamento' }));
+  // pedido de horário: precisa de um espaço válido e do formato certo
+  const pedido = { data: '2026-12-01', hora: '09:00', servico: 'Box braids', servicoId: 's1', duracao: 300 };
+  await assertSucceeds(setDoc(s(), { ...base, agendaId: '', tipo: 'horario', pedido }));
+  await assertFails(setDoc(s(), { ...base, token: 'inexistente', agendaId: '', tipo: 'horario', pedido }));
+  await assertFails(setDoc(s(), { ...base, agendaId: '', tipo: 'horario', pedido: { ...pedido, nome: 'x' } }));
+  await assertFails(setDoc(s(), { ...base, agendaId: '', tipo: 'horario', pedido: { ...pedido, duracao: '300' } }));
+  await assertFails(setDoc(s(), { ...base, agendaId: '', tipo: 'outro', pedido }));
+  await assertFails(getDocs(collection(a, 'solicitacoes')));
+});
+
+test('horários livres: todos leem; equipe de atendimento grava; contador(a) e visitante não', async () => {
+  const h = { ligado: true, dias: [{ d: '2026-12-01', livres: [{ i: 540, f: 720 }] }], servicos: [{ id: 'm1', nome: 'Box', dur: 300 }], atualizadoEm: 'x' };
+  await assertSucceeds(setDoc(doc(db(RECEPCAO), 'vitrine/horarios'), h));
+  await assertSucceeds(setDoc(doc(db(PARCEIRA), 'vitrine/horarios'), h));
+  await assertSucceeds(getDoc(doc(db(null), 'vitrine/horarios')));
+  await assertFails(setDoc(doc(db(null), 'vitrine/horarios'), h));
+  await assertFails(setDoc(doc(db(CONTADOR), 'vitrine/horarios'), h));
+  await assertFails(setDoc(doc(db(RECEPCAO), 'vitrine/horarios'), { ...h, clientes: ['Ana'] }));
+  await assertFails(setDoc(doc(db(RECEPCAO), 'vitrine/config'), { nome: 'x' }));
+});

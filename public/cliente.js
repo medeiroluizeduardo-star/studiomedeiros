@@ -1,9 +1,10 @@
 import { doc, getDoc, getDocs, setDoc, collection, writeBatch, serverTimestamp } from './fb.js';
-import { FS, $, $$, esc, BRL, ic, marca, waLink, estado, dataBR, dataLonga, parse, primeiro, toMs, tokenDaUrl, toast, NIVEL_COR } from './publico.js';
+import { FS, $, $$, esc, BRL, ic, marca, waLink, estado, dataBR, dataLonga, parse, primeiro, toMs, tokenDaUrl, toast, NIVEL_COR, horariosPara } from './publico.js';
 
 const main = $('#pub');
 const token = tokenDaUrl();
-let P = null, PROX = [];
+let P = null, PROX = [], HOR = null, HOR_SERV = '', HOR_DIA = '';
+const CONFIRMADOS = new Set(), PEDIDOS = new Set();
 const MES3 = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 const ST = { agendado: ['', 'Agendado'], confirmado: ['good', 'Confirmado'], cancelado: ['', 'Cancelado'], concluido: ['good', 'Concluído'], faltou: ['bad', 'Faltou'] };
 const CT = { aceito: ['good', 'aceito'], pendente: ['warn', 'aguardando você'], expirado: ['', 'link expirado'] };
@@ -19,7 +20,8 @@ function proxCard(a) {
     <div class="small muted">${esc(quando.replace(/^./, c => c.toUpperCase()))}${a.pacote ? ' · sessão do seu pacote' : ''}${a.sinal ? ` · sinal pago ${BRL(a.sinal)}` : ''}</div>
     ${a.cancelado ? '' : pode ? `<div class="small" style="margin-top:4px">Você pode cancelar por aqui até ${new Date(lim).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}.</div>`
       : `<div class="small" style="margin-top:4px">O prazo para cancelar por aqui terminou (${P.regras.prazoCancel} horas antes do horário). Avise direto pelo WhatsApp.</div>`}</div>
-   ${a.cancelado ? '' : `<div class="actions">${pode ? `<button class="btn sm soft" data-cancelar="${a.id}">${ic('x')}Cancelar horário</button>` : (wCanc ? `<a class="btn sm primary" href="${wCanc}" target="_blank" rel="noopener">${ic('chat')}Avisar cancelamento no WhatsApp</a>` : '')}${wRem ? `<a class="btn sm ghost" href="${wRem}" target="_blank" rel="noopener">${ic('repeat')}Remarcar</a>` : ''}</div>`}</article>`;
+   ${!a.cancelado && a.pix ? `<div class="pix-box"><div class="small"><b>Sinal para garantir o horário: ${BRL(a.sinalFalta)}</b><br>Copie o código e cole no app do seu banco, em Pix › Copia e cola. Depois mande o comprovante no WhatsApp.</div><button class="btn sm primary" data-pix="${esc(a.pix)}">${ic('copy')}Copiar código Pix</button></div>` : ''}
+   ${a.cancelado ? '' : `<div class="actions">${a.status === 'agendado' ? (CONFIRMADOS.has(a.id) ? '<span class="badge good">confirmação enviada</span>' : `<button class="btn sm primary" data-confirmar="${a.id}">${ic('check')}Confirmar presença</button>`) : ''}<button class="btn sm ghost" data-ics="${a.id}">${ic('cal')}Salvar na agenda do celular</button>${pode ? `<button class="btn sm soft" data-cancelar="${a.id}">${ic('x')}Cancelar horário</button>` : (wCanc ? `<a class="btn sm primary" href="${wCanc}" target="_blank" rel="noopener">${ic('chat')}Avisar cancelamento no WhatsApp</a>` : '')}${wRem ? `<a class="btn sm ghost" href="${wRem}" target="_blank" rel="noopener">${ic('repeat')}Remarcar</a>` : ''}</div>`}</article>`;
 }
 
 function render() {
@@ -40,6 +42,7 @@ function render() {
   <section class="card"><h3>Próximos horários <small>${prox.filter(a => !a.cancelado).length}</small></h3>
    ${prox.length ? `<div class="stack" style="gap:10px">${prox.map(proxCard).join('')}</div>` : `<div class="empty">Nenhum horário marcado.</div>`}
    <div class="row" style="margin-top:12px">${wAg ? `<a class="btn primary" href="${wAg}" target="_blank" rel="noopener">${ic('cal')}Agendar pelo WhatsApp</a>` : ''}<a class="btn soft" href="/catalogo">${ic('image')}Ver catálogo de modelos</a></div></section>
+  ${horariosCard()}
   ${avaliarCard()}
   ${cuidadosCard()}
   ${anamCard()}
@@ -57,6 +60,67 @@ function render() {
   <p class="pub-foot">${ic('lock')} Este link é pessoal. Não compartilhe.<br>${esc((P.atelie && P.atelie.nome) || '')}${P.atelie && P.atelie.instagram ? ` · ${esc(P.atelie.instagram)}` : ''}</p>`;
 }
 
+
+// Arquivo de calendário (.ics): abre na agenda do celular com lembrete um dia antes e duas horas antes.
+function salvarNaAgenda(id) {
+  const a = PROX.find(x => x.id === id); if (!a) return;
+  const [y, m, d] = a.data.split('-').map(Number); const [hh, mm] = String(a.hora || '09:00').split(':').map(Number);
+  const ini = new Date(y, m - 1, d, hh || 0, mm || 0); const fim = new Date(ini.getTime() + (a.duracao || 120) * 60e3);
+  const z = x => x.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+  const tx = t => String(t || '').replace(/[\\;,]/g, c => '\\' + c).replace(/\n/g, '\\n');
+  const at = P.atelie || {}; const local = [at.endereco, at.municipio].filter(Boolean).join(', ');
+  const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Atelie//Horario//PT', 'CALSCALE:GREGORIAN', 'BEGIN:VEVENT', `UID:${id}@${location.hostname}`, `DTSTAMP:${z(new Date())}`, `DTSTART:${z(ini)}`, `DTEND:${z(fim)}`,
+    `SUMMARY:${tx(`${a.servico} · ${at.nome || 'Ateliê'}`)}`, local ? `LOCATION:${tx(local)}` : '', `DESCRIPTION:${tx(`Seu horário de ${a.servico}.${P.regras && P.regras.preparo ? ` Venha ${P.regras.preparo}.` : ''} Seu espaço: ${location.href}`)}`,
+    'BEGIN:VALARM', 'TRIGGER:-P1D', 'ACTION:DISPLAY', 'DESCRIPTION:Amanhã é o seu horário', 'END:VALARM', 'BEGIN:VALARM', 'TRIGGER:-PT2H', 'ACTION:DISPLAY', 'DESCRIPTION:Seu horário é daqui a 2 horas', 'END:VALARM',
+    'END:VEVENT', 'END:VCALENDAR'].filter(Boolean).join('\r\n');
+  const url = URL.createObjectURL(new Blob([ics], { type: 'text/calendar;charset=utf-8' }));
+  const l = document.createElement('a'); l.href = url; l.download = `horario-${a.data}.ics`; document.body.appendChild(l); l.click(); l.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60e3); toast('Abra o arquivo para salvar na sua agenda');
+}
+async function confirmarPresenca(id) {
+  const a = PROX.find(x => x.id === id); if (!a) return;
+  try {
+    await setDoc(doc(collection(FS, 'solicitacoes')), { token, agendaId: id, tipo: 'confirmacao', criadoEm: serverTimestamp(), motivo: '' });
+    CONFIRMADOS.add(id); render(); toast('Presença confirmada. Obrigada! 💕');
+  } catch (e) { console.error(e); toast('Não foi possível confirmar agora. Tente de novo.', true); }
+}
+function horariosCard() {
+  const S = (HOR && HOR.servicos) || []; if (!HOR || !S.length) return '';
+  if (!S.some(x => x.id === HOR_SERV)) HOR_SERV = S[0].id;
+  const sv = S.find(x => x.id === HOR_SERV); const dias = horariosPara(HOR, sv.dur);
+  if (!dias.some(x => x.d === HOR_DIA)) HOR_DIA = dias.length ? dias[0].d : '';
+  const dia = dias.find(x => x.d === HOR_DIA);
+  return `<section class="card" id="horLivres"><h3>${ic('clock')} Horários livres <small>próximas 2 semanas</small></h3>
+   <label class="fld">Serviço<select id="horServ">${S.map(x => `<option value="${esc(x.id)}" ${x.id === HOR_SERV ? 'selected' : ''}>${esc(x.nome)}</option>`).join('')}</select></label>
+   ${dias.length ? `<div class="chips hor-dias">${dias.map(x => { const d = parse(x.d); return `<button class="chip" data-hdia="${x.d}" aria-pressed="${x.d === HOR_DIA}">${dataLonga(x.d).split(',')[0].slice(0, 3)} ${d.getDate()}/${d.getMonth() + 1}</button>`; }).join('')}</div>
+    <div class="chips hor-horas">${dia.horas.map(h => { const k = `${dia.d} ${h}`; return `<button class="chip" data-hpedir="${h}" ${PEDIDOS.has(k) ? 'aria-pressed="true" disabled' : ''}>${h}${PEDIDOS.has(k) ? ' · pedido enviado' : ''}</button>`; }).join('')}</div>
+    <p class="small muted" style="margin:8px 0 0">Toque num horário para pedir. O ateliê confirma com você pelo WhatsApp.</p>`
+    : '<div class="empty">Sem horários livres para este serviço nas próximas semanas. Fale com o ateliê pelo WhatsApp para entrar na lista de espera.</div>'}</section>`;
+}
+async function pedirHorario(h) {
+  const S = (HOR && HOR.servicos) || []; const sv = S.find(x => x.id === HOR_SERV); if (!sv || !HOR_DIA) return;
+  const quando = `${dataLonga(HOR_DIA)} às ${h}`;
+  const back = document.createElement('div'); back.className = 'sheet-back';
+  back.innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-label="Pedir horário"><div class="grab"></div><div class="sheet-head"><h2>Pedir este horário?</h2><button class="icon-btn" data-fechar aria-label="Fechar">${ic('x')}</button></div>
+   <div class="form"><p style="margin:0"><b>${esc(sv.nome)}</b>, ${esc(quando)}.</p><p class="small muted" style="margin:0">O horário só fica garantido depois que o ateliê confirmar${P.regras && P.regras.prazoCancel ? ' e você pagar o sinal' : ''}.</p>
+   <label class="fld">Quer deixar um recado? (opcional)<textarea id="hMsg" maxlength="280" placeholder="Ex.: cor do cabelo, comprimento"></textarea></label>
+   <div id="hErr" class="small" style="color:var(--bad)"></div>
+   <div class="form-actions"><button class="btn ghost" data-fechar>Voltar</button><button class="btn primary" id="hOk">${ic('check')}Enviar pedido</button></div></div></div>`;
+  document.body.appendChild(back); document.body.style.overflow = 'hidden';
+  const fechar = () => { back.remove(); document.body.style.overflow = ''; };
+  back.addEventListener('click', e => { if (e.target === back || e.target.closest('[data-fechar]')) fechar(); });
+  $('#hOk', back).onclick = async () => {
+    const bt = $('#hOk', back); bt.disabled = true; bt.textContent = 'Enviando…';
+    try {
+      await setDoc(doc(collection(FS, 'solicitacoes')), { token, agendaId: '', tipo: 'horario', criadoEm: serverTimestamp(), motivo: $('#hMsg', back).value.trim().slice(0, 280), pedido: { data: HOR_DIA, hora: h, servico: String(sv.nome).slice(0, 80), servicoId: String(sv.sid || '').slice(0, 64), duracao: Math.round(+sv.dur || 120) } });
+      PEDIDOS.add(`${HOR_DIA} ${h}`); fechar(); render(); toast('Pedido enviado. O ateliê vai confirmar com você 💕');
+    } catch (e) {
+      console.error(e); bt.disabled = false; bt.innerHTML = `${ic('check')}Enviar pedido`;
+      const w = wa(`Oi! Aqui é ${P.nome}. Quero pedir o horário de ${sv.nome}, ${quando}.`);
+      $('#hErr', back).innerHTML = `Não foi possível enviar por aqui.${w ? ` <a href="${w}" target="_blank" rel="noopener">Pedir pelo WhatsApp</a>` : ''}`;
+    }
+  };
+}
 
 function anamCard() {
   const A = P.anamnese; if (!A || !(A.perguntas || []).length) return '';
@@ -188,9 +252,15 @@ function pedirCancelamento(id) {
   };
 }
 
+main.addEventListener('change', e => { if (e.target.id === 'horServ') { HOR_SERV = e.target.value; HOR_DIA = ''; render(); } });
 main.addEventListener('click', e => { const b = e.target.closest('[data-cancelar]'); if (b) pedirCancelamento(b.dataset.cancelar); if (e.target.closest('[data-anam]')) abrirAnamnese();
   const st = e.target.closest('[data-nota]'); if (st) abrirAvaliacao(st.dataset.ag, +st.dataset.nota);
   const av = e.target.closest('[data-avaliar]'); if (av) abrirAvaliacao(av.dataset.avaliar, 0);
+  const px = e.target.closest('[data-pix]'); if (px) navigator.clipboard.writeText(px.dataset.pix).then(() => toast('Código Pix copiado. Cole no app do seu banco.'), () => toast('Não foi possível copiar', true));
+  const ics = e.target.closest('[data-ics]'); if (ics) salvarNaAgenda(ics.dataset.ics);
+  const cf = e.target.closest('[data-confirmar]'); if (cf) { cf.disabled = true; confirmarPresenca(cf.dataset.confirmar); }
+  const hd = e.target.closest('[data-hdia]'); if (hd) { HOR_DIA = hd.dataset.hdia; render(); $('#horLivres') && $('#horLivres').scrollIntoView({ block: 'nearest' }); }
+  const hp = e.target.closest('[data-hpedir]'); if (hp) pedirHorario(hp.dataset.hpedir);
   const cp = e.target.closest('[data-copiar]'); if (cp) navigator.clipboard.writeText(cp.dataset.copiar).then(() => toast('Convite copiado'), () => toast('Não foi possível copiar', true)); });
 
 async function carregar() {
@@ -199,6 +269,7 @@ async function carregar() {
   P = s.data();
   const q = await getDocs(collection(FS, 'portal', token, 'proximos'));
   PROX = q.docs.map(d => ({ id: d.id, ...d.data() }));
+  if (!HOR) HOR = await getDoc(doc(FS, 'vitrine', 'horarios')).then(x => x.exists() && x.data().ligado !== false ? x.data() : null).catch(() => null);
   render(); return true;
 }
 (async () => {

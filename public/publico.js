@@ -29,7 +29,7 @@ const I = {
   image: 'M4 5h16v14H4zM4 15l5-5 4 4 3-3 4 4M15 9h.01', ticket: 'M3 8a2 2 0 0 0 0 4v0a2 2 0 0 1 0 4v1a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1v-1a2 2 0 0 1 0-4 2 2 0 0 0 0-4V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1zM14 6v2M14 11v2M14 16v2',
   users: 'M16 19v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1M9.5 10a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z', info: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 11v6M12 7.5h.01',
   star: 'M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z', heart: 'M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z',
-  left: 'M15 18l-6-6 6-6', right: 'M9 6l6 6-6 6', lock: 'M6 11h12v10H6zM8.5 11V7.5a3.5 3.5 0 0 1 7 0V11', repeat: 'M17 2l4 4-4 4M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4M21 13v2a3 3 0 0 1-3 3H3'
+  copy: 'M9 9h11v11H9zM5 15H4V4h11v1', left: 'M15 18l-6-6 6-6', right: 'M9 6l6 6-6 6', lock: 'M6 11h12v10H6zM8.5 11V7.5a3.5 3.5 0 0 1 7 0V11', repeat: 'M17 2l4 4-4 4M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4M21 13v2a3 3 0 0 1-3 3H3'
 };
 export const ic = n => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${I[n]}"/></svg>`;
 export function braidMark(size = 34) {
@@ -43,3 +43,15 @@ export function marca() {
 export function toast(m, erro) { const t = document.createElement('div'); t.className = 'toast' + (erro ? ' erro' : ''); t.innerHTML = ic(erro ? 'alert' : 'check'); const sp = document.createElement('span'); sp.textContent = m; t.appendChild(sp); document.body.appendChild(t); setTimeout(() => t.remove(), erro ? 4200 : 2900); }
 export const NIVEL_COR = { perola: 'var(--lv-perola)', ouro: 'var(--lv-ouro)', prata: 'var(--lv-prata)', bronze: 'var(--lv-bronze)', nova: 'var(--lv-nova)' };
 export function estado(main, titulo, texto, extra = '') { main.innerHTML = `<div class="pub-estado card"><img class="marca" src="/img/marca.webp" width="72" height="72" alt=""><h1 class="page-title" style="font-size:1.5rem">${titulo}</h1><p class="muted" style="margin:0">${texto}</p>${extra}</div>`; }
+
+// Horários livres publicados pelo sistema (vitrine/horarios): janelas livres de cada dia, sem nenhum dado de cliente.
+// Devolve os inícios possíveis (de 30 em 30 minutos) para um serviço de "dur" minutos.
+export function horariosPara(H, dur, dias = 14) {
+  const hj = new Date(); const pad2 = n => String(n).padStart(2, '0');
+  const hoje = `${hj.getFullYear()}-${pad2(hj.getMonth() + 1)}-${pad2(hj.getDate())}`; const agora = hj.getHours() * 60 + hj.getMinutes() + 120;
+  const hm = m => `${pad2(Math.floor(m / 60))}:${pad2(m % 60)}`; dur = Math.max(30, +dur || 120);
+  return ((H && H.dias) || []).filter(x => x.d >= hoje).slice(0, dias).map(x => {
+    const hs = []; for (const { i: a, f: b } of x.livres || []) for (let m = Math.ceil(a / 30) * 30; m + dur <= b; m += 30) if (x.d > hoje || m >= agora) hs.push(hm(m));
+    return { d: x.d, horas: hs };
+  }).filter(x => x.horas.length);
+}
