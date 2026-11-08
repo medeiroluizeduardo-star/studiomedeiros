@@ -592,7 +592,7 @@ function shell(){
   const on=navigator.onLine!==false;$('#syncSide').innerHTML=`<i></i>${on?'Sincronizado':'Sem internet · salvando no aparelho'} · ${PAPEIS[ROLE]||''}`;$('#syncSide').classList.toggle('local',!on);
   return `<div class="topbar"><div class="brand">${marcaImg(38)}${MARCA_TXT}</div><div class="row">${navigator.onLine===false?'<span class="sync local"><i></i>Sem internet</span>':''}<span class="role">${esc(PAPEIS[ROLE]||'')}</span>${pode('base')?`<button class="icon-btn" data-act="busca" aria-label="Buscar (atalho /)" title="Buscar (atalho /)">${ic('search')}</button>`:''}<button class="icon-btn" data-act="tema" aria-label="Tema: ${{sistema:'automático',claro:'claro',escuro:'escuro'}[temaAtual()]}" title="Tema: ${{sistema:'automático',claro:'claro',escuro:'escuro'}[temaAtual()]}">${ic({sistema:'auto',claro:'sun',escuro:'moon'}[temaAtual()])}</button></div></div>`;
 }
-function render(){
+function render(){VEZ++;
   const main=$('#main');
   if(['config','login','primeiro','pendente','erro'].includes(ROLE)){$('#tabbar').innerHTML='';$('#navSide').innerHTML='';$('#syncSide').innerHTML='';if(!main.dataset.gate||main.dataset.gate!==ROLE){main.dataset.gate=ROLE;main.innerHTML=demoFaixa()+gate()}return}
   main.dataset.gate='';
@@ -1885,9 +1885,9 @@ function portalSnapshot(c,P,pb){const f=fidelidade(c);const nv=NIVEIS[f.nivel];c
   if(ua&&ua.data>=addDays(t,-150)){const m=manutDe(ua.servicoId);const cat=catDoServ(ua.servicoId);cuidados={servico:nomeAg(ua),data:ua.data,texto:(cat&&cat.cuidados)||CUIDADOS_PADRAO,semanas:m,manutAte:addDays(ua.data,m*7),temFuturo:(agPorCli().get(c.id)||[]).some(a=>a.data>=t&&(a.status==='agendado'||a.status==='confirmado'))}}
   const indicacao={codigo:c.indicacaoCodigo||'',indicadas:indPorCli().get(c.id)||0,beneficio:pb.indBenef||IND_PADRAO[0],beneficioNova:pb.indBenefNova||IND_PADRAO[1]};
   const contratos=[];const vistos=new Set();
-  arr('contratosLink').filter(l=>l.clienteId===c.id).sort((a,b)=>a.criadoEm<b.criadoEm?1:-1).forEach(l=>{vistos.add(l.id);contratos.push({token:l.id,servico:l.servico||'',data:l.data||'',status:linkStatus(l),criadoEm:String(l.criadoEm).slice(0,10)})});
-  arr('aceites').filter(a=>a.clienteId===c.id&&a.tipo==='servico'&&!vistos.has(a.linkToken)).forEach(a=>contratos.push({token:a.linkToken||'',servico:'Contrato de serviço',data:'',status:'aceito',criadoEm:String(a.aceitoEm).slice(0,10),presencial:!a.linkToken}));
-  const pacotes=arr('pacotes').filter(p=>p.clienteId===c.id&&pacoteAtivo(p)).map(p=>({nome:p.nome,saldo:pacoteSaldo(p),validade:p.validade||''}));
+  daCliente('contratosLink',c.id).sort((a,b)=>a.criadoEm<b.criadoEm?1:-1).forEach(l=>{vistos.add(l.id);contratos.push({token:l.id,servico:l.servico||'',data:l.data||'',status:linkStatus(l),criadoEm:String(l.criadoEm).slice(0,10)})});
+  daCliente('aceites',c.id).filter(a=>a.tipo==='servico'&&!vistos.has(a.linkToken)).forEach(a=>contratos.push({token:a.linkToken||'',servico:'Contrato de serviço',data:'',status:'aceito',criadoEm:String(a.aceitoEm).slice(0,10),presencial:!a.linkToken}));
+  const pacotes=daCliente('pacotes',c.id).filter(p=>pacoteAtivo(p)).map(p=>({nome:p.nome,saldo:pacoteSaldo(p),validade:p.validade||''}));
   const main={v:1,nome:c.nome,nivel:{chave:f.nivel,nome:nv.n,score:f.score,beneficio:nv.b,prox:proximoNivel(f.score,f.nivel)},visitas:f.visitas,
     cadastro:{nome:c.nome,telefone:c.telefone||'',instagram:c.instagram||'',aniversario:c.aniversario?dataCurta(c.aniversario):'',cpf:mascaraCpf(c.cpf)},
     ultimos,avaliaveis,cuidados,indicacao,contratos:contratos.slice(0,12),pacotes,anamnese:{perguntas:ANAM_Q.map(([k,q])=>({k,q})),termo:termoAnamnese(),em:c.anamneseEm||''},
@@ -1901,7 +1901,13 @@ function portalSnapshot(c,P,pb){const f=fidelidade(c);const nv=NIVEIS[f.nivel];c
     if(a.status==='cancelado')o.cancelado=true;else if(!pend.has(a.id))o.cancelado=false;
     prox[a.id]=o});
   return {main,prox}}
-async function sincronizarPortais(){const P=pol(),pb=pub();
+/* Durante a sincronização dos espaços das clientes, contratos, aceites e pacotes ficam agrupados por cliente
+   (uma passada em cada coleção, e não uma por cliente). Fora dela, filtra na hora. */
+let GRUPOS=null;
+const daCliente=(col,cid)=>GRUPOS?(GRUPOS[col].get(cid)||[]):arr(col).filter(x=>x.clienteId===cid);
+function agruparPorCliente(){GRUPOS={};['contratosLink','aceites','pacotes'].forEach(col=>{const m=new Map();arr(col).forEach(x=>{if(!m.has(x.clienteId))m.set(x.clienteId,[]);m.get(x.clienteId).push(x)});GRUPOS[col]=m})}
+async function sincronizarPortais(){try{agruparPorCliente();await sincronizarPortais2()}finally{GRUPOS=null}}
+async function sincronizarPortais2(){const P=pol(),pb=pub();
   for(const c of arr('clientes').filter(x=>x.portalToken&&!x.indicacaoCodigo))await save('clientes',c.id,{...c,indicacaoCodigo:novoCodigoInd(c)},{quiet:true});
   for(const c of arr('clientes').filter(x=>x.portalToken)){const {main,prox}=portalSnapshot(c,P,pb);const h=hashStr(JSON.stringify(main));const sync=c.portalSync||{};const old=sync.prox||{};let mudou=false;const novoProx={};
     if(sync.h!==h){await setDoc(doc(FS,'portal',c.portalToken),{...main,atualizadoEm:nowIso()});mudou=true}
@@ -1927,7 +1933,9 @@ async function processar(){if(processando||!FS||!pode('portal')||[...NEED].some(
   try{await sincronizarPortais()}catch(e){console.error('portal',e)}
   if(isOwner()&&!processar.vit){processar.vit=true;salvarVitrine();try{await sincronizarCatalogo()}catch(e){console.error('catalogo',e)}}
   processando=false}
-function avisosPortal(){if(!pode('portal'))return '';const lim=Date.now()-14*864e5;
+let VEZ=0;const AVP={vez:-1,html:''};
+function avisosPortal(){if(AVP.vez===VEZ)return AVP.html;AVP.vez=VEZ;return AVP.html=avisosPortal2()}
+function avisosPortal2(){if(!pode('portal'))return '';const lim=Date.now()-14*864e5;
   const canc=arr('solicitacoes').filter(q=>q.processado&&q.resultado==='cancelado'&&!q.visto&&toMs(q.criadoEm)>lim);
   const acc=arr('contratosLink').filter(l=>l.status==='aceito'&&!l.visto);const cads=pode('base')?avisosCadastro():[];
   const ans=pode('anamnese')?arr('anamnesePortal').filter(x=>x.processado&&x.resultado==='importado'&&!x.visto).map(x=>{const c=S.clientes.get(x.clienteId);const al=anamAlertas(anamDe(x.clienteId));
