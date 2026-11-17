@@ -38,11 +38,13 @@ function render() {
    <div style="min-width:0"><div class="eyebrow">Seu nível</div><div style="font-family:var(--f-display);font-size:1.6rem;line-height:1.1">${esc(n.nome || 'Nova')}</div>
     <p class="small" style="margin:6px 0">${ic('gift')} ${esc(n.beneficio || '')}</p>
     ${n.prox ? (n.prox.faltam ? `<div class="bar thin"><span style="width:${pct}%"></span></div><div class="small muted" style="margin-top:4px">Faltam ${n.prox.faltam} pontos para o nível ${esc(n.prox.nome)}.</div>` : `<div class="small muted">${esc(n.prox.texto || '')}</div>`) : '<div class="small muted">Você está no nível mais alto. Obrigada pela confiança!</div>'}</div>
+   ${pontosBloco(n)}
    <details class="how" style="grid-column:1/-1"><summary>Como ganhar pontos</summary><p>Contamos os últimos 12 meses: cada atendimento vale 7 pontos (até 35), o valor investido vale até 30, voltar com frequência vale até 20 e cada amiga indicada vale 5 (até 15). Faltar sem avisar tira 10 pontos.</p></details></section>
   <section class="card"><h3>Próximos horários <small>${prox.filter(a => !a.cancelado).length}</small></h3>
    ${prox.length ? `<div class="stack" style="gap:10px">${prox.map(proxCard).join('')}</div>` : `<div class="empty">Nenhum horário marcado.</div>`}
    <div class="row" style="margin-top:12px">${wAg ? `<a class="btn primary" href="${wAg}" target="_blank" rel="noopener">${ic('cal')}Agendar pelo WhatsApp</a>` : ''}<a class="btn soft" href="/catalogo">${ic('image')}Ver catálogo de modelos</a></div></section>
   ${horariosCard()}
+  ${googleCard()}
   ${avaliarCard()}
   ${cuidadosCard()}
   ${anamCard()}
@@ -173,7 +175,27 @@ function abrirAnamnese() {
 }
 
 
+/* De onde vêm os pontos da cliente e o que ela pode fazer para subir de nível. */
+function pontosBloco(n) {
+  const p = n.pts; if (!p || n.chave === 'nova') return '';
+  const linhas = [['Atendimentos no ano', p.freq, 35], ['Valor investido', p.valor, 30], ['Voltar com frequência', p.rec, 20], ['Amigas indicadas', p.ind, 15]];
+  const dicas = [];
+  if (p.rec < 20) dicas.push(n.dias != null && n.dias > 45 ? `Voltar logo vale até <b>+${20 - p.rec}</b> pontos: o último atendimento foi há ${n.dias} dias, e quem volta em até 45 dias ganha o máximo.` : `Voltar em até 45 dias depois de cada atendimento vale até <b>+${20 - p.rec}</b> pontos.`);
+  if (p.freq < 35) dicas.push(`Cada novo atendimento nos próximos 12 meses vale <b>+7</b> pontos.`);
+  if (p.ind < 15 && P.indicacao && P.indicacao.codigo) dicas.push(`Cada amiga que vier pelo seu código e for atendida vale <b>+5</b> pontos.`);
+  if (p.pen) dicas.push(`Faltas sem aviso tiraram <b>${p.pen}</b> pontos. Avisando antes, isso não acontece.`);
+  return `<div style="grid-column:1/-1"><div class="eyebrow" style="margin:4px 0 8px">Seus pontos</div><div class="pontos-grid">${linhas.map(([t, v, m]) => `<div><div class="row between small"><span>${t}</span><span class="muted">${v} de ${m}</span></div><div class="bar thin"><span style="width:${Math.round(v / m * 100)}%"></span></div></div>`).join('')}</div>
+   ${p.pen ? `<div class="small" style="color:var(--bad);margin-top:6px">Faltas: −${p.pen} pontos</div>` : ''}
+   ${n.prox && dicas.length ? `<div class="eyebrow" style="margin:12px 0 6px">Como subir para ${esc(n.prox.nome)}</div><ul class="small" style="margin:0;padding-left:18px;display:grid;gap:4px">${dicas.slice(0, 3).map(d => `<li>${d}</li>`).join('')}</ul>` : ''}</div>`;
+}
 const AVALIADOS = new Set();
+let GOOGLE_PEDIR = null; // { texto } depois de uma nota 4 ou 5, enquanto a página estiver aberta
+function googleCard() {
+  const g = P.atelie && P.atelie.google; if (!g || !GOOGLE_PEDIR) return '';
+  return `<section class="card aval-card"><h3>${ic('star')} Que bom que você gostou!</h3>
+   <p class="small" style="margin:4px 0 10px">Pode deixar a sua avaliação também no Google? Leva um minutinho e ajuda outras mulheres a encontrarem o ateliê.${GOOGLE_PEDIR.texto ? ' Já copiamos o seu comentário: é só colar lá.' : ''}</p>
+   <div class="row"><a class="btn primary" href="${esc(g)}" target="_blank" rel="noopener" data-google>${ic('star')}Avaliar no Google</a><button class="btn ghost" data-google-fechar>Agora não</button></div></section>`;
+}
 function avaliarCard() {
   const u = (P.ultimos || []).find(x => x.avaliar && !AVALIADOS.has(x.id)); if (!u) return '';
   return `<section class="card aval-card"><h3>${ic('star')} Como foi o seu atendimento?</h3><p class="small muted" style="margin:4px 0 10px">${esc(u.servico)} em ${dataBR(u.data)}. Sua opinião ajuda o ateliê a melhorar sempre.</p>
@@ -218,9 +240,13 @@ function abrirAvaliacao(agId, nota) {
   $('#avPub', back).onchange = e => { $('#avNomeBox', back).hidden = !e.target.checked; };
   $('#fAv', back).onsubmit = async e => { e.preventDefault(); if (!n) { $('#avMsg', back).textContent = 'Escolha de 1 a 5 estrelas.'; return; }
     const bt = $('button.primary', back); bt.disabled = true; bt.textContent = 'Enviando…'; const pub = $('#avPub', back).checked;
+    // Copia o comentário já no toque (o navegador só deixa copiar logo após um toque), para colar no Google depois.
+    const txt = $('#avTxt', back).value.trim(); const copia = n >= 4 && P.atelie && P.atelie.google && txt && navigator.clipboard ? navigator.clipboard.writeText(txt).then(() => true, () => false) : Promise.resolve(false);
     try {
       await setDoc(doc(FS, 'avaliacoes', `${token}_${agId}`), { token, agendaId: agId, nota: n, texto: $('#avTxt', back).value.trim().slice(0, 600), autorizaPublicar: pub, nomeExibicao: pub ? ($('#avNome', back).value.trim().slice(0, 60) || primeiro(P.nome)) : '', servico: String(u.servico || '').slice(0, 80), em: serverTimestamp() });
-      AVALIADOS.add(agId); fechar(); render(); toast(n >= 4 ? 'Obrigada pelo carinho! 💕' : 'Obrigada! Vamos usar sua opinião para melhorar.');
+      AVALIADOS.add(agId); if (n >= 4 && P.atelie && P.atelie.google) GOOGLE_PEDIR = { texto: await copia };
+      fechar(); render(); toast(n >= 4 ? 'Obrigada pelo carinho! 💕' : 'Obrigada! Vamos usar sua opinião para melhorar.');
+      if (GOOGLE_PEDIR) setTimeout(() => document.querySelector('[data-google]')?.closest('section')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300);
     } catch (err) { console.error(err); bt.disabled = false; bt.innerHTML = `${ic('check')}Enviar avaliação`; $('#avMsg', back).textContent = 'Não foi possível enviar. Talvez este atendimento já tenha sido avaliado.'; }
   };
 }
@@ -254,6 +280,7 @@ function pedirCancelamento(id) {
 
 main.addEventListener('change', e => { if (e.target.id === 'horServ') { HOR_SERV = e.target.value; HOR_DIA = ''; render(); } });
 main.addEventListener('click', e => { const b = e.target.closest('[data-cancelar]'); if (b) pedirCancelamento(b.dataset.cancelar); if (e.target.closest('[data-anam]')) abrirAnamnese();
+  if (e.target.closest('[data-google-fechar]') || e.target.closest('[data-google]')) { GOOGLE_PEDIR = null; setTimeout(render, 50); if (e.target.closest('[data-google-fechar]')) return; }
   const st = e.target.closest('[data-nota]'); if (st) abrirAvaliacao(st.dataset.ag, +st.dataset.nota);
   const av = e.target.closest('[data-avaliar]'); if (av) abrirAvaliacao(av.dataset.avaliar, 0);
   const px = e.target.closest('[data-pix]'); if (px) navigator.clipboard.writeText(px.dataset.pix).then(() => toast('Código Pix copiado. Cole no app do seu banco.'), () => toast('Não foi possível copiar', true));

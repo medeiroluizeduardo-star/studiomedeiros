@@ -202,7 +202,7 @@ function carregarHistorico(){if(histProm)return histProm;if(HIST||!FS)return Pro
 const histAte=()=>HIST?'':corte();
 /* telas que mostram um período antes do corte pedem o histórico sozinhas */
 function histPelaTela(){if(HIST)return;const cm=corte().slice(0,7);
-  if((UI.view==='financeiro'&&UI.finMes<cm)||(UI.view==='calendario'&&UI.calMes<cm)||(UI.view==='agenda'&&UI.agDia<corte()))carregarHistorico()}
+  if((UI.view==='financeiro'&&(UI.finMes<cm||UI.finTab==='caixa'&&UI.caixaDia<corte()))||(UI.view==='calendario'&&UI.calMes<cm)||(UI.view==='agenda'&&UI.agDia<corte()))carregarHistorico()}
 const configPendente=()=>!DEMO&&!firebaseConfig||!firebaseConfig.apiKey||/COLE|SUA_/i.test(firebaseConfig.apiKey);
 
 function virarPapel(papel){if(ROLE===papel)return;pararDados();ROLE=papel;errEnviar();vigiarAvisos();if(COLS_POR_PAPEL[papel]){if(!visiveis().some(v=>v[0]===UI.view))UI.view=visiveis()[0][0];subscribe(COLS_POR_PAPEL[papel])}render()}
@@ -598,7 +598,7 @@ function docPolitica(){
 async function hashTexto(t){try{const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(t));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('').slice(0,16)}catch(e){return ''}}
 
 /* ================= interface: casca ================= */
-const UI={view:'inicio',agDia:today(),calMes:ym(today()),calDia:today(),finTab:'visao',finMes:ym(today()),lanTipo:'todos',cliBusca:'',cliLim:60,cliNivel:'todos',cliOrd:'score',ctTab:'links',agVis:'dia',reatTodos:false,ajTab:'horarios',cliTab:'lista',ctTipo:'servico',ctCli:'',ctAg:'',acFiltro:'todos',pkTab:'pacotes',relPer:6,lastView:null};
+const UI={view:'inicio',caixaDia:today(),agDia:today(),calMes:ym(today()),calDia:today(),finTab:'visao',finMes:ym(today()),lanTipo:'todos',cliBusca:'',cliLim:60,cliNivel:'todos',cliOrd:'score',ctTab:'links',agVis:'dia',reatTodos:false,ajTab:'horarios',cliTab:'lista',ctTipo:'servico',ctCli:'',ctAg:'',acFiltro:'todos',pkTab:'pacotes',relPer:6,lastView:null};
 const VIEWS=[['inicio','Início','home',()=>pode('base')],['agenda','Agenda','cal',()=>pode('base')],['clientes','Clientes','users',()=>pode('base')],['catalogo','Catálogo','image',()=>pode('base')],['financeiro','Finanças','wallet',()=>pode('fin')],['contratos','Contratos','file',()=>pode('contratos')],['pacotes','Pacotes e vales','ticket',()=>pode('base')],['estoque','Estoque','box',()=>pode('estoque')],['calendario','Datas e ideias','spark',()=>pode('base')],['ajustes','Ajustes','gear',()=>true]];
 const visiveis=()=>VIEWS.filter(v=>v[3]());
 let rq=0;function schedule(){if(rq)return;rq=requestAnimationFrame(()=>{rq=0;render()})}
@@ -820,6 +820,8 @@ function vAgendaMes(){const d=UI.agDia;const m=ym(d);const [Y,M]=m.split('-').ma
 
 /* ---------- v8: cuidados, avaliações, indicação, sinais, reativar, relatório ---------- */
 const CUIDADOS_PADRAO='Lave o couro cabeludo a cada 7 a 10 dias com xampu diluído, secando bem as tranças. Durma com touca ou fronha de cetim. Hidrate o couro com tônico leve, sem óleos pesados. Evite prender com muita tensão nos primeiros dias.';
+/* Avaliação no Google: só aceita endereço https do Google (g.page, goo.gl, google.com/…, maps.app.goo.gl). */
+function linkGoogle(u){u=String(u||'').trim();if(!u)return '';try{const x=new URL(u);return x.protocol==='https:'&&/(^|\.)(google\.[a-z.]+|g\.page|goo\.gl)$/i.test(x.hostname)?x.href:''}catch(e){return ''}}
 const IND_PADRAO=['10% de desconto no próximo atendimento para cada amiga atendida','5% de desconto no primeiro atendimento'];
 const catDoServ=sid=>arr('catalogo').find(x=>x.servicoId===sid);
 const manutDe=sid=>{const c=catDoServ(sid);return +c?.manutSem||+pol().campos.semanasMax||8};
@@ -943,12 +945,12 @@ function vClientes(){
 
 /* ================= FINANÇAS ================= */
 function vFinanceiro(){
-  const tabs=[['visao','Visão geral'],['lanc','Lançamentos'],['contas','Contas'],['sinais','Sinais'],...(profs().length?[['repasse','Repasse']]:[]),['mei','MEI e impostos'],['rel','Relatórios'],['serv','Serviços e preços']];
+  const tabs=[['visao','Visão geral'],['caixa','Caixa do dia'],['lanc','Lançamentos'],['contas','Contas'],['sinais','Sinais'],...(profs().length?[['repasse','Repasse']]:[]),['mei','MEI e impostos'],['rel','Relatórios'],['serv','Serviços e preços']];
   if(UI.finTab==='repasse'&&!profs().length)UI.finTab='visao';
   const comMes=['visao','lanc','mei','sinais','repasse'].includes(UI.finTab);
   return head('Finanças','Controle <em>financeiro</em>',comMes?esc(cap(mesNome(UI.finMes))):'',
     `${comMes?`<button class="icon-btn" data-act="finMes" data-n="-1" aria-label="Mês anterior">${ic('left')}</button><button class="icon-btn" data-act="finMes" data-n="1" aria-label="Próximo mês">${ic('right')}</button>`:''}${['visao','mei'].includes(UI.finTab)?`<button class="btn soft" data-act="relContador">${ic('file')}Relatório do mês</button>`:''}${!pode('finEdit')?'<span class="badge">somente leitura</span>':UI.finTab==='serv'?`<button class="btn primary" data-act="novoServ">${ic('plus')}Serviço</button>`:UI.finTab==='contas'?`<button class="btn primary" data-act="novaConta">${ic('plus')}Conta a pagar</button>`:`<button class="btn primary" data-act="novoLan">${ic('plus')}Lançar</button>`}`)+
-  `<div style="overflow-x:auto">${seg('finTab',UI.finTab,tabs)}</div>`+({visao:finVisao,lanc:finLanc,contas:finContas,sinais:finSinais,repasse:finRepasse,mei:finMei,rel:finRel,serv:finServ}[UI.finTab]||finVisao)();
+  `<div style="overflow-x:auto">${seg('finTab',UI.finTab,tabs)}</div>`+({visao:finVisao,caixa:finCaixa,lanc:finLanc,contas:finContas,sinais:finSinais,repasse:finRepasse,mei:finMei,rel:finRel,serv:finServ}[UI.finTab]||finVisao)();
 }
 function finVisao(){
   const m=UI.finMes;const R=receitas(l=>ym(l.data)===m),D=despesas(l=>ym(l.data)===m);const r=soma(R),d=soma(D);
@@ -978,6 +980,38 @@ function grafico(s,cur,{key2=true,fmt}={}){
     g+=`<text x="${cx}" y="${H-8}" text-anchor="middle" style="${isC?'fill:var(--fg);font-weight:700':''}">${esc(x.lab||MES3[+x.k.slice(5)-1])}</text>`});
   return `<div class="chart-wrap"><svg class="chart" viewBox="0 0 ${W} ${H}" width="100%" style="min-width:${Math.min(W,560)}px" role="img">${g}</svg></div>`;
 }
+/* ---------- Caixa do dia: confere o que entrou (dinheiro, Pix, cartão) com o que tem na mão.
+   O fechamento fica em privado/caixa-AAAA (um documento por ano: { dias: { 'AAAA-MM-DD': {...} } }). */
+const caixaDoc=d=>'caixa-'+d.slice(0,4);
+const caixaFech=d=>((S.privado.get(caixaDoc(d))||{}).dias||{})[d]||null;
+function caixaConta(d){const R=receitas(l=>l.data===d),D=despesas(l=>l.data===d&&l.origem!=='taxa');
+  const por={};FORMAS.forEach(f=>por[f]=0);R.forEach(l=>{const f=l.forma||'Outro';por[f]=(por[f]||0)+(+l.valor||0)});
+  const saiDin=soma(D.filter(l=>l.forma==='Dinheiro'));return {R,D,por,saiDin,total:soma(R)}}
+function caixaTrocoSugerido(d){for(let i=1;i<=31;i++){const f=caixaFech(addDays(d,-i));if(f)return +f.fica||0}return 0}
+function finCaixa(){const d=UI.caixaDia;const t=today();const ed=pode('finEdit');const x=caixaConta(d);const f=caixaFech(d);
+  const troco=f?+f.troco||0:caixaTrocoSugerido(d);const esperado=troco+(x.por['Dinheiro']||0)-x.saiDin;
+  const formas=Object.entries(x.por).filter(([k,v])=>v>0||['Dinheiro','Pix'].includes(k));
+  const pend=[...Array(7)].map((_,i)=>addDays(t,-i-1)).filter(k=>k>=corte()&&!caixaFech(k)&&caixaConta(k).R.length);
+  const mes=ym(d);const fechs=Object.entries((S.privado.get(caixaDoc(d))||{}).dias||{}).filter(([k])=>ym(k)===mes).sort((a,b)=>a[0]<b[0]?1:-1);
+  const difTxt=v=>Math.abs(v)<0.01?'<span class="badge good">bateu</span>':`<span class="badge ${v<0?'bad':'warn'}">${v<0?'faltou':'sobrou'} ${BRL(Math.abs(v))}</span>`;
+  return `<div class="row between"><div class="row" style="gap:6px"><button class="icon-btn" data-act="caixaDia" data-n="-1" aria-label="Dia anterior">${ic('left')}</button><b>${esc(cap(dataLonga(d)))}${d===t?' · hoje':''}</b><button class="icon-btn" data-act="caixaDia" data-n="1" aria-label="Próximo dia" ${d>=t?'disabled':''}>${ic('right')}</button></div>${d!==t?`<button class="btn sm ghost" data-act="caixaDia" data-n="0">Hoje</button>`:''}</div>
+  ${pend.length&&ed?`<div class="alert warn">${ic('clock')}<div><b>Dias sem fechamento:</b> ${pend.map(k=>`<button class="btn sm ghost" data-act="caixaIr" data-d="${k}">${dataCurta(k)}</button>`).join(' ')}</div></div>`:''}
+  <section class="kpis"><div class="kpi"><div class="l">Entrou no dia</div><div class="v">${cnt(x.total)}</div><div class="d">${x.R.length} recebimento${x.R.length===1?'':'s'}</div></div>
+   <div class="kpi"><div class="l">Dinheiro esperado na gaveta</div><div class="v">${cnt(esperado)}</div><div class="d">troco ${BRL(troco)} + recebido ${BRL(x.por['Dinheiro']||0)}${x.saiDin?` − saídas ${BRL(x.saiDin)}`:''}</div></div>
+   <div class="kpi"><div class="l">Situação</div><div class="v" style="font-size:1.1rem">${f?difTxt(+f.dif||0):'<span class="badge">não fechado</span>'}</div><div class="d">${f?`fechado${f.em?' às '+new Date(f.em).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):''}`:'confira e feche abaixo'}</div></div></section>
+  <div class="grid g2"><section class="card"><h3>Por forma de pagamento</h3>${bars(formas.map(([k,v])=>[k,v]),Math.max(1,...formas.map(([,v])=>v)))}
+    <h3 style="margin-top:14px">Recebimentos do dia</h3>${x.R.length?`<div class="list">${x.R.map(l=>`<div class="item"><div class="grow"><div class="t">${esc(l.descricao||l.categoria)}</div><div class="s">${esc(l.forma||'sem forma')}${l.parcelas>1?` ${l.parcelas}x`:''}</div></div><b class="num" style="color:var(--good)">${BRL(l.valor)}</b></div>`).join('')}</div>`:'<div class="empty">Nada recebido neste dia. Os pagamentos registrados na agenda entram aqui sozinhos.</div>'}
+    ${x.saiDin?`<h3 style="margin-top:14px">Saídas em dinheiro</h3><div class="list">${x.D.filter(l=>l.forma==='Dinheiro').map(l=>`<div class="item"><div class="grow"><div class="t">${esc(l.descricao||l.categoria)}</div><div class="s">${esc(l.categoria)}</div></div><b class="num" style="color:var(--bad)">− ${BRL(l.valor)}</b></div>`).join('')}</div>`:''}</section>
+   <section class="card"><h3>Fechamento</h3>${ed?`<form class="form" id="fCaixa" data-d="${d}">
+     <div class="f2"><label class="fld">Troco no início do dia (R$)<input id="cxTroco" type="number" step="0.01" min="0" inputmode="decimal" value="${troco||''}" placeholder="0,00"></label><label class="fld">Dinheiro contado no fim (R$)<input id="cxCont" type="number" step="0.01" min="0" inputmode="decimal" value="${f?f.contado:''}" placeholder="${esperado.toFixed(2)}" required></label></div>
+     <label class="fld">Fica de troco para o próximo dia (R$)<input id="cxFica" type="number" step="0.01" min="0" inputmode="decimal" value="${f?f.fica??'':''}" placeholder="o que sobra na gaveta"></label>
+     <label class="check"><input type="checkbox" id="cxPix" ${f&&f.pixOk?'checked':''}>Conferi o Pix no app do banco (${BRL(x.por['Pix']||0)})</label>
+     <label class="check"><input type="checkbox" id="cxCart" ${f&&f.cartaoOk?'checked':''}>Conferi a maquininha (${BRL((x.por['Cartão de débito']||0)+(x.por['Cartão de crédito']||0))})</label>
+     <label class="fld">Observação<input id="cxObs" maxlength="200" value="${esc(f?.obs||'')}" placeholder="ex.: troco dado errado, Pix caiu amanhã"></label>
+     <div class="form-actions">${f?`<button type="button" class="btn ghost" data-act="caixaDesfazer" data-d="${d}">Reabrir</button>`:''}<button class="btn primary">${ic('check')}${f?'Atualizar fechamento':'Fechar o caixa'}</button></div></form>`
+     :f?`<div class="small"><div>Contado: <b>${BRL(f.contado)}</b> (esperado ${BRL(f.esperado)})</div><div>${f.pixOk?'Pix conferido':'Pix não conferido'} · ${f.cartaoOk?'maquininha conferida':'maquininha não conferida'}</div>${f.obs?`<div>Obs.: ${esc(f.obs)}</div>`:''}</div>`:'<div class="empty">Ainda não fechado.</div>'}</section></div>
+  <section class="card"><h3>Fechamentos de ${esc(mesNome(mes))}</h3>${fechs.length?`<div class="list">${fechs.map(([k,v])=>`<button class="item" data-act="caixaIr" data-d="${k}"><span class="time">${dataCurta(k)}</span><div class="grow"><div class="t">Contado ${BRL(v.contado)} · esperado ${BRL(v.esperado)}</div><div class="s">${v.pixOk?'Pix ok':'Pix ?'} · ${v.cartaoOk?'cartão ok':'cartão ?'}${v.obs?' · '+esc(v.obs):''}</div></div>${difTxt(+v.dif||0)}</button>`).join('')}</div>`:'<div class="empty">Nenhum fechamento neste mês.</div>'}</section>
+  <div class="alert info">${ic('info')}<div>O caixa soma o que foi registrado na agenda, nos pacotes, nos vales e em Lançamentos naquela data. Se algo não aparece, o pagamento não foi registrado.</div></div>`}
 function finLanc(){
   const m=UI.finMes;let L=[...receitas(),...despesas()].filter(l=>ym(l.data)===m);if(UI.lanTipo!=='todos')L=L.filter(l=>l.tipo===UI.lanTipo);
   L.sort((a,b)=>a.data<b.data?1:a.data>b.data?-1:0);const grp={};L.forEach(l=>(grp[l.data]=grp[l.data]||[]).push(l));
@@ -1047,7 +1081,9 @@ function finRel(){
   const t=today();const ini=addMonths(ym(t),-UI.relPer+1)+'-01';const c=priv();
   const ag=arr('agenda').filter(a=>a.data>=ini&&a.data<=t);const concl=ag.filter(a=>a.status==='concluido');
   const porServ={};concl.forEach(a=>{const s=S.servicos.get(a.servicoId);const k=s?.nome||'Outro';const o=porServ[k]=porServ[k]||{n:0,rec:0,custo:0,min:0};o.n++;o.rec+=+a.valor||0;o.custo+=a.custoMaterial!=null&&a.custoMaterial>0?+a.custoMaterial:custoServ(s);o.min+=+a.duracao||+s?.duracao||0});
-  const servRows=Object.entries(porServ).map(([k,o])=>({k,...o,lucro:o.rec-o.custo,hora:o.min?(o.rec-o.custo)/(o.min/60):0})).sort((a,b)=>b.lucro-a.lucro);
+  const servRows=Object.entries(porServ).map(([k,o])=>({k,...o,lucro:o.rec-o.custo,hora:o.min?(o.rec-o.custo)/(o.min/60):0})).sort((a,b)=>b.hora-a.hora);
+  const totMin=servRows.reduce((x,r)=>x+r.min,0);const mediaHora=totMin?servRows.reduce((x,r)=>x+r.lucro,0)/(totMin/60):0;
+  const rank=servRows.filter(r=>r.min>0);const melhorS=rank[0],piorS=rank.length>1?rank[rank.length-1]:null;
   const semana=[0,0,0,0,0,0,0];concl.forEach(a=>semana[parse(a.data).getDay()]++);const mxs=Math.max(1,...semana);
   // retorno em até 90 dias
   const base=concl.filter(a=>a.data<=addDays(t,-90));let volt=0;base.forEach(a=>{if(arr('agenda').some(b=>b.clienteId===a.clienteId&&b.status==='concluido'&&b.data>a.data&&b.data<=addDays(a.data,90)))volt++});
@@ -1063,7 +1099,7 @@ function finRel(){
    <div class="kpi"><div class="l">Clientes novas</div><div class="v">${cnt(novas.length,'n')}</div><div class="d">primeiro atendimento no período</div></div>
    <div class="kpi"><div class="l">Meta batida</div><div class="v">${bat} de ${UI.relPer}</div><div class="d">melhor mês: ${melhor?`${MES3[+melhor.k.slice(5)-1]} (${BRL(melhor.r)})`:'—'}</div></div>
    <div class="kpi"><div class="l">Faltas e cancelamentos</div><div class="v">${faltas+canc}</div><div class="d">${faltas} faltas · ${canc} cancelados · ${ag.length?pct((faltas+canc)/ag.length):'—'}</div></div></section>
-  <section class="card"><h3>Lucro por serviço <small>valor cobrado − material (real da ficha técnica quando registrado)</small></h3>${servRows.length?`<div class="scroll-x"><table class="tbl"><thead><tr><th>Serviço</th><th class="v">Feitos</th><th class="v">Receita</th><th class="v">Material</th><th class="v">Lucro</th><th class="v">Lucro/hora</th></tr></thead><tbody>${servRows.map((r,i)=>`<tr><td>${i===0?'<b>':''}${esc(r.k)}${i===0?'</b>':''}</td><td class="v">${r.n}</td><td class="v">${BRL(r.rec)}</td><td class="v">${BRL(r.custo)}</td><td class="v"><b>${BRL(r.lucro)}</b></td><td class="v">${BRL(r.hora)}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Sem atendimentos concluídos no período.</div>'}</section>
+  <section class="card"><h3>Quanto cada serviço rende por hora <small>valor cobrado − material, dividido pelo tempo do atendimento</small></h3>${servRows.length?`${melhorS?`<div class="kpis" style="margin-bottom:10px"><div class="kpi"><div class="l">Média por hora</div><div class="v">${BRL(mediaHora)}</div><div class="d">todos os atendimentos do período</div></div><div class="kpi"><div class="l">Rende mais</div><div class="v" style="font-size:1.05rem">${esc(melhorS.k)}</div><div class="d">${BRL(melhorS.hora)} por hora</div></div>${piorS?`<div class="kpi"><div class="l">Rende menos</div><div class="v" style="font-size:1.05rem">${esc(piorS.k)}</div><div class="d">${BRL(piorS.hora)} por hora${mediaHora>0&&piorS.hora<mediaHora*0.8?' · vale rever o preço':''}</div></div>`:''}</div>`:''}<div class="scroll-x"><table class="tbl"><thead><tr><th>Serviço</th><th class="v">Feitos</th><th class="v">Receita</th><th class="v">Material</th><th class="v">Lucro</th><th class="v">Por hora</th></tr></thead><tbody>${servRows.map((r,i)=>`<tr><td>${i===0?'<b>':''}${esc(r.k)}${i===0?'</b>':''}</td><td class="v">${r.n}</td><td class="v">${BRL(r.rec)}</td><td class="v">${BRL(r.custo)}</td><td class="v">${BRL(r.lucro)}</td><td class="v"><b style="color:${mediaHora>0&&r.min&&r.hora<mediaHora*0.8?'var(--bad)':mediaHora>0&&r.hora>mediaHora*1.2?'var(--good)':'inherit'}">${BRL(r.hora)}</b></td></tr>`).join('')}</tbody></table></div><p class="small muted" style="margin:8px 0 0">Verde rende bem acima da média e vermelho, bem abaixo. O tempo é o registrado no atendimento. Taxas de cartão e repasse às parceiras não entram nesta conta.</p>`:'<div class="empty">Sem atendimentos concluídos no período.</div>'}</section>
   <div class="grid g3"><section class="card"><h3>Dias mais cheios</h3>${semana.map((n,i)=>`<div class="hbar"><span>${SEM[i]}</span><div class="bar thin"><span style="width:${n/mxs*100}%;${n===mxs&&n?'background:var(--accent-ink)':''}"></span></div><b class="num" style="text-align:right">${n}</b></div>`).join('')}</section>
   <section class="card"><h3>De onde vêm as clientes novas</h3>${so.length?bars(so.map(([k,v])=>[k,v,`${v} · ${pct(v/novas.length)}`]),so[0][1]):'<div class="empty">Sem clientes novas no período.</div>'}<p class="small muted" style="margin-bottom:0">Preencha "Como conheceu" no cadastro para este gráfico ficar preciso.</p></section>
   <section class="card"><h3>Clientes novas por mês</h3>${grafico(novasSerie,ym(t),{key2:false,fmt:v=>Math.round(v)})}</section></div>
@@ -1194,6 +1230,9 @@ function ajNegocio(){const pb=pub(),c=priv();
    <div class="f2"><label class="fld">Nome empresarial<input id="gNome" value="${esc(pb.nome)}"></label><label class="fld">Responsável<input id="gResp" value="${esc(pb.responsavel)}"></label><label class="fld">CNPJ<input id="gCnpj" inputmode="numeric" value="${esc(pb.cnpj)}" placeholder="00.000.000/0001-00"></label></div>
    <div class="f2"><label class="fld">Endereço do ateliê<input id="gEnd" value="${esc(pb.endereco)}"></label><label class="fld">Município<input id="gMun" value="${esc(pb.municipio)}"></label></div>
    <div class="f2"><label class="fld">WhatsApp do ateliê<input id="gWa" inputmode="tel" value="${esc(pb.whatsapp)}" placeholder="(27) 99999-9999"></label><label class="fld">Instagram do ateliê<input id="gIg" placeholder="@stefanytrancista" value="${esc(pb.instagram)}"></label><label class="fld">Desconto de aniversário (%)<input id="gAniv" type="number" min="0" max="50" value="${pb.descAniv}"></label></div>
+   <h3 style="margin-top:8px">Avaliação no Google <small>depois de uma nota 4 ou 5, a cliente vê um botão para avaliar também no Google</small></h3>
+   <label class="fld">Link para avaliar o ateliê no Google<input id="gGoo" type="url" inputmode="url" autocapitalize="off" spellcheck="false" value="${esc(pb.googleAval||'')}" placeholder="https://g.page/r/…/review"></label>
+   <p class="small muted" style="margin:-4px 0 0">Para pegar o link: no Perfil da Empresa no Google, toque em "Pedir avaliações" e copie. Em branco, o botão não aparece.</p>
    <h3 style="margin-top:8px">Programa de indicação <small>aparece no espaço da cliente e no catálogo</small></h3>
    <div class="f2"><label class="fld">Quem indica ganha<input id="gIndB" value="${esc(pb.indBenef||'')}" placeholder="${esc(IND_PADRAO[0])}"></label><label class="fld">Quem foi indicada ganha<input id="gIndN" value="${esc(pb.indBenefNova||'')}" placeholder="${esc(IND_PADRAO[1])}"></label></div>
    <h3 style="margin-top:8px">Pix para o sinal <small>gera o código "copia e cola" com o valor certo</small></h3>
@@ -1649,7 +1688,7 @@ async function seed(ex){
   if(ex){[['Box braids','4 a 6 horas','Tranças soltas e versáteis, do comprimento que você escolher. Duram de 6 a 8 semanas com os cuidados certos.','Tranças soltas',280],['Nagô','1 a 2 horas','Tranças rentes ao couro cabeludo, em desenhos retos ou criativos. Ótimas para o dia a dia e para o calor.','Nagô',120],['Fulani braids','4 a 5 horas','Combinação de nagô na frente com tranças soltas atrás, com miçangas e anéis.','Tranças soltas',260]]
       .forEach(([nome,tempo,descricao,categoria,preco],i)=>ops.push(['catalogo',uid(),{nome,tempo,descricao,categoria,preco,mostrarPreco:true,link:'',botao:'Quero este modelo',ativo:true,ordem:i,fotos:[],exemplo:true}]))}
   // Só na demonstração: chave Pix fictícia e uma parceira de exemplo (no sistema real a chave é sempre a da Stéfany).
-  const demoPub=DEMO?{pixTipo:'aleatoria',pixChave:'00000000-0000-4000-8000-000000000000',pixNome:'Atelie Exemplo',profissionais:[{id:'demo-ana',nome:'Ana (exemplo)'}]}:{};
+  const demoPub=DEMO?{pixTipo:'aleatoria',pixChave:'00000000-0000-4000-8000-000000000000',pixNome:'Atelie Exemplo',profissionais:[{id:'demo-ana',nome:'Ana (exemplo)'}],googleAval:'https://g.page/r/exemplo/review'}:{};
   ops.push(['publico','config',{...pub(),...demoPub,started:true}]);
   ops.push(['privado','config',{...priv(),dasPagos:pagos,...(DEMO?{repasse:{'demo-ana':{tipo:'pct',valor:40}}}:{})}]);
   ops.forEach(([c,id,d])=>{S[c].set(id,{id,...d})});touch();
@@ -1960,11 +1999,11 @@ function portalSnapshot(c,P,pb){const f=fidelidade(c);const nv=NIVEIS[f.nivel];c
   daCliente('contratosLink',c.id).sort((a,b)=>a.criadoEm<b.criadoEm?1:-1).forEach(l=>{vistos.add(l.id);contratos.push({token:l.id,servico:l.servico||'',data:l.data||'',status:linkStatus(l),criadoEm:String(l.criadoEm).slice(0,10)})});
   daCliente('aceites',c.id).filter(a=>a.tipo==='servico'&&!vistos.has(a.linkToken)).forEach(a=>contratos.push({token:a.linkToken||'',servico:'Contrato de serviço',data:'',status:'aceito',criadoEm:String(a.aceitoEm).slice(0,10),presencial:!a.linkToken}));
   const pacotes=daCliente('pacotes',c.id).filter(p=>pacoteAtivo(p)).map(p=>({nome:p.nome,saldo:pacoteSaldo(p),validade:p.validade||''}));
-  const main={v:1,nome:c.nome,nivel:{chave:f.nivel,nome:nv.n,score:f.score,beneficio:nv.b,prox:proximoNivel(f.score,f.nivel)},visitas:f.visitas,
+  const main={v:1,nome:c.nome,nivel:{chave:f.nivel,nome:nv.n,score:f.score,beneficio:nv.b,prox:proximoNivel(f.score,f.nivel),pts:{...f.p},visitas12:f.visitas12,dias:f.dias},visitas:f.visitas,
     cadastro:{nome:c.nome,telefone:c.telefone||'',instagram:c.instagram||'',aniversario:c.aniversario?dataCurta(c.aniversario):'',cpf:mascaraCpf(c.cpf)},
     ultimos,avaliaveis,cuidados,indicacao,contratos:contratos.slice(0,12),pacotes,anamnese:{perguntas:ANAM_Q.map(([k,q])=>({k,q})),termo:termoAnamnese(),em:c.anamneseEm||''},
     regras:{prazoCancel:+P.campos.prazoCancel||48,tolerancia:+P.campos.tolerancia||0,sinalCancel:String(P.campos.sinalCancel||''),falta:String(P.campos.falta||''),preparo:String(P.campos.preparo||'')},
-    atelie:{nome:pb.nome,responsavel:pb.responsavel,whatsapp:pb.whatsapp||'',instagram:pb.instagram||'',endereco:pb.endereco||'',municipio:pb.municipio||''}};
+    atelie:{nome:pb.nome,responsavel:pb.responsavel,whatsapp:pb.whatsapp||'',instagram:pb.instagram||'',endereco:pb.endereco||'',municipio:pb.municipio||'',google:linkGoogle(pb.googleAval)}};
   const prazo=(+P.campos.prazoCancel||48)*3600e3;const pend=new Set(arr('solicitacoes').filter(q=>!q.processado&&(q.tipo||'cancelamento')==='cancelamento').map(q=>q.agendaId));const prox={};
   (agPorCli().get(c.id)||[]).filter(a=>a.data>=t&&(a.status==='agendado'||a.status==='confirmado'||(a.status==='cancelado'&&a.canceladoPor==='cliente'))).forEach(a=>{
     const [y,m,d]=a.data.split('-').map(Number);const [hh,mm]=String(a.hora||'00:00').split(':').map(Number);const ini=new Date(y,m-1,d,hh||0,mm||0).getTime();
@@ -2130,6 +2169,9 @@ const ACT={
    const lid=await save('lancamentos',null,{tipo:'despesa',data:today(),valor:+c.valor,categoria:c.categoria,descricao:c.descricao,forma:'Pix',contaRef:k});pg[k]=lid;await save('contas',c.id,{...c,pagas:pg});toast('Conta paga e despesa lançada')},
  novoServ:()=>pode('finEdit')&&formServ(),editServ:t=>pode('finEdit')?formServ(t.dataset.id):toast('Perfil somente leitura'),delServ:t=>confirmar('Excluir este serviço do catálogo?',()=>del('servicos',t.dataset.id)),
  relPer:t=>{UI.relPer=+t.dataset.n;render()},
+ caixaDia:t=>{const n=+t.dataset.n;const d=n?addDays(UI.caixaDia,n):today();UI.caixaDia=d>today()?today():d;if(UI.caixaDia<corte())carregarHistorico();render()},
+ caixaIr:t=>{UI.caixaDia=t.dataset.d;UI.finTab='caixa';render();scrollTo({top:0,behavior:'smooth'})},
+ caixaDesfazer:t=>confirmar('Reabrir o caixa deste dia? O fechamento salvo é apagado.',async()=>{const d=t.dataset.d;const k=caixaDoc(d);const g=S.privado.get(k)||{};const dias={...(g.dias||{})};delete dias[d];await save('privado',k,{...g,dias});toast('Caixa reaberto')}),
  das:async t=>{if(!pode('finEdit'))return;const k=t.dataset.k;const g=priv();const p={...(g.dasPagos||{})};const ja=!!p[k];
    if(ja){delete p[k];const l=arr('lancamentos').find(x=>x.dasRef===k);if(l)await del('lancamentos',l.id)}
    else{p[k]=true;await save('lancamentos',null,{tipo:'despesa',data:today(),valor:+g.das,categoria:'DAS-MEI',descricao:`DAS ${mesNome(k)}`,forma:'Pix',dasRef:k})}
@@ -2202,8 +2244,13 @@ document.addEventListener('submit',async e=>{
     try{await signInWithEmailAndPassword(AUTH,$('#lgEmail').value.trim(),$('#lgSenha').value)}catch(err){const c=err.code||'';m.textContent=/invalid-credential|wrong-password|user-not-found|invalid-email/.test(c)?'E-mail ou senha incorretos.':/too-many-requests/.test(c)?'Muitas tentativas. Aguarde alguns minutos.':/network/.test(c)?'Sem internet. Tente de novo.':'Não foi possível entrar.'}
     return}
   if(e.target.id==='fAvChave'){e.preventDefault();const v=$('#avChave').value.trim();if(v&&!/^B[A-Za-z0-9_-]{60,}$/.test(v)){toast('A chave parece incompleta. Ela começa com B e é bem longa.','erro');return}await save('publico','avisos',{vapid:v});toast('Chave salva');return}
+  if(e.target.id==='fCaixa'){e.preventDefault();if(!pode('finEdit'))return;const d=e.target.dataset.d;const n=i=>Math.round((+$('#'+i).value||0)*100)/100;
+    const x=caixaConta(d);const troco=n('cxTroco');const esperado=Math.round((troco+(x.por['Dinheiro']||0)-x.saiDin)*100)/100;const contado=n('cxCont');const fica=$('#cxFica').value===''?contado:n('cxFica');
+    const k=caixaDoc(d);const g=S.privado.get(k)||{};
+    await save('privado',k,{...g,dias:{...(g.dias||{}),[d]:{troco,contado,esperado,dif:Math.round((contado-esperado)*100)/100,fica,pixOk:$('#cxPix').checked,cartaoOk:$('#cxCart').checked,obs:$('#cxObs').value.trim().slice(0,200),recebido:Math.round(x.total*100)/100,em:nowIso(),por:ME||''}}});
+    const dif=contado-esperado;toast(Math.abs(dif)<0.01?'Caixa fechado. Bateu certinho!':`Caixa fechado. ${dif<0?'Faltou':'Sobrou'} ${BRL(Math.abs(dif))}.`);return}
   if(e.target.id==='fCfg'){e.preventDefault();const v=i=>$('#'+i).value.trim();
-    await save('publico','config',{...pub(),nome:v('gNome')||DEF_PUB.nome,responsavel:v('gResp'),cnpj:v('gCnpj'),endereco:v('gEnd'),municipio:v('gMun'),whatsapp:v('gWa'),instagram:v('gIg'),descAniv:+v('gAniv')||0,indBenef:v('gIndB'),indBenefNova:v('gIndN'),pixTipo:v('gPixT'),pixChave:v('gPix'),pixNome:v('gPixN'),pixCidade:v('gPixC'),horariosOnline:$('#gHorOn').checked,started:true});
+    await save('publico','config',{...pub(),nome:v('gNome')||DEF_PUB.nome,responsavel:v('gResp'),cnpj:v('gCnpj'),endereco:v('gEnd'),municipio:v('gMun'),whatsapp:v('gWa'),instagram:v('gIg'),descAniv:+v('gAniv')||0,indBenef:v('gIndB'),indBenefNova:v('gIndN'),googleAval:linkGoogle(v('gGoo')),pixTipo:v('gPixT'),pixChave:v('gPix'),pixNome:v('gPixN'),pixCidade:v('gPixC'),horariosOnline:$('#gHorOn').checked,started:true});
     salvarVitrine();
     await save('privado','config',{...priv(),inicioMei:v('gIni'),limite:+v('gLim')||81000,das:+v('gDas')||DEF_PRIV.das,meta:+v('gMeta')||0,taxaDebito:+v('gTd')||0,taxaCredito:+v('gTc')||0,taxaParcelado:+v('gTp')||0});toast('Ajustes salvos')}
   else if(e.target.id==='fRep'){e.preventDefault();const L=$$('#repLista .rep-linha').map(el=>({id:el.dataset.id,nome:$('[data-k=nome]',el).value.trim(),tipo:$('[data-k=tipo]',el).value,valor:+$('[data-k=valor]',el).value||0})).filter(x=>x.nome);
