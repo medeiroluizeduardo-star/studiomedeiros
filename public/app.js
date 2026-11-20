@@ -965,12 +965,12 @@ function vClientes(){
 
 /* ================= FINANÇAS ================= */
 function vFinanceiro(){
-  const tabs=!pode('fin')?[['caixa','Caixa do dia'],['sinais','Sinais'],['serv','Serviços e preços']]:[['visao','Visão geral'],['caixa','Caixa do dia'],['lanc','Lançamentos'],['contas','Contas'],['sinais','Sinais'],...(profs().length?[['repasse','Repasse']]:[]),['mei','MEI e impostos'],['rel','Relatórios'],['serv','Serviços e preços']];
+  const tabs=!pode('fin')?[['caixa','Caixa do dia'],['sinais','Sinais'],['serv','Serviços e preços']]:[['visao','Visão geral'],['caixa','Caixa do dia'],['lanc','Lançamentos'],['contas','Contas'],['plan','Planejamento'],['sinais','Sinais'],...(profs().length?[['repasse','Repasse']]:[]),['mei','MEI e impostos'],['rel','Relatórios'],['serv','Serviços e preços']];
   if(!tabs.some(t=>t[0]===UI.finTab))UI.finTab=tabs[0][0];
-  const comMes=['visao','lanc','mei','sinais','repasse'].includes(UI.finTab);
+  const comMes=['visao','lanc','mei','sinais','repasse','plan'].includes(UI.finTab);
   return head('Finanças','Controle <em>financeiro</em>',comMes?esc(cap(mesNome(UI.finMes))):'',
     `${comMes?`<button class="icon-btn" data-act="finMes" data-n="-1" aria-label="Mês anterior">${ic('left')}</button><button class="icon-btn" data-act="finMes" data-n="1" aria-label="Próximo mês">${ic('right')}</button>`:''}${['visao','mei'].includes(UI.finTab)?`<button class="btn soft" data-act="relContador">${ic('file')}Relatório do mês</button>`:''}${UI.finTab==='serv'&&pode('precos')?`<button class="btn primary" data-act="novoServ">${ic('plus')}Serviço</button>`:UI.finTab==='serv'&&pode('finEdit')?'<span class="badge">preços definidos pela proprietária</span>':!pode('finEdit')?'<span class="badge">somente leitura</span>':UI.finTab==='serv'?'':UI.finTab==='contas'?`<button class="btn primary" data-act="novaConta">${ic('plus')}Conta a pagar</button>`:`<button class="btn primary" data-act="novoLan">${ic('plus')}Lançar</button>`}`)+
-  `<div style="overflow-x:auto">${seg('finTab',UI.finTab,tabs)}</div>`+({visao:finVisao,caixa:finCaixa,lanc:finLanc,contas:finContas,sinais:finSinais,repasse:finRepasse,mei:finMei,rel:finRel,serv:finServ}[UI.finTab]||finVisao)();
+  `<div style="overflow-x:auto">${seg('finTab',UI.finTab,tabs)}</div>`+({visao:finVisao,caixa:finCaixa,lanc:finLanc,contas:finContas,plan:finPlan,sinais:finSinais,repasse:finRepasse,mei:finMei,rel:finRel,serv:finServ}[UI.finTab]||finVisao)();
 }
 function finVisao(){
   const m=UI.finMes;const R=receitas(l=>ym(l.data)===m),D=despesas(l=>ym(l.data)===m);const r=soma(R),d=soma(D);
@@ -1000,6 +1000,73 @@ function grafico(s,cur,{key2=true,fmt}={}){
     g+=`<text x="${cx}" y="${H-8}" text-anchor="middle" style="${isC?'fill:var(--fg);font-weight:700':''}">${esc(x.lab||MES3[+x.k.slice(5)-1])}</text>`});
   return `<div class="chart-wrap"><svg class="chart" viewBox="0 0 ${W} ${H}" width="100%" style="min-width:${Math.min(W,560)}px" role="img">${g}</svg></div>`;
 }
+/* ---------- Planejamento: pró-labore, orçamento do mês, previsão de caixa de 90 dias e relatório do ano ----------
+   Tudo fica em privado/config (prolabore, orcamento, saldoHoje), que só quem cuida das finanças e a contabilidade leem. */
+const PRO_CAT='Retirada pró-labore';
+const proPago=m=>soma(despesas(l=>ym(l.data)===m&&l.categoria===PRO_CAT));
+function planPro(){const c=priv();const p=c.prolabore||{};const m=ym(today());const ano=m.slice(0,4);const ed=pode('finEdit');
+  const pago=proPago(m),falta=Math.max(0,(+p.valor||0)-pago);const pagoAno=soma(despesas(l=>l.data.slice(0,4)===ano&&l.categoria===PRO_CAT));
+  return `<section class="card"><h3>Pró-labore <small>o que a proprietária retira por mês pelo trabalho</small></h3>
+   ${+p.valor?`<div class="kpis"><div class="kpi"><div class="l">Combinado por mês</div><div class="v">${BRL(p.valor)}</div><div class="d">todo dia ${+p.dia||5}</div></div><div class="kpi"><div class="l">Pago em ${esc(mesNome(m))}</div><div class="v">${BRL(pago)}</div><div class="d">${falta>0.009?`falta ${BRL(falta)}`:'em dia'}</div></div><div class="kpi"><div class="l">Pago em ${ano}</div><div class="v">${BRL(pagoAno)}</div><div class="d">entra no relatório do ano</div></div></div>`:'<p class="small muted" style="margin-top:0">Ainda não foi definido um valor fixo por mês.</p>'}
+   ${ed?`<form class="form" id="fPro" style="margin-top:10px"><div class="f2"><label class="fld">Valor por mês (R$)<input id="proVal" type="number" step="0.01" min="0" value="${esc(p.valor??'')}"></label><label class="fld">Dia do pagamento<input id="proDia" type="number" min="1" max="28" value="${esc(p.dia??5)}"></label></div>
+   <div class="form-actions" style="justify-content:space-between">${+p.valor&&falta>0.009?`<button type="button" class="btn soft" data-act="proPagar">${ic('check')}Registrar pagamento de ${BRL(falta)}</button>`:'<span></span>'}<button class="btn primary">${ic('check')}Salvar valor</button></div></form>`:''}
+   <p class="small muted" style="margin-bottom:0">O pagamento entra em Lançamentos como despesa "${PRO_CAT}". Separar o dinheiro da empresa do dinheiro da casa deixa o lucro de verdade visível.</p></section>`}
+async function proPagar(){const p=priv().prolabore||{};const m=ym(today());const falta=Math.max(0,(+p.valor||0)-proPago(m));if(!(falta>0.009))return;
+  await save('lancamentos',null,{tipo:'despesa',data:today(),valor:Math.round(falta*100)/100,categoria:PRO_CAT,descricao:`Pró-labore de ${mesNome(m)}`,forma:'Pix',prolaboreRef:m});toast('Pagamento do pró-labore registrado')}
+const ORC_FORA=new Set(['DAS-MEI',PRO_CAT]);
+function planOrc(){const c=priv();const o=c.orcamento||{};const m=UI.finMes;const ed=pode('finEdit');
+  const D=despesas(l=>ym(l.data)===m);const r=soma(receitas(l=>ym(l.data)===m));const meta=+c.meta||0;
+  const cats=CAT_DES.filter(k=>!ORC_FORA.has(k));const real=k=>soma(D.filter(l=>l.categoria===k));
+  const linhas=cats.filter(k=>+o[k]||real(k));const prev=soma(cats.map(k=>({valor:+o[k]||0}))),gasto=soma(linhas.map(k=>({valor:real(k)})));
+  const barra=(v,max,cor)=>`<div class="bar thin"><span style="width:${max?Math.min(100,v/max*100):0}%;background:${cor}"></span></div>`;
+  return `<section class="card"><h3>Orçamento de ${esc(mesNome(m))} <small>previsto × realizado</small></h3>
+   <div class="kpis"><div class="kpi"><div class="l">Receita</div><div class="v">${BRL(r)}</div><div class="d">${meta?`meta ${BRL(meta)} · ${pct(r/meta)}`:'sem meta (Ajustes › Negócio)'}</div></div><div class="kpi"><div class="l">Despesas do orçamento</div><div class="v">${BRL(gasto)}</div><div class="d">${prev?`previsto ${BRL(prev)} · ${pct(gasto/prev)}`:'sem orçamento definido'}</div></div></div>
+   ${linhas.length?`<div style="margin-top:12px">${linhas.map(k=>{const p=+o[k]||0,v=real(k);const cor=p&&v>p?'var(--bad)':p&&v>p*.85?'var(--warn)':'var(--good)';
+     return `<div style="margin-bottom:10px"><div class="row between small"><span>${esc(k)}</span><b class="num">${BRL(v)}${p?` de ${BRL(p)}`:''}</b></div>${barra(v,p||v,p?cor:'var(--lv-prata)')}</div>`}).join('')}</div>`:''}
+   ${ed?`<details class="how" style="margin-top:8px"><summary>Definir o orçamento por categoria</summary><form class="form" id="fOrc" style="margin-top:8px"><div class="f2">${cats.map((k,i)=>`<label class="fld">${esc(k)}<input data-orc="${i}" type="number" step="10" min="0" value="${esc(o[k]??'')}"></label>`).join('')}</div><div class="form-actions"><button class="btn primary">${ic('check')}Salvar orçamento</button></div></form></details>`:''}
+   <p class="small muted" style="margin-bottom:0">DAS e pró-labore ficam fora do orçamento porque já têm controle próprio.</p></section>`}
+/* Previsão de caixa: entradas = atendimentos marcados (o que falta receber) + cartões a cair; saídas = contas a pagar, DAS,
+   pró-labore e a parte do orçamento que não é conta fixa. Em três blocos de 30 dias. */
+function previsao90(){const c=priv();const t=today();const fim=addDays(t,90);const o=c.orcamento||{};const p=c.prolabore||{};
+  const blocos=[0,1,2].map(i=>({ini:addDays(t,i*30+(i?1:0)),fim:addDays(t,(i+1)*30),ent:0,sai:0,det:{}}));
+  const bl=d=>blocos.find(b=>d>=b.ini&&d<=b.fim);const add=(d,v,tipo,rot)=>{const b=bl(d);if(!b||!(v>0))return;b[tipo]+=v;b.det[rot]=(b.det[rot]||0)+(tipo==='sai'?-v:v)};
+  arr('agenda').filter(a=>a.data>=t&&a.data<=fim&&(a.status==='agendado'||a.status==='confirmado')&&!a.pacoteId).forEach(a=>add(a.data,Math.max(0,(+a.valor||0)-soma(a.pagamentos||[])),'ent','Atendimentos marcados'));
+  aReceber().filter(r=>r.data>t&&r.data<=fim).forEach(r=>add(r.data,r.liquido,'ent','Cartões a cair'));
+  ocorrencias(fim).filter(x=>!x.paga&&x.venc>=t).forEach(x=>add(x.venc,+x.conta.valor||0,'sai','Contas a pagar'));
+  const pagos=c.dasPagos||{};for(let i=0;i<4;i++){const k=addMonths(ym(t),i);const comp=addMonths(k,-1);const venc=k+'-20';if(!pagos[comp]&&venc>=t)add(venc,+c.das||0,'sai','DAS')}
+  if(+p.valor)for(let i=0;i<4;i++){const k=addMonths(ym(t),i);const d=`${k}-${pad(Math.min(28,+p.dia||5))}`;const falta=Math.max(0,+p.valor-proPago(k));if(d>=t||i===0)add(d<t?t:d,falta,'sai','Pró-labore')}
+  const fixas=new Set(arr('contas').map(x=>x.categoria));const varMes=soma(Object.entries(o).filter(([k])=>!ORC_FORA.has(k)&&!fixas.has(k)).map(([,v])=>({valor:+v||0})));
+  if(varMes)blocos.forEach(b=>{b.sai+=varMes;b.det['Gastos variáveis do orçamento']=-(varMes)});
+  return blocos}
+function planPrev(){const c=priv();const sh=c.saldoHoje||{};const B=previsao90();const ed=pode('finEdit');let saldo=+sh.valor||0;const temSaldo=sh.valor!=null&&sh.valor!=='';
+  return `<section class="card"><h3>Previsão de caixa <small>próximos 90 dias</small></h3>
+   <div class="list">${B.map(b=>{const res=b.ent-b.sai;saldo+=res;
+     return `<div class="item" style="display:block"><div class="row between"><b>${dataCurta(b.ini)} a ${dataCurta(b.fim)}</b><b class="num" style="color:${res>=0?'var(--good)':'var(--bad)'}">${res>=0?'+':'−'}${BRL(Math.abs(res))}</b></div>
+      <div class="small" style="margin-top:2px">Entra ${BRL(b.ent)} · Sai ${BRL(b.sai)}${temSaldo?` · <b style="color:${saldo>=0?'inherit':'var(--bad)'}">saldo ${BRL(saldo)}</b>`:''}</div>
+      <div class="small muted" style="margin-top:2px">${Object.entries(b.det).map(([k,v])=>`${esc(k)} ${v<0?'−':'+'}${BRL(Math.abs(v))}`).join(' · ')||'nada previsto'}</div></div>`}).join('')}</div>
+   ${ed?`<form class="form row" id="fSaldo" style="margin-top:10px;align-items:flex-end"><label class="fld" style="flex:1 1 200px">Saldo na conta da empresa hoje (opcional)<input id="saldoVal" type="number" step="0.01" value="${esc(sh.valor??'')}"></label><button class="btn soft">${ic('check')}Usar este saldo</button></form>`:''}
+   <p class="small muted" style="margin-bottom:0">${temSaldo?`Saldo informado em ${dataBR(sh.data)}. `:''}Entradas: atendimentos já marcados (menos o que já foi pago) e cartões a cair. Saídas: contas, DAS, pró-labore e os gastos do orçamento que não são contas fixas. Atendimentos que ainda vão ser marcados não entram.</p></section>`}
+function planAno(){const anos=[...new Set(todasReceitas().map(l=>l.data.slice(0,4)))].sort().reverse();const a=UI.irAno||String(+today().slice(0,4)-1);
+  return `<section class="card"><h3>Relatório do ano <small>para a declaração do MEI (DASN-SIMEI) e o Imposto de Renda</small></h3>
+   <div class="row" style="align-items:flex-end"><label class="fld">Ano<select id="irAno">${[...new Set([a,...anos])].sort().reverse().map(y=>`<option ${y===a?'selected':''}>${y}</option>`).join('')}</select></label><button class="btn primary" data-act="relAno">${ic('file')}Gerar relatório do ano</button></div></section>`}
+function relatorioAno(ano){const pb=pub(),c=priv();const R=receitas(l=>l.data.slice(0,4)===ano),D=despesas(l=>l.data.slice(0,4)===ano);const r=soma(R),d=soma(D);
+  const serv=R.filter(l=>!ehComercio(l)),com=R.filter(l=>ehComercio(l));const pro=soma(D.filter(l=>l.categoria===PRO_CAT));const lucro=r-(d-pro);
+  const isento=soma(serv)*0.32+soma(com)*0.08;const lim=limiteAno(ano);
+  const agg=(L,k)=>{const o={};L.forEach(l=>o[l[k]||'Outro']=(o[l[k]||'Outro']||0)+(+l.valor||0));return Object.entries(o).sort((x,y)=>y[1]-x[1])};
+  const tab=(rows,tot)=>`<table><tbody>${rows.map(([k,v])=>`<tr><td>${esc(k)}</td><td style="text-align:right;white-space:nowrap">${BRL(v)}</td></tr>`).join('')}${tot!=null?`<tr><td><b>Total</b></td><td style="text-align:right"><b>${BRL(tot)}</b></td></tr>`:''}</tbody></table>`;
+  const meses=[...Array(12)].map((_,i)=>`${ano}-${pad(i+1)}`);const das=meses.filter(k=>(c.dasPagos||{})[k]).length;
+  return `<article class="doc"><h1>Relatório anual · ${esc(ano)}</h1><div class="sub">${esc(pb.nome)} · CNPJ ${esc(pb.cnpj||'não informado')} · ${esc(pb.municipio||'')}<br>Gerado em ${dataBR(today())}</div>
+   <h2>Resumo</h2>${tab([['Receita bruta do ano',r],['Despesas da empresa (sem pró-labore)',d-pro],['Lucro da empresa',lucro],['Pró-labore pago',pro]])}
+   <h2>DASN-SIMEI (declaração anual do MEI)</h2>${tab([['Receita bruta de serviços',soma(serv)],['Receita bruta de comércio (venda de produtos)',soma(com)],['Total',r]])}<p>Houve empregado no ano? Confira antes de enviar. Limite do MEI em ${esc(ano)}: <b>${BRL(lim)}</b>, e foi usado <b>${lim?Math.round(r/lim*1000)/10:0}%</b>. DAS marcados como pagos: <b>${das} de 12</b>.</p>
+   <h2>Imposto de Renda da pessoa física (estimativa)</h2>${tab([['Parte isenta pela presunção (32% de serviços + 8% de comércio)',isento],['Lucro da empresa no ano',lucro],['Parte do lucro que pode ser tributável (se não houver escrituração contábil)',Math.max(0,lucro-isento)]])}
+   <p>A parte isenta entra como "Lucros e dividendos" e a tributável como "Rendimentos tributáveis recebidos de pessoa jurídica" (CNPJ do MEI). Com escrituração feita pela contabilidade, a parte isenta pode ser maior. <b>Confirme os valores com o(a) contador(a) antes de declarar.</b></p>
+   <h2>Mês a mês</h2><table><thead><tr><th>Mês</th><th style="text-align:right">Receita</th><th style="text-align:right">Despesas</th><th style="text-align:right">Pró-labore</th></tr></thead><tbody>${meses.map(k=>{const Dk=D.filter(l=>ym(l.data)===k);return `<tr><td>${esc(cap(mesNome(k)))}</td><td style="text-align:right">${BRL(soma(R.filter(l=>ym(l.data)===k)))}</td><td style="text-align:right">${BRL(soma(Dk.filter(l=>l.categoria!==PRO_CAT)))}</td><td style="text-align:right">${BRL(soma(Dk.filter(l=>l.categoria===PRO_CAT)))}</td></tr>`}).join('')}</tbody></table>
+   <h2>Receitas por categoria</h2>${R.length?tab(agg(R,'categoria'),r):'<p>Sem receitas.</p>'}
+   <h2>Despesas por categoria</h2>${D.length?tab(agg(D,'categoria'),d):'<p>Sem despesas.</p>'}
+   <p class="sub" style="margin-top:18px">Relatório gerencial gerado pelo sistema do ateliê. Não substitui a escrituração nem a orientação da contabilidade.</p></article>`}
+async function abrirRelatorioAno(){const ano=$('#irAno')?.value||String(+today().slice(0,4)-1);UI.irAno=ano;if(ano<corte().slice(0,4))await carregarHistorico();
+  sheet(`Relatório do ano ${esc(ano)}`,`<div class="stack"><div id="reciboBox">${relatorioAno(ano)}</div><div class="row"><button class="btn primary" data-act="imprimirArea">${ic('file')}Imprimir ou salvar PDF</button></div></div>`)}
+function finPlan(){return planPro()+planOrc()+planPrev()+planAno()}
 /* ---------- Caixa do dia: confere o que entrou (dinheiro, Pix, cartão) com o que tem na mão.
    O fechamento fica em privado/caixa-AAAA (um documento por ano: { dias: { 'AAAA-MM-DD': {...} } }). */
 const caixaDoc=d=>'caixa-'+d.slice(0,4);
@@ -1196,7 +1263,7 @@ async function jurSugeridos(){for(const [nome,parte] of JUR_DOCS_SUG)await save(
    Fica de fora o que é exemplo e o que o próprio sistema grava sozinho. */
 const REG_COLS={servicos:'Serviço',lancamentos:'Lançamento',contas:'Conta a pagar',privado:'Finanças (ajustes)',publico:'Dados do negócio',juridico:'Jurídico',equipe:'Equipe'};
 const REG_IGNORA=new Set(['atualizadoEm','atualizadoPor','id']);
-const REG_NOMES={preco:'preço',valor:'valor',nome:'nome',descricao:'descrição',data:'data',vencimento:'vencimento',validade:'validade',papel:'perfil',ativo:'acesso',categoria:'categoria',forma:'forma de pagamento',campos:'texto',versao:'versão',duracao:'duração',pixChave:'chave Pix',limite:'limite do MEI',das:'valor do DAS',meta:'meta',dasPagos:'DAS pagos',pagas:'pagamentos',repasse:'repasse'};
+const REG_NOMES={preco:'preço',valor:'valor',nome:'nome',descricao:'descrição',data:'data',vencimento:'vencimento',validade:'validade',papel:'perfil',ativo:'acesso',categoria:'categoria',forma:'forma de pagamento',campos:'texto',versao:'versão',duracao:'duração',pixChave:'chave Pix',prolabore:'pró-labore',orcamento:'orçamento',saldoHoje:'saldo informado',limite:'limite do MEI',das:'valor do DAS',meta:'meta',dasPagos:'DAS pagos',pagas:'pagamentos',repasse:'repasse'};
 function regResumo(col,antes,depois){const r=depois||antes||{};const nome=r.nome||r.descricao||r.apelido||r.email||'';
   const rot=REG_COLS[col]+(nome?` "${String(nome).slice(0,60)}"`:'');
   if(!antes||!depois)return rot;
@@ -1797,7 +1864,7 @@ async function seed(ex){
   // Só na demonstração: chave Pix fictícia e uma parceira de exemplo (no sistema real a chave é sempre a da Stéfany).
   const demoPub=DEMO?{pixTipo:'aleatoria',pixChave:'00000000-0000-4000-8000-000000000000',pixNome:'Atelie Exemplo',profissionais:[{id:'demo-ana',nome:'Ana (exemplo)'}],googleAval:'https://g.page/r/exemplo/review'}:{};
   ops.push(['publico','config',{...pub(),...demoPub,started:true}]);
-  ops.push(['privado','config',{...priv(),dasPagos:pagos,...(DEMO?{repasse:{'demo-ana':{tipo:'pct',valor:40}}}:{})}]);
+  ops.push(['privado','config',{...priv(),dasPagos:pagos,...(DEMO?{repasse:{'demo-ana':{tipo:'pct',valor:40}},prolabore:{valor:1200,dia:5},orcamento:{'Cabelo / fibra':350,'Materiais (pomada, linha, elástico)':120,'Transporte':80,'Marketing e redes':50}}:{})}]);
   ops.forEach(([c,id,d])=>{S[c].set(id,{id,...d})});touch();
   await pool(ops.map(([c,id,d])=>()=>save(c,id,d,{quiet:true})),8);
   toast(ex?'Dados de exemplo carregados':'Pronto! Ajuste preços em Finanças › Serviços e o estoque inicial');
@@ -2316,6 +2383,7 @@ const ACT={
  servSug:async()=>{await servicosSugeridos();const f=$('#fLk')||$('#fAg');if(f){const sel=f.querySelector('#lkServ,#aServ');if(sel){const v=sel.value;sel.innerHTML=(sel.id==='lkServ'?optServCat():optServ(''))+(sel.id==='lkServ'?'<option value="__outro">Outro: digitar o nome</option>':'');sel.value=v==='__outro'?'':v;sel.dispatchEvent(new Event('change'))}const al=f.querySelector('.alert.warn');if(al&&/Nenhum serviço/.test(al.textContent))al.remove()}},
  folgaRem:t=>{const i=+t.dataset.i;const f=[...(pub().folgas||[])];f.splice(i,1);save('publico','config',{...pub(),folgas:f});toast('Data removida')},
  ajTab:t=>{UI.ajTab=t.dataset.t;render()},
+ proPagar:()=>pode('finEdit')&&confirmar('Registrar agora o pagamento do pró-labore deste mês?',proPagar),relAno:()=>abrirRelatorioAno(),
  jurTab:t=>{UI.jurTab=t.dataset.t;render()},novoJur:t=>pode('juridico')&&formJur(null,t.dataset.t),editJur:t=>pode('juridico')&&formJur(t.dataset.id),delJur:t=>confirmar('Excluir este item do Jurídico?',async()=>{await del('juridico',t.dataset.id);closeSheet()}),jurSug:()=>pode('juridico')&&jurSugeridos(),verPolVer:t=>verPolVer(t.dataset.id),regMais:()=>{UI.regLim=(UI.regLim||40)+60;render()},
  relContador:()=>abrirRelatorioContador(),avTodas:()=>{UI.avTodas=!UI.avTodas;render()},reatTodos:()=>{UI.reatTodos=!UI.reatTodos;render()},
  avPub:async t=>{const a=S.avaliacoes.get(t.dataset.id);if(!a)return;const pub2=!a.publicado;S.avaliacoes.set(a.id,{...a,publicado:pub2,visto:true});touch();await updateDoc(doc(FS,'avaliacoes',a.id),{publicado:pub2,visto:true}).catch(dbErr);await publicarDepoimentos();toast(pub2?'Avaliação no catálogo':'Avaliação retirada do catálogo')},
@@ -2379,6 +2447,9 @@ document.addEventListener('submit',async e=>{
     if(!ini){toast('Escolha a data.','erro');return}if(fim&&fim<ini){toast('A data final precisa ser depois da inicial.','erro');return}
     const reg={ini,fim,motivo,tipo};if(rec){reg.rec=rec;reg.dow=parse(ini).getDay();if(rec==='mensal'){const k=nthDow(ini);reg.nth=k.n>4||(k.ult&&k.n>=4)?-1:k.n}}if(tipo==='horario'){reg.abre=$('#fgAbre').value;reg.fecha=$('#fgFecha').value;if(!reg.abre||!reg.fecha||reg.fecha<=reg.abre){toast('Confira o horário especial.','erro');return}}
     const f=[...(pub().folgas||[]),reg].sort((a,b)=>a.ini<b.ini?-1:1);await save('publico','config',{...pub(),folgas:f});toast(tipo==='horario'?'Horário especial salvo':'Agenda bloqueada')}
+  else if(e.target.id==='fPro'){e.preventDefault();if(!pode('finEdit'))return;await save('privado','config',{...priv(),prolabore:{valor:+$('#proVal').value||0,dia:Math.min(28,Math.max(1,+$('#proDia').value||5))}});toast('Pró-labore salvo')}
+  else if(e.target.id==='fOrc'){e.preventDefault();if(!pode('finEdit'))return;const cats=CAT_DES.filter(k=>!ORC_FORA.has(k));const o={};document.querySelectorAll('[data-orc]').forEach(i=>{const v=+i.value||0;if(v)o[cats[+i.dataset.orc]]=v});await save('privado','config',{...priv(),orcamento:o});toast('Orçamento salvo')}
+  else if(e.target.id==='fSaldo'){e.preventDefault();if(!pode('finEdit'))return;const v=$('#saldoVal').value;await save('privado','config',{...priv(),saldoHoje:v===''?null:{valor:+v,data:today()}});toast('Saldo salvo')}
   else if(e.target.id==='fLgpd'){e.preventDefault();if(!pode('juridico'))return;const it={};$$('[data-lgpd]').forEach(c=>it[c.dataset.lgpd]=c.checked);
     await save('juridico','lgpd',{tipo:'lgpd',nome:'Lista da LGPD',itens:it,encarregado:$('#lgEnc').value.trim(),canal:$('#lgCanal').value.trim(),obs:$('#lgObs').value.trim()});toast('LGPD salva')}
   else if(e.target.id==='fPol'){e.preventDefault();const P=pol();const campos={},rev={};
