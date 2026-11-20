@@ -1,6 +1,7 @@
 import { DEMO, mensagens, initializeApp, getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, onSnapshot, setDoc, deleteDoc, getDoc, updateDoc, query, where, Timestamp, arrayUnion, arrayRemove, deleteField, serverTimestamp } from './fb.js';
 import { firebaseConfig } from './firebase-config.js';
-/* Stéfany Medeiros Trancista · sistema de gestão (Firebase) */
+import { NEGOCIO } from './negocio.js';
+/* Sistema de gestão do estúdio (Firebase). Nome e abas do negócio vêm de negocio.js. */
 /* ================= utilidades ================= */
 const $=(s,el=document)=>el.querySelector(s);
 const $$=(s,el=document)=>[...el.querySelectorAll(s)];
@@ -61,7 +62,7 @@ const I={
 };
 const ic=(n,cls='')=>`<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${I[n]}"/></svg>`;
 const marcaImg=(n=34)=>`<img class="marca" src="/img/marca.webp" width="${n}" height="${n}" alt="" decoding="async">`;
-const MARCA_TXT='<div><div class="brand-name">Stéfany</div><div class="brand-sub">Medeiros · Trancista</div></div>';
+const MARCA_TXT=`<div><div class="brand-name">${NEGOCIO.marca[0].replace(/[&<>"]/g,'')}</div><div class="brand-sub">${NEGOCIO.marca[1].replace(/[&<>"]/g,'')}</div></div>`;
 function braidMark(size=34,spin=false){
   const cols=['var(--accent)','var(--accent-ink)','var(--gold)'];let paths='';
   for(let k=0;k<3;k++){let d='';for(let i=0;i<=28;i++){const y=3+i*(34/28);const x=14+7*Math.sin(i/28*Math.PI*3+k*2*Math.PI/3);d+=(i?'L':'M')+x.toFixed(2)+' '+y.toFixed(2)}
@@ -83,8 +84,8 @@ const NIVEIS={
  bronze:{n:'Bronze',c:'var(--lv-bronze)',min:0,b:'Cupom de retorno válido por 60 dias para trazer de volta.'},
  nova:{n:'Nova',c:'var(--lv-nova)',min:-1,b:'Boas-vindas: 5% na segunda visita.'}
 };
-const PAPEIS={owner:'Proprietária',parceira:'Trancista parceira',recepcao:'Recepção',contador:'Contador(a)'};
-const DEF_PUB={nome:'Stéfany Medeiros Trancista',responsavel:'Stéfany Medeiros',cnpj:'',municipio:'Serra - ES',endereco:'',whatsapp:'',abre:'08:00',fecha:'20:00',dias:[1,2,3,4,5,6],intervaloIni:'',intervaloFim:'',folgas:[],instagram:'',descAniv:10,started:false};
+const PAPEIS={owner:'Proprietária',parceira:NEGOCIO.parceira,recepcao:'Recepção',contador:'Contador(a)'};
+const DEF_PUB={nome:NEGOCIO.nome,responsavel:NEGOCIO.responsavel,cnpj:'',municipio:NEGOCIO.municipio,endereco:'',whatsapp:'',abre:'08:00',fecha:'20:00',dias:[1,2,3,4,5,6],intervaloIni:'',intervaloFim:'',folgas:[],instagram:'',descAniv:10,started:false};
 const DEF_PRIV={das:86.05,limite:81000,inicioMei:'',meta:4000,dasPagos:{},taxaDebito:1.99,taxaCredito:4.98,taxaParcelado:9.9};
 const ANAM_Q=[
  ['couro','Sente sensibilidade ou dor no couro cabeludo?'],
@@ -249,7 +250,7 @@ async function avDesligar(){const t=avToken();try{localStorage.removeItem(AV_LS)
 async function avTestar(){try{if(!('Notification' in window))throw new Error('Este navegador não mostra avisos.');
     if(Notification.permission!=='granted'&&(await Notification.requestPermission())!=='granted')throw new Error('Os avisos estão bloqueados neste aparelho.');
     const reg=await navigator.serviceWorker.register('sw.js');await navigator.serviceWorker.ready;
-    await reg.showNotification('Stéfany Trancista',{body:'Assim chegam os avisos neste aparelho.',icon:'icon-192.png',badge:'icon-192.png',tag:'teste',data:{url:'/#inicio'}});
+    await reg.showNotification(NEGOCIO.curto,{body:'Assim chegam os avisos neste aparelho.',icon:'icon-192.png',badge:'icon-192.png',tag:'teste',data:{url:'/#inicio'}});
   }catch(e){toast(e.message||'Não foi possível testar.','erro')}}
 function cardAvisos(){if(!PAPEIS[ROLE])return '';const own=isOwner();const vapid=(S.publico.get('avisos')||{}).vapid||'';const aqui=avLigadoAqui();const pr=avPrefs();
   const tipos=Object.entries(AV_TIPOS).filter(([,[,ps]])=>ps.includes(ROLE));
@@ -604,7 +605,7 @@ async function hashTexto(t){try{const b=await crypto.subtle.digest('SHA-256',new
 /* ================= interface: casca ================= */
 const UI={view:'inicio',caixaDia:today(),agDia:today(),calMes:ym(today()),calDia:today(),finTab:'visao',finMes:ym(today()),lanTipo:'todos',cliBusca:'',cliLim:60,cliNivel:'todos',cliOrd:'score',ctTab:'links',agVis:'dia',reatTodos:false,ajTab:'horarios',cliTab:'lista',ctTipo:'servico',ctCli:'',ctAg:'',acFiltro:'todos',pkTab:'pacotes',relPer:6,lastView:null};
 const VIEWS=[['inicio','Início','home',()=>pode('base')],['agenda','Agenda','cal',()=>pode('base')],['clientes','Clientes','users',()=>pode('base')],['catalogo','Catálogo','image',()=>pode('base')],['financeiro','Finanças','wallet',()=>pode('fin')],['contratos','Contratos','file',()=>pode('contratos')],['pacotes','Pacotes e vales','ticket',()=>pode('base')],['estoque','Estoque','box',()=>pode('estoque')],['calendario','Datas e ideias','spark',()=>pode('base')],['ajustes','Ajustes','gear',()=>true]];
-const visiveis=()=>VIEWS.filter(v=>v[3]());
+const visiveis=()=>VIEWS.filter(v=>!NEGOCIO.abasDesligadas.includes(v[0])&&v[3]());
 let rq=0;function schedule(){if(rq)return;rq=requestAnimationFrame(()=>{rq=0;render()})}
 function go(v){if(!visiveis().some(x=>x[0]===v))v=visiveis()[0][0];UI.view=v;try{history.replaceState(null,'','#'+v)}catch(e){}window.scrollTo({top:0,behavior:'smooth'});closeSheet(true);render()}
 
@@ -1264,7 +1265,7 @@ function ajEquipe(){const ped=arr('pedidos'),eq=arr('equipe');const donas=(ACESS
    ${!ped.length&&!eq.length?'<div class="empty">Ninguém da equipe ainda.</div>':''}
    <details class="how" style="margin-top:10px"><summary>O que cada perfil acessa</summary><table>
     <tr><td><b>Proprietária</b></td><td>Tudo, incluindo finanças, contas, relatórios, política da empresa e equipe.</td></tr>
-    <tr><td><b>Trancista parceira</b></td><td>Agenda, clientes, fichas de anamnese, estoque (sem custos), pacotes, vales, contratos e datas.</td></tr>
+    <tr><td><b>${esc(PAPEIS.parceira)}</b></td><td>Agenda, clientes, fichas de anamnese, estoque (sem custos), pacotes, vales, contratos e datas.</td></tr>
     <tr><td><b>Recepção</b></td><td>Agenda, cadastro de clientes, pacotes, vales, contrato de serviço e datas. Sem fichas de saúde e sem estoque.</td></tr>
     <tr><td><b>Contador(a)</b></td><td>Finanças, contas, relatórios e MEI, somente leitura. Sem clientes nem fichas.</td></tr></table>
     <p>Todas essas separações são aplicadas pelas regras de segurança do Firestore, no servidor. Para bloquear alguém de vez, desative o acesso aqui e também desative o usuário em Authentication no console.</p></details></section>${repasseCard()}`}
@@ -1611,7 +1612,7 @@ function formIdeia(id,pre={}){const i=id?S.ideias.get(id):{data:pre.d||'',titulo
 function aprovar(uidp){const e=S.equipe.get(uidp)||{};const p=S.pedidos.get(uidp)||{};const email=e.email||p.email||'';
   sheet('Perfil de acesso',`<form class="form" id="fEq"><p class="small muted" style="margin:0">Conta: <b>${esc(email)}</b></p>
    <label class="fld">Nome para exibir<input id="qNome" value="${esc(e.apelido||p.nome||'')}"></label>
-   <label class="fld">Perfil<select id="qPapel">${[['parceira','Trancista parceira'],['recepcao','Recepção'],['contador','Contador(a) – somente leitura das finanças']].map(([k,n])=>`<option value="${k}" ${e.papel===k?'selected':''}>${n}</option>`).join('')}</select></label>
+   <label class="fld">Perfil<select id="qPapel">${[['parceira',PAPEIS.parceira],['recepcao','Recepção'],['contador','Contador(a) – somente leitura das finanças']].map(([k,n])=>`<option value="${k}" ${e.papel===k?'selected':''}>${n}</option>`).join('')}</select></label>
    ${S.equipe.has(uidp)?`<label class="check"><input type="checkbox" id="qAtivo" ${e.ativo!==false?'checked':''}>Acesso ativo</label>`:''}
    <div class="form-actions"><button class="btn primary">${ic('check')}Salvar perfil</button></div></form>`);
   $('#fEq').onsubmit=async ev=>{ev.preventDefault();await save('equipe',uidp,{papel:$('#qPapel').value,apelido:$('#qNome').value.trim(),email,ativo:$('#qAtivo')?$('#qAtivo').checked:true,desde:e.desde||today()});if(S.pedidos.has(uidp))await del('pedidos',uidp);closeSheet();toast('Perfil salvo')}}
@@ -2206,7 +2207,7 @@ const ACT={
  esqueci:async()=>{const em=($('#lgEmail')?.value||'').trim();if(!em){$('#lgMsg').textContent='Digite seu e-mail acima e toque de novo em "Esqueci minha senha".';return}try{await sendPasswordResetEmail(AUTH,em);$('#lgMsg').style.color='var(--good)';$('#lgMsg').textContent='Enviamos um link para redefinir a senha. Confira também o spam.'}catch(e){$('#lgMsg').textContent='Não foi possível enviar. Confira o e-mail digitado.'}},
  trocarSenha:async()=>{try{await sendPasswordResetEmail(AUTH,EMAIL);toast('Link para trocar a senha enviado para '+EMAIL)}catch(e){toast('Não foi possível enviar o e-mail')}},
  imprimirDoc:()=>window.print(),
- backup:async()=>{await carregarHistorico();const o={versao:3,gerado:nowIso()};ALL_COLS.filter(c=>c!=='pedidos'&&c!=='erros').forEach(c=>o[c]=arr(c));baixar(`backup-stefany-trancista-${today()}.json`,JSON.stringify(o,null,1))},
+ backup:async()=>{await carregarHistorico();const o={versao:3,gerado:nowIso()};ALL_COLS.filter(c=>c!=='pedidos'&&c!=='erros').forEach(c=>o[c]=arr(c));baixar(`backup-${NEGOCIO.arquivo}-${today()}.json`,JSON.stringify(o,null,1))},
  limparEx:()=>confirmar('Apagar todos os registros marcados como exemplo?',limparEx),
  tornarDona:t=>{const id=t.dataset.id;const e=S.equipe.get(id)||S.pedidos.get(id)||{};confirmar(`Dar acesso total de proprietária para <b>${esc(e.apelido||e.nome||e.email||'esta pessoa')}</b>? Ela passa a ver finanças, contratos, equipe e configurações.`,()=>tornarDona(id))},
  removerDona:t=>confirmar('Remover o acesso de proprietária desta conta? Ela deixará de entrar no sistema até receber um perfil.',()=>removerDona(t.dataset.id)),

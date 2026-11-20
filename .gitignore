@@ -4,3 +4,5 @@ service-account*.json
 *.key
 .firebase/
 node_modules/
+site-raquel/
+firebase-raquel.json

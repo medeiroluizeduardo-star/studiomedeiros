@@ -1,5 +1,5 @@
 import { doc, getDoc, updateDoc, serverTimestamp } from './fb.js';
-import { FS, $, esc, BRL, ic, marca, waLink, estado, dataBR, primeiro, toMs, digits, tokenDaUrl, toast } from './publico.js';
+import { FS, $, esc, BRL, ic, marca, waLink, estado, dataBR, primeiro, toMs, digits, tokenDaUrl, toast, NEGOCIO } from './publico.js';
 
 const main = $('#pub');
 const token = tokenDaUrl();
@@ -81,7 +81,7 @@ async function baixarPdf() {
     const { jsPDF } = await carregaJsPdf(); const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
     const M = 18, W = 174, H = 297; let y = 20; const ac = L.aceite || {};
     const linha = (txt, size = 10, bold = false, gap = 4.6) => { pdf.setFont('helvetica', bold ? 'bold' : 'normal'); pdf.setFontSize(size); for (const l of pdf.splitTextToSize(latin(txt), W)) { if (y > H - 22) { pdf.addPage(); y = 20; } pdf.text(l, M, y); y += gap; } };
-    pdf.setTextColor(122, 65, 35); linha((L.atelie && L.atelie.nome) || 'Stéfany Medeiros Trancista', 11, true, 6); pdf.setTextColor(59, 34, 22);
+    pdf.setTextColor(122, 65, 35); linha((L.atelie && L.atelie.nome) || NEGOCIO.nome, 11, true, 6); pdf.setTextColor(59, 34, 22);
     for (const par of String(L.texto || '').split('\n')) { if (!par.trim()) { y += 2; continue; } const titulo = /^(Contrato|Cláusula|Partes)/i.test(par.trim()); linha(par, titulo ? 11 : 10, titulo, titulo ? 5.6 : 4.6); }
     if (y > H - 70) { pdf.addPage(); y = 20; }
     y += 4; pdf.setDrawColor(200, 137, 94); pdf.line(M, y, M + W, y); y += 7;

@@ -19,6 +19,7 @@
 
 ## Estrutura (resumo)
 - Página estática sem build, JavaScript puro (módulos ES) em `public/`. `app.js` é o sistema da equipe; `publico.js` + `catalogo.js`, `cliente.js`, `contrato.js` e `cadastro.js` são as páginas abertas às clientes.
+- Nome, marca e abas do negócio ficam em `public/negocio.js`. Outro estúdio tem a pasta `negocios/<estudio>/` (o `negocio.js` dele e arquivos que substituem os de `public/`); `node integracao/montar.mjs <estudio> <pasta>` monta o site dele. Os testes de telas rodam nos dois sites, e a prévia publica os dois.
 - Todo acesso ao Firebase passa por `public/fb.js`: com `?demo` (ou na prévia, endereço com `--`) ele usa `public/demo/firebase-demo.js`, um banco de mentira no navegador. Funções novas do Firebase precisam existir nos dois.
 - Rotinas no GitHub Actions: publicar, prévia, testes, `backup` (todo dia), `restaurar` (manual) e `avisos` (de hora em hora; decisão em `integracao/admin/avisos-planejar.mjs`, testada em `testes/avisos.test.mjs`), com scripts em `integracao/admin/`. Erros dos aparelhos vão para a coleção `erros` (só a proprietária lê, em Ajustes › Conta e dados).
 - Perfis: proprietária (`sistema/acesso.donas`), parceira, recepção e contador(a) (`equipe/{uid}`). Coleções por perfil em `COLS_POR_PAPEL` (`app.js`).
