@@ -6,7 +6,7 @@ import { initializeTestEnvironment, assertSucceeds, assertFails } from '@firebas
 import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs, query, where, serverTimestamp, Timestamp } from 'firebase/firestore';
 
 let env;
-const DONA = 'dona', PARCEIRA = 'parc', RECEPCAO = 'recep', CONTADOR = 'cont', INATIVA = 'inat', ESTRANHA = 'estranha';
+const DONA = 'dona', DIRETOR = 'dir', PARCEIRA = 'parc', RECEPCAO = 'recep', CONTADOR = 'cont', INATIVA = 'inat', ESTRANHA = 'estranha';
 
 before(async () => {
   env = await initializeTestEnvironment({
@@ -25,6 +25,8 @@ beforeEach(async () => {
     await setDoc(doc(db, 'equipe', PARCEIRA), { papel: 'parceira', ativo: true });
     await setDoc(doc(db, 'equipe', RECEPCAO), { papel: 'recepcao', ativo: true });
     await setDoc(doc(db, 'equipe', CONTADOR), { papel: 'contador', ativo: true });
+    await setDoc(doc(db, 'equipe', DIRETOR), { papel: 'diretor', ativo: true });
+    await setDoc(doc(db, 'pedidos', ESTRANHA), { email: 'x@x.com', nome: 'Nova', pedidoEm: '2026-01-01' });
     await setDoc(doc(db, 'equipe', INATIVA), { papel: 'parceira', ativo: false });
     await setDoc(doc(db, 'clientes/c1'), { nome: 'Cliente Teste' });
     await setDoc(doc(db, 'agenda/a1'), { clienteId: 'c1', data: '2026-01-01' });
@@ -217,4 +219,49 @@ test('horários livres: todos leem; equipe de atendimento grava; contador(a) e v
   await assertFails(setDoc(doc(db(CONTADOR), 'vitrine/horarios'), h));
   await assertFails(setDoc(doc(db(RECEPCAO), 'vitrine/horarios'), { ...h, clientes: ['Ana'] }));
   await assertFails(setDoc(doc(db(RECEPCAO), 'vitrine/config'), { nome: 'x' }));
+});
+
+test('diretor: finanças, contratos e dados do negócio; sem fichas de saúde, estoque, preços e catálogo', async () => {
+  const d = db(DIRETOR);
+  // finanças com edição
+  await assertSucceeds(getDoc(doc(d, 'lancamentos/l1')));
+  await assertSucceeds(setDoc(doc(d, 'lancamentos/l2'), { valor: 5 }));
+  await assertSucceeds(setDoc(doc(d, 'contas/c1'), { descricao: 'Aluguel' }));
+  await assertSucceeds(setDoc(doc(d, 'privado/config'), { das: 80 }));
+  await assertSucceeds(setDoc(doc(d, 'publico/config'), { nome: 'Ateliê' }));
+  // consulta clientes e agenda, mas não altera
+  await assertSucceeds(getDoc(doc(d, 'clientes/c1')));
+  await assertSucceeds(getDoc(doc(d, 'agenda/a1')));
+  await assertFails(setDoc(doc(d, 'clientes/c2'), { nome: 'x' }));
+  await assertFails(updateDoc(doc(d, 'agenda/a1'), { valor: 1 }));
+  // dados de saúde, estoque, preços e catálogo ficam fora
+  await assertFails(getDoc(doc(d, 'anamneses/c1')));
+  await assertFails(getDoc(doc(d, 'aceites/n1')));
+  await assertSucceeds(getDoc(doc(d, 'aceites/s1')));
+  await assertFails(getDoc(doc(d, 'estoque/e1')));
+  await assertFails(setDoc(doc(d, 'servicos/s1'), { nome: 'Box', preco: 1 }));
+  await assertFails(setDoc(doc(d, 'catalogo/m2'), { nome: 'x' }));
+  // contratos por link
+  await assertSucceeds(getDocs(collection(d, 'contratosLink')));
+  await assertSucceeds(setDoc(doc(d, 'contratosLink/tok2'), { status: 'pendente', expiraEm: Timestamp.fromMillis(Date.now() + 864e5) }));
+  // erros dos aparelhos
+  await assertSucceeds(getDocs(collection(d, 'erros')));
+});
+
+test('diretor: aprova acessos comuns, mas não o próprio, outro diretor nem proprietária', async () => {
+  const d = db(DIRETOR);
+  await assertSucceeds(getDocs(collection(d, 'pedidos')));
+  await assertSucceeds(getDocs(collection(d, 'equipe')));
+  await assertSucceeds(setDoc(doc(d, 'equipe', ESTRANHA), { papel: 'recepcao', ativo: true }));
+  await assertSucceeds(deleteDoc(doc(d, 'pedidos', ESTRANHA)));
+  await assertSucceeds(updateDoc(doc(d, 'equipe', RECEPCAO), { papel: 'contador' }));
+  await assertFails(updateDoc(doc(d, 'equipe', PARCEIRA), { papel: 'diretor' }));
+  await assertFails(setDoc(doc(d, 'equipe', 'novo'), { papel: 'diretor', ativo: true }));
+  await assertFails(updateDoc(doc(d, 'equipe', DIRETOR), { papel: 'parceira' }));
+  await assertFails(deleteDoc(doc(d, 'equipe', DIRETOR)));
+  await assertFails(updateDoc(doc(d, 'sistema/acesso'), { donas: [DONA, DIRETOR] }));
+  // a proprietária continua definindo qualquer perfil, inclusive o de diretor
+  await assertSucceeds(setDoc(doc(db(DONA), 'equipe', 'novo'), { papel: 'diretor', ativo: true }));
+  // as outras pessoas da equipe continuam sem ver a equipe
+  await assertFails(getDocs(collection(db(RECEPCAO), 'equipe')));
 });

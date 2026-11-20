@@ -1,7 +1,8 @@
 rules_version = '2';
 
 // Regras de segurança · Stéfany Medeiros Trancista
-// Perfis: proprietária (dona), trancista parceira, recepção e contador(a).
+// Perfis: proprietária (dona), diretor (parte administrativa: finanças, contratos e equipe, sem dados de saúde),
+// trancista parceira, recepção e contador(a).
 // O servidor recusa qualquer leitura ou gravação fora do perfil, mesmo que alguém altere o site.
 
 service cloud.firestore {
@@ -24,7 +25,11 @@ service cloud.firestore {
     }
     function atendimento() { return dona() || eh('parceira') || eh('recepcao'); }
     function saude()       { return dona() || eh('parceira'); }
-    function financas()    { return dona() || eh('contador'); }
+    function financas()    { return dona() || eh('contador') || eh('diretor'); }
+    function finEdita()    { return dona() || eh('diretor'); }
+    function contratos()   { return atendimento() || eh('diretor'); }
+    // O diretor aprova e altera só estes perfis (nunca o próprio, nem outro diretor, nem proprietária).
+    function papelComum(d) { return d.papel in ['parceira', 'recepcao', 'contador']; }
 
     // Quem é a proprietária. Só pode ser criado uma vez, pela própria conta.
     match /sistema/acesso {
@@ -35,39 +40,44 @@ service cloud.firestore {
       allow update, delete: if dona();
     }
 
-    // Perfis da equipe: só a proprietária define. Cada pessoa lê apenas o próprio.
+    // Perfis da equipe: a proprietária define todos; o diretor, só os perfis comuns e nunca o próprio.
+    // Cada pessoa lê apenas o próprio.
     match /equipe/{uid} {
-      allow read: if dona() || (logada() && request.auth.uid == uid);
+      allow read: if dona() || eh('diretor') || (logada() && request.auth.uid == uid);
       allow write: if dona();
+      allow create: if eh('diretor') && uid != request.auth.uid && papelComum(request.resource.data);
+      allow update: if eh('diretor') && uid != request.auth.uid && papelComum(resource.data) && papelComum(request.resource.data);
+      allow delete: if eh('diretor') && uid != request.auth.uid && papelComum(resource.data);
     }
 
-    // Pedidos de acesso: cada pessoa cria o seu; só a proprietária vê todos.
+    // Pedidos de acesso: cada pessoa cria o seu; só a proprietária e o diretor veem todos.
     match /pedidos/{uid} {
-      allow read: if dona() || (logada() && request.auth.uid == uid);
+      allow read: if dona() || eh('diretor') || (logada() && request.auth.uid == uid);
       allow create, update: if logada() && request.auth.uid == uid
         && request.resource.data.keys().hasOnly(['email', 'nome', 'pedidoEm']);
-      allow delete: if dona();
+      allow delete: if dona() || eh('diretor');
     }
 
     // Atendimento do dia a dia
     match /clientes/{id} {
-      allow read, create, update: if atendimento();
+      allow read: if atendimento() || eh('diretor');
+      allow create, update: if atendimento();
       allow delete: if dona();
     }
     match /agenda/{id} {
-      allow read: if atendimento() || eh('contador');
+      allow read: if atendimento() || eh('contador') || eh('diretor');
       allow create, update: if atendimento();
       allow delete: if dona();
     }
     match /espera/{id}  { allow read, write: if atendimento(); }
     match /ideias/{id}  { allow read, write: if atendimento(); }
     match /pacotes/{id} {
-      allow read: if atendimento() || eh('contador');
+      allow read: if atendimento() || eh('contador') || eh('diretor');
       allow create, update: if atendimento();
       allow delete: if dona();
     }
     match /vales/{id} {
-      allow read: if atendimento() || eh('contador');
+      allow read: if atendimento() || eh('contador') || eh('diretor');
       allow create, update: if atendimento();
       allow delete: if dona();
     }
@@ -87,26 +97,26 @@ service cloud.firestore {
     // Aceites de contratos: não podem ser alterados depois de registrados.
     // Termos de anamnese só são visíveis para quem pode ver dados de saúde.
     match /aceites/{id} {
-      allow read: if saude() || (eh('recepcao') && resource.data.tipo in ['servico', 'politica']);
-      allow create: if saude() || (eh('recepcao') && request.resource.data.tipo in ['servico', 'politica']);
+      allow read: if saude() || ((eh('recepcao') || eh('diretor')) && resource.data.tipo in ['servico', 'politica']);
+      allow create: if saude() || ((eh('recepcao') || eh('diretor')) && request.resource.data.tipo in ['servico', 'politica']);
       allow update: if false;
       allow delete: if dona();
     }
 
-    // Tabela de preços e configurações públicas: todos leem, só a proprietária altera.
+    // Tabela de preços: só a proprietária altera. Configurações públicas (dados do negócio, Pix, política): proprietária e diretor.
     match /servicos/{id} {
-      allow read: if atendimento() || eh('contador');
+      allow read: if atendimento() || eh('contador') || eh('diretor');
       allow write: if dona();
     }
     match /publico/{id} {
-      allow read: if atendimento() || eh('contador');
-      allow write: if dona();
+      allow read: if atendimento() || eh('contador') || eh('diretor');
+      allow write: if finEdita();
     }
 
-    // Finanças: proprietária altera; contador(a) só lê.
-    match /lancamentos/{id} { allow read: if financas(); allow write: if dona(); }
-    match /contas/{id}      { allow read: if financas(); allow write: if dona(); }
-    match /privado/{id}     { allow read: if financas(); allow write: if dona(); }
+    // Finanças: proprietária e diretor alteram; contador(a) só lê.
+    match /lancamentos/{id} { allow read: if financas(); allow write: if finEdita(); }
+    match /contas/{id}      { allow read: if financas(); allow write: if finEdita(); }
+    match /privado/{id}     { allow read: if financas(); allow write: if finEdita(); }
 
     // ===== Catálogo e vitrine: públicos para leitura, só a proprietária altera =====
     match /catalogo/{id} { allow read: if true; allow write: if dona(); }
@@ -129,9 +139,9 @@ service cloud.firestore {
     // sem alterar nenhum outro campo. Depois do aceite, a equipe só marca "registrado" e "visto".
     match /contratosLink/{token} {
       allow get: if true;
-      allow list: if atendimento();
-      allow create: if atendimento() && request.resource.data.status == 'pendente';
-      allow update: if (atendimento() && (resource.data.status == 'pendente'
+      allow list: if contratos();
+      allow create: if contratos() && request.resource.data.status == 'pendente';
+      allow update: if (contratos() && (resource.data.status == 'pendente'
             ? request.resource.data.status == 'pendente'
             : request.resource.data.diff(resource.data).affectedKeys().hasOnly(['registrado', 'visto'])))
         || (resource.data.status == 'pendente'
@@ -147,7 +157,7 @@ service cloud.firestore {
             && request.resource.data.aceite.meio in ['assinatura', 'concordo']
             && (request.resource.data.aceite.meio == 'concordo'
                 || (request.resource.data.aceite.assinatura is string && request.resource.data.aceite.assinatura.size() < 250000)));
-      allow delete: if dona();
+      allow delete: if dona() || eh('diretor');
     }
 
     // ===== Espaço da cliente =====
@@ -291,17 +301,17 @@ service cloud.firestore {
     // Cada pessoa da equipe liga os avisos no próprio aparelho: guarda só os próprios tokens e preferências.
     // A rotina do GitHub lê e envia com a chave de serviço. O estado da rotina só a proprietária lê.
     match /avisos/{uid} {
-      allow read, write: if (dona() || eh('parceira') || eh('recepcao') || eh('contador'))
+      allow read, write: if (dona() || eh('diretor') || eh('parceira') || eh('recepcao') || eh('contador'))
         && request.auth.uid == uid;
       allow delete: if dona();
     }
     match /avisosEstado/{id} { allow read: if dona(); }
 
     // ===== Erros nos aparelhos (app.js, "erros nos aparelhos") =====
-    // Cada pessoa da equipe grava só os próprios, com campos curtos. Só a proprietária lê e apaga.
+    // Cada pessoa da equipe grava só os próprios, com campos curtos. Só a proprietária e o diretor leem e apagam.
     match /erros/{id} {
-      allow read, delete: if dona();
-      allow create: if (dona() || eh('parceira') || eh('recepcao') || eh('contador'))
+      allow read, delete: if dona() || eh('diretor');
+      allow create: if (dona() || eh('diretor') || eh('parceira') || eh('recepcao') || eh('contador'))
         && request.resource.data.keys().hasOnly(['quando', 'uid', 'msg', 'onde', 'tela', 'versao', 'aparelho', 'vezes'])
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.quando == request.time

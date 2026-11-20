@@ -7,13 +7,13 @@
 //   concluir   às 20h: atendimentos de hoje que já terminaram e não foram concluídos
 //   amanha     às 19h: atendimentos de amanhã e quantos ainda não confirmaram
 //   contas     às 8h (proprietária e contador): contas que vencem hoje ou estão vencidas, DAS perto do dia 20
-//   semana     segunda às 8h (proprietária): resumo da semana que passou
+//   semana     segunda às 8h (proprietária e diretor): resumo da semana que passou
 export const TIPOS = {
   novidades: { nome: 'Novidades das clientes pelo link', papeis: ['owner', 'parceira', 'recepcao'] },
   concluir: { nome: 'Atendimentos de hoje sem concluir (20h)', papeis: ['owner', 'parceira', 'recepcao'] },
   amanha: { nome: 'Agenda de amanhã (19h)', papeis: ['owner', 'parceira', 'recepcao'] },
-  contas: { nome: 'Contas e DAS a pagar (8h)', papeis: ['owner', 'contador'] },
-  semana: { nome: 'Resumo da semana (segunda, 8h)', papeis: ['owner'] }
+  contas: { nome: 'Contas e DAS a pagar (8h)', papeis: ['owner', 'contador', 'diretor'] },
+  semana: { nome: 'Resumo da semana (segunda, 8h)', papeis: ['owner', 'diretor'] }
 };
 
 const pad = n => String(n).padStart(2, '0');
