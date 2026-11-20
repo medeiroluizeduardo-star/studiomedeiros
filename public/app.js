@@ -172,7 +172,11 @@ function dbErr(e){const c=e&&e.code;toast(c==='permission-denied'?'Seu perfil n�
 // Os cálculos guardados (memo) só dependem destas coleções; mudança nas outras (ideias, estoque, erros, avisos…)
 // redesenha a tela sem refazer fidelidade, finanças e retornos de todas as clientes.
 const MEMO_COLS=new Set(['clientes','agenda','servicos','lancamentos','pacotes','vales','privado','publico']);
-function touch(col){if(!col||MEMO_COLS.has(col))DATAV++;schedule()}
+function touch(col){if(!col||MEMO_COLS.has(col))DATAV++;if(col==='avaliacoes')depSinc();schedule()}
+/* Se uma cliente editar ou tirar a autorização de uma avaliação que estava no catálogo, o catálogo é refeito sozinho. */
+let DEP_ASS=null,DEP_T=0;
+function depSinc(){if(!FS||!pode('catalogoEdit'))return;clearTimeout(DEP_T);DEP_T=setTimeout(()=>{const ass=JSON.stringify(arr('avaliacoes').filter(a=>a.publicado&&a.autorizaPublicar&&a.texto).map(a=>[a.id,a.nota,a.texto,a.nomeExibicao]).sort());
+  if(DEP_ASS===null){DEP_ASS=ass;return}if(ass!==DEP_ASS){DEP_ASS=ass;publicarDepoimentos()}},1500)}
 
 function pararDados(){OUV.forEach(u=>{try{u()}catch(e){}});OUV.clear();loaded.clear();HIST=false;histProm=null;ALL_COLS.forEach(c=>S[c]=new Map());NEED=new Set()}
 function pararTudo(){pararDados();MEUS_AVISOS=null;AV_ESTADO=null;['acesso','equipe','avisos','avEstado'].forEach(k=>{if(ctl[k]){try{ctl[k]()}catch(e){}ctl[k]=null}});ACESSO=null}
@@ -841,7 +845,7 @@ async function publicarDepoimentos(){if(!pode('catalogoEdit'))return;const lista
   .map(a=>({nome:String(a.nomeExibicao||'Cliente').slice(0,60),nota:+a.nota||5,texto:String(a.texto).slice(0,600),servico:String(a.servico||'').slice(0,80),data:new Date(toMs(a.em)).toISOString().slice(0,10)}));
   const todas=arr('avaliacoes');const media=todas.length?todas.reduce((t,a)=>t+(+a.nota||0),0)/todas.length:0;
   await setDoc(doc(FS,'vitrine','depoimentos'),{lista,media:Math.round(media*10)/10,total:todas.length,atualizadoEm:nowIso()}).catch(dbErr)}
-function avisosAvaliacao(){return arr('avaliacoes').filter(a=>!a.visto).map(a=>`<div class="item"><div class="avatar" style="--lv:var(--lv-ouro)">${+a.nota||0}★</div><div class="grow"><div class="t" style="white-space:normal">${esc(a.nomeExibicao||'Uma cliente')} avaliou ${esc(a.servico||'o atendimento')}: <span class="estrelas">${estrelas(+a.nota||0)}</span></div>${a.texto?`<div class="s" style="white-space:normal">"${esc(a.texto)}"</div>`:''}</div>${pode('catalogoEdit')&&a.autorizaPublicar&&a.texto&&!a.publicado?`<button class="btn sm soft" data-act="avPub" data-id="${a.id}">Mostrar no catálogo</button>`:''}<button class="btn sm ghost" data-act="avisoVisto" data-k="aval" data-id="${a.id}">Ok</button></div>`)}
+function avisosAvaliacao(){return arr('avaliacoes').filter(a=>!a.visto).map(a=>`<div class="item"><div class="avatar" style="--lv:var(--lv-ouro)">${+a.nota||0}★</div><div class="grow"><div class="t" style="white-space:normal">${esc(a.nomeExibicao||'Uma cliente')} ${a.editadoEm?'editou a avaliação de':'avaliou'} ${esc(a.servico||'o atendimento')}: <span class="estrelas">${estrelas(+a.nota||0)}</span></div>${a.texto?`<div class="s" style="white-space:normal">"${esc(a.texto)}"</div>`:''}</div>${pode('catalogoEdit')&&a.autorizaPublicar&&a.texto&&!a.publicado?`<button class="btn sm soft" data-act="avPub" data-id="${a.id}">Mostrar no catálogo</button>`:''}<button class="btn sm ghost" data-act="avisoVisto" data-k="aval" data-id="${a.id}">Ok</button></div>`)}
 /* indicação */
 function avisosIndicacao(){return arr('clientes').filter(c=>c.indicadaPor&&!c.indAvisado&&S.clientes.has(c.indicadaPor)&&(agPorCli().get(c.id)||[]).some(a=>a.status==='concluido')).map(c=>{const r=S.clientes.get(c.indicadaPor);const pb=pub();
   const w=waLink(r.telefone,`Oi, ${primeiro(r.nome)}! 💕 A ${primeiro(c.nome)}, que você indicou, já fez o atendimento dela. Obrigada! Você ganhou: ${pb.indBenef||IND_PADRAO[0]}. É só me lembrar no seu próximo horário.`);
@@ -1989,9 +1993,12 @@ function proximoNivel(score,nivel){if(nivel==='nova')return {nome:'Bronze',falta
   const alvo=[['Prata',25],['Ouro Rosé',50],['Pérola',75]].find(([,m])=>m>score);return alvo?{nome:alvo[0],faltam:alvo[1]-score}:null}
 function portalSnapshot(c,P,pb){const f=fidelidade(c);const nv=NIVEIS[f.nivel];const t=today();
   const concl=(agPorCli().get(c.id)||[]).filter(a=>(a.status==='concluido'||a.status==='faltou')&&a.data<=t).sort((a,b)=>(a.data+a.hora)<(b.data+b.hora)?1:-1);
-  const avaliado=a=>S.avaliacoes.has(`${c.portalToken}_${a.id}`);const lim60=addDays(t,-60);
-  const avaliaveis=concl.filter(a=>a.status==='concluido'&&a.data>=lim60&&!avaliado(a)).map(a=>a.id);
-  const ultimos=concl.slice(0,6).map(a=>({id:a.id,data:a.data,servico:nomeAg(a),status:a.status,pacote:!!a.pacoteId,avaliar:avaliaveis.includes(a.id)}));
+  /* Avaliações: a cliente avalia qualquer atendimento concluído (sem prazo) e pode rever e editar as que já fez. */
+  const avDe=a=>S.avaliacoes.get(`${c.portalToken}_${a.id}`);
+  const conclOk=concl.filter(a=>a.status==='concluido').slice(0,40);const avaliaveis=conclOk.map(a=>a.id);
+  const minhasAval=conclOk.filter(avDe).map(a=>{const v=avDe(a);return {id:a.id,data:a.data,servico:nomeAg(a),nota:+v.nota||0,texto:v.texto||'',autorizaPublicar:!!v.autorizaPublicar,nomeExibicao:v.nomeExibicao||'',noCatalogo:!!(v.publicado&&v.autorizaPublicar)}});
+  const ultimos=concl.slice(0,6).map(a=>({id:a.id,data:a.data,servico:nomeAg(a),status:a.status,pacote:!!a.pacoteId,avaliar:a.status==='concluido'&&!avDe(a)}));
+  const paraAvaliar=conclOk.filter(a=>!avDe(a)).slice(0,10).map(a=>({id:a.id,data:a.data,servico:nomeAg(a)}));
   const ua=concl.find(a=>a.status==='concluido');let cuidados=null;
   if(ua&&ua.data>=addDays(t,-150)){const m=manutDe(ua.servicoId);const cat=catDoServ(ua.servicoId);cuidados={servico:nomeAg(ua),data:ua.data,texto:(cat&&cat.cuidados)||CUIDADOS_PADRAO,semanas:m,manutAte:addDays(ua.data,m*7),temFuturo:(agPorCli().get(c.id)||[]).some(a=>a.data>=t&&(a.status==='agendado'||a.status==='confirmado'))}}
   const indicacao={codigo:c.indicacaoCodigo||'',indicadas:indPorCli().get(c.id)||0,beneficio:pb.indBenef||IND_PADRAO[0],beneficioNova:pb.indBenefNova||IND_PADRAO[1]};
@@ -2001,7 +2008,7 @@ function portalSnapshot(c,P,pb){const f=fidelidade(c);const nv=NIVEIS[f.nivel];c
   const pacotes=daCliente('pacotes',c.id).filter(p=>pacoteAtivo(p)).map(p=>({nome:p.nome,saldo:pacoteSaldo(p),validade:p.validade||''}));
   const main={v:1,nome:c.nome,nivel:{chave:f.nivel,nome:nv.n,score:f.score,beneficio:nv.b,prox:proximoNivel(f.score,f.nivel),pts:{...f.p},visitas12:f.visitas12,dias:f.dias},visitas:f.visitas,
     cadastro:{nome:c.nome,telefone:c.telefone||'',instagram:c.instagram||'',aniversario:c.aniversario?dataCurta(c.aniversario):'',cpf:mascaraCpf(c.cpf)},
-    ultimos,avaliaveis,cuidados,indicacao,contratos:contratos.slice(0,12),pacotes,anamnese:{perguntas:ANAM_Q.map(([k,q])=>({k,q})),termo:termoAnamnese(),em:c.anamneseEm||''},
+    ultimos,avaliaveis,minhasAval,paraAvaliar,cuidados,indicacao,contratos:contratos.slice(0,12),pacotes,anamnese:{perguntas:ANAM_Q.map(([k,q])=>({k,q})),termo:termoAnamnese(),em:c.anamneseEm||''},
     regras:{prazoCancel:+P.campos.prazoCancel||48,tolerancia:+P.campos.tolerancia||0,sinalCancel:String(P.campos.sinalCancel||''),falta:String(P.campos.falta||''),preparo:String(P.campos.preparo||'')},
     atelie:{nome:pb.nome,responsavel:pb.responsavel,whatsapp:pb.whatsapp||'',instagram:pb.instagram||'',endereco:pb.endereco||'',municipio:pb.municipio||'',google:linkGoogle(pb.googleAval)}};
   const prazo=(+P.campos.prazoCancel||48)*3600e3;const pend=new Set(arr('solicitacoes').filter(q=>!q.processado&&(q.tipo||'cancelamento')==='cancelamento').map(q=>q.agendaId));const prox={};

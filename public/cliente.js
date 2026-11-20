@@ -1,4 +1,4 @@
-import { doc, getDoc, getDocs, setDoc, collection, writeBatch, serverTimestamp } from './fb.js';
+import { doc, getDoc, getDocs, setDoc, updateDoc, collection, writeBatch, serverTimestamp } from './fb.js';
 import { FS, $, $$, esc, BRL, ic, marca, waLink, estado, dataBR, dataLonga, parse, primeiro, toMs, tokenDaUrl, toast, NIVEL_COR, horariosPara } from './publico.js';
 
 const main = $('#pub');
@@ -46,13 +46,14 @@ function render() {
   ${horariosCard()}
   ${googleCard()}
   ${avaliarCard()}
+  ${minhasAvalCard()}
   ${cuidadosCard()}
   ${anamCard()}
   ${indicacaoCard()}
   ${(P.contratos || []).length ? `<section class="card"><h3>Meus contratos</h3><div class="list">${P.contratos.map(k => { const [cl, tx] = CT[k.status] || CT.aceito; const inner = `<div class="avatar" style="--lv:var(--rose)">${ic('file')}</div><div class="grow"><div class="t">${esc(k.servico || 'Contrato de serviço')}</div><div class="s">${k.data ? `atendimento em ${dataBR(k.data)} · ` : ''}${k.presencial ? 'assinado no ateliê' : `enviado em ${dataBR(k.criadoEm)}`}</div></div><span class="badge ${cl}">${tx}</span>`;
       return k.token ? `<a class="item" href="/contrato#${esc(k.token)}" style="text-decoration:none;color:inherit">${inner}</a>` : `<div class="item">${inner}</div>`; }).join('')}</div></section>` : ''}
   ${(P.pacotes || []).length ? `<section class="card"><h3>Meus pacotes</h3><div class="list">${P.pacotes.map(p => `<div class="item"><div class="avatar" style="--lv:var(--lv-ouro)">${ic('ticket')}</div><div class="grow"><div class="t">${esc(p.nome)}</div><div class="s">${p.saldo} sessão(ões) disponível(is)${p.validade ? ` · válido até ${dataBR(p.validade)}` : ''}</div></div></div>`).join('')}</div></section>` : ''}
-  <section class="card"><h3>Últimos atendimentos</h3>${(P.ultimos || []).length ? `<div class="list">${P.ultimos.map(u => { const [cl, tx] = ST[u.status] || ST.concluido; return `<div class="item"><span class="time">${dataBR(u.data).slice(0, 5)}</span><div class="grow"><div class="t">${esc(u.servico)}</div><div class="s">${u.data.slice(0, 4)}${u.pacote ? ' · pacote' : ''}</div></div>${u.avaliar && !AVALIADOS.has(u.id) ? `<button class="btn sm soft" data-avaliar="${esc(u.id)}">${ic('star')}Avaliar</button>` : AVALIADOS.has(u.id) ? '<span class="badge good">avaliado</span>' : `<span class="badge ${cl}">${tx}</span>`}</div>`; }).join('')}</div>` : '<div class="empty">Seu histórico aparece aqui depois do primeiro atendimento.</div>'}</section>
+  <section class="card"><h3>Últimos atendimentos</h3>${(P.ultimos || []).length ? `<div class="list">${P.ultimos.map(u => { const [cl, tx] = ST[u.status] || ST.concluido; return `<div class="item"><span class="time">${dataBR(u.data).slice(0, 5)}</span><div class="grow"><div class="t">${esc(u.servico)}</div><div class="s">${u.data.slice(0, 4)}${u.pacote ? ' · pacote' : ''}</div></div>${u.status === 'concluido' && minhaAval(u.id) ? `<button class="btn sm ghost" data-avaliar="${esc(u.id)}">${ic('pen')}Editar</button>` : u.avaliar && !AVALIADOS.has(u.id) ? `<button class="btn sm soft" data-avaliar="${esc(u.id)}">${ic('star')}Avaliar</button>` : `<span class="badge ${cl}">${tx}</span>`}</div>`; }).join('')}</div>` : '<div class="empty">Seu histórico aparece aqui depois do primeiro atendimento.</div>'}</section>
   <section class="card"><h3>Meus dados</h3><div class="dados">
    <div><span>Nome</span>${esc(c.nome)}</div>${c.telefone ? `<div><span>WhatsApp</span>${esc(c.telefone)}</div>` : ''}${c.cpf ? `<div><span>CPF</span>${esc(c.cpf)}</div>` : ''}${c.aniversario ? `<div><span>Aniversário</span>${esc(c.aniversario)}</div>` : ''}${c.instagram ? `<div><span>Instagram</span>${esc(c.instagram)}</div>` : ''}</div>
    ${wa('') ? `<a class="btn sm ghost" style="margin-top:10px" href="${wa(`Oi! Aqui é ${P.nome}. Preciso corrigir meus dados de cadastro.`)}" target="_blank" rel="noopener">${ic('chat')}Corrigir meus dados</a>` : ''}</section>
@@ -189,6 +190,21 @@ function pontosBloco(n) {
    ${n.prox && dicas.length ? `<div class="eyebrow" style="margin:12px 0 6px">Como subir para ${esc(n.prox.nome)}</div><ul class="small" style="margin:0;padding-left:18px;display:grid;gap:4px">${dicas.slice(0, 3).map(d => `<li>${d}</li>`).join('')}</ul>` : ''}</div>`;
 }
 const AVALIADOS = new Set();
+const MINHAS = {}; // avaliações feitas ou editadas nesta visita (o espaço só se atualiza quando o ateliê abre o sistema)
+function minhaAval(id) { return MINHAS[id] || (P.minhasAval || []).find(x => x.id === id) || null; }
+function minhasLista() {
+  const m = new Map((P.minhasAval || []).map(x => [x.id, x])); Object.values(MINHAS).forEach(x => m.set(x.id, { ...m.get(x.id), ...x }));
+  return [...m.values()].sort((a, b) => a.data < b.data ? 1 : -1);
+}
+function paraAvaliar() { return (P.paraAvaliar || (P.ultimos || []).filter(x => x.avaliar)).filter(x => !AVALIADOS.has(x.id) && !MINHAS[x.id]); }
+function estrelasTxt(n) { return '★★★★★'.slice(0, n) + '☆☆☆☆☆'.slice(0, 5 - n); }
+function minhasAvalCard() {
+  const L = minhasLista(); const falta = paraAvaliar();
+  if (!L.length && falta.length <= 1) return '';
+  return `<section class="card"><h3>${ic('star')} Minhas avaliações <small>${L.length}</small></h3>
+   ${L.length ? `<div class="list">${L.map(a => `<div class="item wrap"><span class="time">${dataBR(a.data).slice(0, 5)}</span><div class="grow"><div class="t"><span style="color:var(--lv-ouro);letter-spacing:1px">${estrelasTxt(a.nota)}</span> · ${esc(a.servico)}</div>${a.texto ? `<div class="s" style="white-space:normal">"${esc(a.texto)}"</div>` : ''}<div class="s">${a.autorizaPublicar ? (a.noCatalogo ? 'aparece no catálogo' : 'pode aparecer no catálogo') : 'só o ateliê vê'}</div></div><button class="btn sm ghost" data-avaliar="${esc(a.id)}">${ic('pen')}Editar</button></div>`).join('')}</div>` : '<p class="small muted" style="margin:0">Você ainda não avaliou nenhum atendimento.</p>'}
+   ${falta.length > 1 ? `<div class="eyebrow" style="margin:14px 0 6px">Ainda sem avaliação</div><div class="list">${falta.slice(1).map(u => `<div class="item"><span class="time">${dataBR(u.data).slice(0, 5)}</span><div class="grow"><div class="t">${esc(u.servico)}</div><div class="s">${u.data.slice(0, 4)}</div></div><button class="btn sm soft" data-avaliar="${esc(u.id)}">${ic('star')}Avaliar</button></div>`).join('')}</div>` : ''}</section>`;
+}
 let GOOGLE_PEDIR = null; // { texto } depois de uma nota 4 ou 5, enquanto a página estiver aberta
 function googleCard() {
   const g = P.atelie && P.atelie.google; if (!g || !GOOGLE_PEDIR) return '';
@@ -197,7 +213,7 @@ function googleCard() {
    <div class="row"><a class="btn primary" href="${esc(g)}" target="_blank" rel="noopener" data-google>${ic('star')}Avaliar no Google</a><button class="btn ghost" data-google-fechar>Agora não</button></div></section>`;
 }
 function avaliarCard() {
-  const u = (P.ultimos || []).find(x => x.avaliar && !AVALIADOS.has(x.id)); if (!u) return '';
+  const u = paraAvaliar()[0]; if (!u) return '';
   return `<section class="card aval-card"><h3>${ic('star')} Como foi o seu atendimento?</h3><p class="small muted" style="margin:4px 0 10px">${esc(u.servico)} em ${dataBR(u.data)}. Sua opinião ajuda o ateliê a melhorar sempre.</p>
    <div class="estrelas-in" role="radiogroup" aria-label="Nota">${[1, 2, 3, 4, 5].map(n => `<button type="button" role="radio" aria-checked="false" aria-label="${n} estrela${n > 1 ? 's' : ''}" data-nota="${n}" data-ag="${esc(u.id)}">★</button>`).join('')}</div></section>`;
 }
@@ -223,16 +239,19 @@ function indicacaoCard() {
    ${i.indicadas ? `<p class="small muted" style="margin:10px 0 0">Você já indicou ${i.indicadas} amiga${i.indicadas > 1 ? 's' : ''}. Obrigada! 💕</p>` : ''}</section>`;
 }
 function abrirAvaliacao(agId, nota) {
-  const u = (P.ultimos || []).find(x => x.id === agId); if (!u) return;
+  const ja = minhaAval(agId);
+  const u = ja || (P.paraAvaliar || []).find(x => x.id === agId) || (P.ultimos || []).find(x => x.id === agId); if (!u) return;
+  if (ja && !nota) nota = ja.nota;
   const back = document.createElement('div'); back.className = 'sheet-back';
-  back.innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-label="Avaliar atendimento"><div class="grab"></div><div class="sheet-head"><h2>Avaliar atendimento</h2><button class="icon-btn" data-fechar aria-label="Fechar">${ic('x')}</button></div>
+  back.innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-label="Avaliar atendimento"><div class="grab"></div><div class="sheet-head"><h2>${ja ? 'Editar avaliação' : 'Avaliar atendimento'}</h2><button class="icon-btn" data-fechar aria-label="Fechar">${ic('x')}</button></div>
    <form class="form" id="fAv"><p class="small muted" style="margin:0">${esc(u.servico)} em ${dataBR(u.data)}</p>
     <div class="estrelas-in grande" role="radiogroup" aria-label="Nota">${[1, 2, 3, 4, 5].map(n => `<button type="button" role="radio" aria-checked="${n === nota}" data-n="${n}" class="${n <= nota ? 'on' : ''}">★</button>`).join('')}</div>
-    <label class="fld">Conte como foi (opcional)<textarea id="avTxt" maxlength="600" placeholder="O que você mais gostou? Algo que podemos melhorar?"></textarea></label>
-    <label class="check"><input type="checkbox" id="avPub">Autorizo mostrar meu comentário no catálogo do ateliê</label>
-    <label class="fld" id="avNomeBox" hidden>Nome que aparece<input id="avNome" maxlength="60" value="${esc(primeiro(P.nome))}"></label>
+    <label class="fld">Conte como foi (opcional)<textarea id="avTxt" maxlength="600" placeholder="O que você mais gostou? Algo que podemos melhorar?">${esc(ja ? ja.texto : '')}</textarea></label>
+    <label class="check"><input type="checkbox" id="avPub" ${ja && ja.autorizaPublicar ? 'checked' : ''}>Autorizo mostrar meu comentário no catálogo do ateliê</label>
+    <label class="fld" id="avNomeBox" ${ja && ja.autorizaPublicar ? '' : 'hidden'}>Nome que aparece<input id="avNome" maxlength="60" value="${esc((ja && ja.nomeExibicao) || primeiro(P.nome))}"></label>
+    ${ja && ja.noCatalogo ? '<p class="small muted" style="margin:0">Ao salvar a edição, o comentário sai do catálogo até o ateliê revisar.</p>' : ''}
     <div id="avMsg" class="small" style="color:var(--bad)"></div>
-    <button class="btn primary" style="justify-content:center">${ic('check')}Enviar avaliação</button></form></div>`;
+    <button class="btn primary" style="justify-content:center">${ic('check')}${ja ? 'Salvar alterações' : 'Enviar avaliação'}</button></form></div>`;
   document.body.appendChild(back); document.body.style.overflow = 'hidden'; let n = nota;
   const fechar = () => { back.remove(); document.body.style.overflow = ''; };
   back.addEventListener('click', e => { if (e.target === back || e.target.closest('[data-fechar]')) { fechar(); return; }
@@ -243,11 +262,14 @@ function abrirAvaliacao(agId, nota) {
     // Copia o comentário já no toque (o navegador só deixa copiar logo após um toque), para colar no Google depois.
     const txt = $('#avTxt', back).value.trim(); const copia = n >= 4 && P.atelie && P.atelie.google && txt && navigator.clipboard ? navigator.clipboard.writeText(txt).then(() => true, () => false) : Promise.resolve(false);
     try {
-      await setDoc(doc(FS, 'avaliacoes', `${token}_${agId}`), { token, agendaId: agId, nota: n, texto: $('#avTxt', back).value.trim().slice(0, 600), autorizaPublicar: pub, nomeExibicao: pub ? ($('#avNome', back).value.trim().slice(0, 60) || primeiro(P.nome)) : '', servico: String(u.servico || '').slice(0, 80), em: serverTimestamp() });
-      AVALIADOS.add(agId); if (n >= 4 && P.atelie && P.atelie.google) GOOGLE_PEDIR = { texto: await copia };
-      fechar(); render(); toast(n >= 4 ? 'Obrigada pelo carinho! 💕' : 'Obrigada! Vamos usar sua opinião para melhorar.');
+      const d = { nota: n, texto: txt.slice(0, 600), autorizaPublicar: pub, nomeExibicao: pub ? ($('#avNome', back).value.trim().slice(0, 60) || primeiro(P.nome)) : '' };
+      if (ja) await updateDoc(doc(FS, 'avaliacoes', `${token}_${agId}`), { ...d, editadoEm: serverTimestamp(), visto: false, publicado: false });
+      else await setDoc(doc(FS, 'avaliacoes', `${token}_${agId}`), { token, agendaId: agId, ...d, servico: String(u.servico || '').slice(0, 80), em: serverTimestamp() });
+      MINHAS[agId] = { id: agId, data: u.data, servico: u.servico, ...d, noCatalogo: false };
+      AVALIADOS.add(agId); if (!ja && n >= 4 && P.atelie && P.atelie.google) GOOGLE_PEDIR = { texto: await copia };
+      fechar(); render(); toast(ja ? 'Avaliação atualizada. Obrigada! 💕' : n >= 4 ? 'Obrigada pelo carinho! 💕' : 'Obrigada! Vamos usar sua opinião para melhorar.');
       if (GOOGLE_PEDIR) setTimeout(() => document.querySelector('[data-google]')?.closest('section')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300);
-    } catch (err) { console.error(err); bt.disabled = false; bt.innerHTML = `${ic('check')}Enviar avaliação`; $('#avMsg', back).textContent = 'Não foi possível enviar. Talvez este atendimento já tenha sido avaliado.'; }
+    } catch (err) { console.error(err); bt.disabled = false; bt.innerHTML = `${ic('check')}Enviar avaliação`; $('#avMsg', back).textContent = 'Não foi possível enviar. Tente de novo em instantes.'; }
   };
 }
 

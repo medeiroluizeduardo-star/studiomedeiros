@@ -257,7 +257,8 @@ service cloud.firestore {
     }
 
     // ===== Avaliações feitas pela cliente no espaço dela =====
-    // Uma por atendimento concluído (lista "avaliaveis" do espaço). Não pode ser alterada pela cliente.
+    // Uma por atendimento concluído (lista "avaliaveis" do espaço). A cliente pode editar a dela depois (nota, texto e
+    // autorização); ao editar, volta para "não vista" e sai do catálogo até a equipe aprovar de novo.
     match /avaliacoes/{id} {
       allow create: if request.resource.data.keys().hasOnly(['token', 'agendaId', 'nota', 'texto', 'autorizaPublicar', 'nomeExibicao', 'servico', 'em'])
         && request.resource.data.token is string && request.resource.data.token.size() <= 64
@@ -273,6 +274,16 @@ service cloud.firestore {
         && request.resource.data.em == request.time;
       allow read: if atendimento();
       allow update: if atendimento() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['publicado', 'visto']);
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nota', 'texto', 'autorizaPublicar', 'nomeExibicao', 'editadoEm', 'visto', 'publicado'])
+        && exists(/databases/$(database)/documents/portal/$(resource.data.token))
+        && resource.data.agendaId in get(/databases/$(database)/documents/portal/$(resource.data.token)).data.avaliaveis
+        && request.resource.data.nota is int && request.resource.data.nota >= 1 && request.resource.data.nota <= 5
+        && request.resource.data.texto is string && request.resource.data.texto.size() <= 600
+        && request.resource.data.autorizaPublicar is bool
+        && request.resource.data.nomeExibicao is string && request.resource.data.nomeExibicao.size() <= 60
+        && request.resource.data.editadoEm == request.time
+        && request.resource.data.visto == false
+        && (!('publicado' in request.resource.data) || request.resource.data.publicado == false);
       allow delete: if dona();
     }
 
