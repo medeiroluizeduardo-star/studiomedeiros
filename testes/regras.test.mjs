@@ -265,3 +265,29 @@ test('diretor: aprova acessos comuns, mas não o próprio, outro diretor nem pro
   // as outras pessoas da equipe continuam sem ver a equipe
   await assertFails(getDocs(collection(db(RECEPCAO), 'equipe')));
 });
+
+test('jurídico: só proprietária e diretor', async () => {
+  await assertSucceeds(setDoc(doc(db(DIRETOR), 'juridico/alvara'), { tipo: 'documento', nome: 'Alvará', validade: '2027-01-01' }));
+  await assertSucceeds(getDoc(doc(db(DONA), 'juridico/alvara')));
+  for (const u of [PARCEIRA, RECEPCAO, CONTADOR, ESTRANHA, null]) {
+    await assertFails(getDoc(doc(db(u), 'juridico/alvara')));
+    await assertFails(setDoc(doc(db(u), 'juridico/x'), { nome: 'x' }));
+  }
+});
+
+test('registro de alterações: grava em nome próprio, ninguém altera nem apaga, só proprietária e diretor leem', async () => {
+  const linha = uid => ({ quem: uid, nome: 'Fulana', col: 'servicos', docId: 's1', acao: 'alterou', resumo: 'Serviço "Box": preço R$ 280 → R$ 300', em: serverTimestamp() });
+  await assertSucceeds(setDoc(doc(db(PARCEIRA), 'registro/r1'), linha(PARCEIRA)));
+  await assertSucceeds(setDoc(doc(db(DONA), 'registro/r2'), linha(DONA)));
+  await assertFails(setDoc(doc(db(RECEPCAO), 'registro/r3'), linha(DONA)));
+  await assertFails(setDoc(doc(db(PARCEIRA), 'registro/r4'), { ...linha(PARCEIRA), em: Timestamp.fromMillis(Date.now() - 864e5) }));
+  await assertFails(setDoc(doc(db(PARCEIRA), 'registro/r5'), { ...linha(PARCEIRA), acao: 'apagou tudo' }));
+  await assertFails(setDoc(doc(db(PARCEIRA), 'registro/r6'), { ...linha(PARCEIRA), extra: 1 }));
+  await assertFails(setDoc(doc(db(CONTADOR), 'registro/r7'), linha(CONTADOR)));
+  await assertSucceeds(getDoc(doc(db(DIRETOR), 'registro/r1')));
+  await assertSucceeds(getDoc(doc(db(DONA), 'registro/r1')));
+  await assertFails(getDoc(doc(db(PARCEIRA), 'registro/r1')));
+  await assertFails(updateDoc(doc(db(DONA), 'registro/r1'), { resumo: 'outra coisa' }));
+  await assertFails(deleteDoc(doc(db(DONA), 'registro/r1')));
+  await assertFails(deleteDoc(doc(db(DIRETOR), 'registro/r1')));
+});

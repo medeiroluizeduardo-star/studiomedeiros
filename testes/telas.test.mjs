@@ -89,8 +89,8 @@ for (const site of SITES) for (const [nome, viewport] of TAMANHOS) {
 // Perfis separados: com um Diretor ativo, a proprietária fica só com o dia a dia nas finanças, e o Diretor vê a parte
 // administrativa (finanças, contratos e ajustes), sem agenda, clientes, fichas de saúde, estoque e catálogo.
 const ESPERADO = {
-  proprietaria: { menuTem: ['inicio', 'agenda', 'clientes', 'financeiro', 'estoque', 'ajustes'], menuSem: [], fin: ['caixa', 'sinais', 'serv'] },
-  diretor: { menuTem: ['financeiro', 'contratos', 'ajustes'], menuSem: ['inicio', 'agenda', 'clientes', 'estoque', 'catalogo'], fin: ['visao', 'caixa', 'lanc', 'contas', 'sinais', 'mei', 'rel', 'serv'] }
+  proprietaria: { menuTem: ['inicio', 'agenda', 'clientes', 'financeiro', 'estoque', 'juridico', 'ajustes'], menuSem: [], fin: ['caixa', 'sinais', 'serv'] },
+  diretor: { menuTem: ['financeiro', 'contratos', 'juridico', 'ajustes'], menuSem: ['inicio', 'agenda', 'clientes', 'estoque', 'catalogo'], fin: ['visao', 'caixa', 'lanc', 'contas', 'sinais', 'mei', 'rel', 'serv'] }
 };
 for (const [perfil, esp] of Object.entries(ESPERADO)) for (const [nome, viewport] of TAMANHOS) {
   test(`Stéfany · ver como ${perfil} · ${nome}`, async t => {
@@ -127,6 +127,25 @@ for (const [perfil, esp] of Object.entries(ESPERADO)) for (const [nome, viewport
     } finally { await ctx.close(); }
   });
 }
+
+// Registro de alterações: mudar os dados do negócio aparece em Jurídico › Quem alterou, com quem fez e o quê.
+test('registro de alterações mostra quem mudou o quê', async () => {
+  const { ctx, pg, problemas } = await abrir({ width: 1366, height: 860 });
+  try {
+    await pg.goto(srv.url + '/?demo&perfil=dona');
+    await pg.waitForFunction(() => /Ana Beatriz|Jéssica|Camila/.test(document.body.innerText), null, { timeout: 15000 });
+    await pg.evaluate(() => document.querySelector('#navSide [data-v="ajustes"]').click());
+    await pg.evaluate(() => document.querySelector('#view [data-act="ajTab"][data-t="negocio"]').click());
+    await pg.waitForSelector('#gMun');
+    await pg.fill('#gMun', 'Vitória - ES');
+    await pg.evaluate(() => document.querySelector('#fCfg button.primary').click());
+    await pg.waitForTimeout(500);
+    await pg.evaluate(() => document.querySelector('#navSide [data-v="juridico"]').click());
+    await pg.evaluate(() => document.querySelector('#view [data-act="jurTab"][data-t="registro"]').click());
+    await pg.waitForFunction(() => /Dados do negócio.*Vitória - ES/.test(document.querySelector('#view').innerText), null, { timeout: 5000 });
+    assert.deepEqual(problemas, []);
+  } finally { await ctx.close(); }
+});
 
 // A tela se redesenha quando chega novidade de outro aparelho. O que estava sendo digitado (e ainda não foi salvo)
 // não pode sumir, e uma caixa aberta não pode fechar sozinha.

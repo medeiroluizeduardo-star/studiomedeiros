@@ -324,6 +324,27 @@ service cloud.firestore {
       allow update: if false;
     }
 
+    // ===== Jurídico =====
+    // Documentos da empresa, contratos com terceiros, lista da LGPD e versões da política: proprietária e diretor.
+    match /juridico/{id} { allow read, write: if finEdita(); }
+
+    // ===== Registro de alterações (quem alterou o quê) =====
+    // Cada pessoa da equipe grava só em nome próprio, na hora do servidor. Ninguém altera nem apaga.
+    // Só a proprietária e o diretor leem.
+    match /registro/{id} {
+      allow read: if finEdita();
+      allow create: if (dona() || eh('diretor') || eh('parceira') || eh('recepcao'))
+        && request.resource.data.keys().hasOnly(['quem', 'nome', 'col', 'docId', 'acao', 'resumo', 'em'])
+        && request.resource.data.quem == request.auth.uid
+        && request.resource.data.em == request.time
+        && request.resource.data.acao in ['criou', 'alterou', 'excluiu']
+        && txt(request.resource.data, 'nome', 80)
+        && txt(request.resource.data, 'col', 40)
+        && txt(request.resource.data, 'docId', 120)
+        && request.resource.data.resumo is string && request.resource.data.resumo.size() <= 400;
+      allow update, delete: if false;
+    }
+
     // Qualquer outro caminho é bloqueado.
     match /{documento=**} { allow read, write: if false; }
   }

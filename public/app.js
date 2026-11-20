@@ -100,14 +100,14 @@ const ANAM_Q=[
 ];
 
 /* ================= armazenamento (Firestore) e perfis ================= */
-const ALL_COLS=['clientes','servicos','agenda','estoque','pacotes','vales','espera','anamneses','aceites','ideias','publico','equipe','pedidos','lancamentos','contas','privado','catalogo','contratosLink','solicitacoes','cadastros','anamnesePortal','avaliacoes','erros'];
+const ALL_COLS=['clientes','servicos','agenda','estoque','pacotes','vales','espera','anamneses','aceites','ideias','publico','equipe','pedidos','lancamentos','contas','privado','catalogo','contratosLink','solicitacoes','cadastros','anamnesePortal','avaliacoes','erros','juridico','registro'];
 const COLS_POR_PAPEL={
   owner:ALL_COLS,
   parceira:['clientes','servicos','agenda','estoque','pacotes','vales','espera','anamneses','aceites','ideias','publico','catalogo','contratosLink','solicitacoes','cadastros','anamnesePortal','avaliacoes'],
   recepcao:['clientes','servicos','agenda','pacotes','vales','espera','aceites','ideias','publico','catalogo','contratosLink','solicitacoes','cadastros','avaliacoes'],
   contador:['servicos','agenda','pacotes','vales','publico','lancamentos','contas','privado'],
   // Diretor: parte administrativa (finanças com edição, contratos, equipe). Sem fichas de saúde, estoque e catálogo.
-  diretor:['clientes','servicos','agenda','pacotes','vales','aceites','publico','equipe','pedidos','lancamentos','contas','privado','contratosLink','erros']
+  diretor:['clientes','servicos','agenda','pacotes','vales','aceites','publico','equipe','pedidos','lancamentos','contas','privado','contratosLink','erros','juridico','registro']
 };
 const S={};ALL_COLS.forEach(c=>S[c]=new Map());
 let MODE='db',ROLE='carregando',ME=null,EMAIL='',APP=null,AUTH=null,FS=null,ACESSO=null;const ctl={acesso:null,equipe:null,avisos:null,avEstado:null};let MEUS_AVISOS=null,AV_ESTADO=null;
@@ -131,7 +131,7 @@ function pode(f){const own=isOwner(),r=ROLE,dir=r==='diretor';
   switch(f){
     case 'fin':return (own&&!temDiretor())||r==='contador'||dir;
     case 'caixa':return own||dir;
-    case 'finEdit':case 'equipe':case 'politicaEdit':return own||dir;
+    case 'finEdit':case 'equipe':case 'politicaEdit':case 'juridico':return own||dir;
     case 'custos':case 'precos':case 'seed':return own;
     case 'anamnese':case 'estoque':return own||r==='parceira';
     case 'contratos':return own||r==='parceira'||r==='recepcao'||dir;
@@ -170,12 +170,13 @@ function limpaUndef(o){return JSON.parse(JSON.stringify(o))}
 function save(col,id,data,{quiet}={}){
   id=id||uid();const rec=limpaUndef({...data});delete rec.id;
   rec.atualizadoEm=nowIso();rec.atualizadoPor=ME||'';
+  const antes=S[col].get(id);registrar(col,id,antes,rec);
   S[col].set(id,{id,...rec});touch(col);
   // Não esperamos a confirmação do servidor: sem internet, o Firestore guarda e envia depois.
   setDoc(doc(FS,col,id),rec).catch(e=>{if(!quiet)dbErr(e)});
   return Promise.resolve(id);
 }
-function del(col,id){S[col].delete(id);touch(col);deleteDoc(doc(FS,col,id)).catch(dbErr);return Promise.resolve()}
+function del(col,id){registrar(col,id,S[col].get(id),null);S[col].delete(id);touch(col);deleteDoc(doc(FS,col,id)).catch(dbErr);return Promise.resolve()}
 async function pool(tasks,n=8){const q=[...tasks];const run=async()=>{while(q.length){const t=q.shift();try{await t()}catch(e){}}};await Promise.all([...Array(n)].map(run))}
 function dbErr(e){const c=e&&e.code;toast(c==='permission-denied'?'Seu perfil não tem permissão para esta alteração.':c==='resource-exhausted'?'Limite diário do plano gratuito atingido. Tente amanhã ou mude de plano.':'Não foi possível salvar. Verifique a internet e tente de novo.','erro');console.error(e)}
 // Os cálculos guardados (memo) só dependem destas coleções; mudança nas outras (ideias, estoque, erros, avisos…)
@@ -192,6 +193,7 @@ function pararTudo(){pararDados();MEUS_AVISOS=null;AV_ESTADO=null;['acesso','equ
 function consulta(c){let q=collection(FS,c);
   if(c==='aceites'&&(ROLE==='recepcao'||ROLE==='diretor'))q=query(q,where('tipo','in',['servico','politica']));
   if(c==='contratosLink')q=query(q,where('criadoEm','>=',addDays(today(),-120)));
+  if(c==='registro')q=query(q,where('em','>=',Timestamp.fromMillis(Date.now()-183*864e5)));
   if(c==='cadastros')q=query(q,where('criadoEm','>=',addDays(today(),-90)));
   if(JANELA.has(c)&&!HIST)q=query(q,where('data','>=',corte()));
   return q}
@@ -611,8 +613,8 @@ function docPolitica(){
 async function hashTexto(t){try{const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(t));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('').slice(0,16)}catch(e){return ''}}
 
 /* ================= interface: casca ================= */
-const UI={view:'inicio',caixaDia:today(),agDia:today(),calMes:ym(today()),calDia:today(),finTab:'visao',finMes:ym(today()),lanTipo:'todos',cliBusca:'',cliLim:60,cliNivel:'todos',cliOrd:'score',ctTab:'links',agVis:'dia',reatTodos:false,ajTab:'horarios',cliTab:'lista',ctTipo:'servico',ctCli:'',ctAg:'',acFiltro:'todos',pkTab:'pacotes',relPer:6,lastView:null};
-const VIEWS=[['inicio','Início','home',()=>pode('base')],['agenda','Agenda','cal',()=>pode('base')],['clientes','Clientes','users',()=>pode('base')],['catalogo','Catálogo','image',()=>pode('base')],['financeiro','Finanças','wallet',()=>pode('fin')||pode('caixa')],['contratos','Contratos','file',()=>pode('contratos')],['pacotes','Pacotes e vales','ticket',()=>pode('base')],['estoque','Estoque','box',()=>pode('estoque')],['calendario','Datas e ideias','spark',()=>pode('base')],['ajustes','Ajustes','gear',()=>true]];
+const UI={view:'inicio',jurTab:'docs',regLim:40,caixaDia:today(),agDia:today(),calMes:ym(today()),calDia:today(),finTab:'visao',finMes:ym(today()),lanTipo:'todos',cliBusca:'',cliLim:60,cliNivel:'todos',cliOrd:'score',ctTab:'links',agVis:'dia',reatTodos:false,ajTab:'horarios',cliTab:'lista',ctTipo:'servico',ctCli:'',ctAg:'',acFiltro:'todos',pkTab:'pacotes',relPer:6,lastView:null};
+const VIEWS=[['inicio','Início','home',()=>pode('base')],['agenda','Agenda','cal',()=>pode('base')],['clientes','Clientes','users',()=>pode('base')],['catalogo','Catálogo','image',()=>pode('base')],['financeiro','Finanças','wallet',()=>pode('fin')||pode('caixa')],['contratos','Contratos','file',()=>pode('contratos')],['juridico','Jurídico','shield',()=>pode('juridico')],['pacotes','Pacotes e vales','ticket',()=>pode('base')],['estoque','Estoque','box',()=>pode('estoque')],['calendario','Datas e ideias','spark',()=>pode('base')],['ajustes','Ajustes','gear',()=>true]];
 const visiveis=()=>VIEWS.filter(v=>!NEGOCIO.abasDesligadas.includes(v[0])&&v[3]());
 let rq=0;function schedule(){if(rq)return;rq=requestAnimationFrame(()=>{rq=0;render()})}
 function go(v){if(!visiveis().some(x=>x[0]===v))v=visiveis()[0][0];UI.view=v;try{history.replaceState(null,'','#'+v)}catch(e){}window.scrollTo({top:0,behavior:'smooth'});closeSheet(true);render()}
@@ -620,10 +622,12 @@ function go(v){if(!visiveis().some(x=>x[0]===v))v=visiveis()[0][0];UI.view=v;try
 function shell(){
   const vs=visiveis();
   $('#brandSide').innerHTML=`${marcaImg(46)}${MARCA_TXT}`;
-  const GR=[['Atendimento',['inicio','agenda','clientes','contratos']],['Vitrine e marketing',['catalogo','pacotes','calendario']],['Gestão',['financeiro','estoque']],['',['ajustes']]];
+  const GR=[['Atendimento',['inicio','agenda','clientes','contratos']],['Vitrine e marketing',['catalogo','pacotes','calendario']],['Gestão',['financeiro','juridico','estoque']],['',['ajustes']]];
   const bt=([k,n,i])=>`<button class="nav" data-act="go" data-v="${k}" ${UI.view===k?'aria-current="page"':''}>${ic(i)}${n}</button>`;
   $('#navSide').innerHTML=GR.map(([g,ks])=>{const it=ks.map(k=>vs.find(v=>v[0]===k)).filter(Boolean);return it.length?`${g?`<div class="nav-grupo">${g}</div>`:'<div class="nav-sep"></div>'}${it.map(bt).join('')}`:''}).join('');
   const tabs=vs.filter(v=>['inicio','agenda','clientes'].includes(v[0]));tabs.push(vs.find(v=>v[0]==='financeiro')||vs.find(v=>v[0]==='contratos')||vs.find(v=>v[0]==='pacotes'));
+  // perfil sem atendimento (diretor): Jurídico e Contratos também ficam na barra de baixo
+  if(tabs.length<3)['juridico','contratos'].forEach(k=>{const v=vs.find(x=>x[0]===k);if(v&&!tabs.includes(v))tabs.push(v)});
   const inTabs=tabs.some(t=>t[0]===UI.view);
   $('#tabbar').innerHTML=tabs.map(([k,n,i])=>`<button class="tab" data-act="go" data-v="${k}" ${UI.view===k?'aria-current="page"':''}>${ic(i)}<span>${k==='financeiro'?'Finanças':n}</span></button>`).join('')+`<button class="tab" data-act="mais" ${!inTabs?'aria-current="page"':''}>${ic('grid')}<span>Mais</span></button>`;
   const on=navigator.onLine!==false;$('#syncSide').innerHTML=`<i></i>${on?'Sincronizado':'Sem internet · salvando no aparelho'} · ${PAPEIS[ROLE]||''}`;$('#syncSide').classList.toggle('local',!on);
@@ -638,7 +642,7 @@ function render(){VEZ++;
   if(DEMO&&!DEMO_SEMEADO&&(isOwner()||ROLE==='diretor')&&!pub().started&&S.clientes.size===0){DEMO_SEMEADO=true;setTimeout(()=>seed(true),0)}
   histPelaTela();
   const top=shell();
-  const fn={inicio:vInicio,agenda:vAgenda,clientes:vClientes,catalogo:vCatalogo,financeiro:vFinanceiro,contratos:vContratos,pacotes:vPacotes,estoque:vEstoque,calendario:vCalendario,ajustes:vAjustes}[UI.view]||vInicio;
+  const fn={inicio:vInicio,agenda:vAgenda,clientes:vClientes,catalogo:vCatalogo,financeiro:vFinanceiro,contratos:vContratos,juridico:vJuridico,pacotes:vPacotes,estoque:vEstoque,calendario:vCalendario,ajustes:vAjustes}[UI.view]||vInicio;
   const changed=UI.lastView!==UI.view;UI.lastView=UI.view;const y=window.scrollY;
   const ae=document.activeElement;const aid=ae&&main.contains(ae)?ae.id:null;let pos=null;try{pos=aid?ae.selectionStart:null}catch(_){}
   const tela=changed?null:guardarTela();
@@ -744,6 +748,7 @@ function agoraItens(t,own,est){const it=[];const agora=new Date();const minAgora
     const venc=ocorrencias(addDays(t,7)).filter(o=>!o.paga&&o.venc<=addDays(t,7));const atras=venc.filter(o=>o.venc<t);
     if(fin&&venc.length)add(atras.length?20:55,atras.length?'bad':'warn','clock',`<b>${venc.length} conta${venc.length>1?'s':''} a pagar</b>${atras.length?` (${atras.length} vencida${atras.length>1?'s':''})`:''}: ${venc.slice(0,3).map(o=>`${esc(o.conta.descricao)} (${dataCurta(o.venc)})`).join(', ')}.`,bt('finTab','data-t="contas"','Abrir contas','soft'));
     const ped=arr('pedidos');if(ped.length)add(40,'info','lock',`<b>${ped.length} pedido${ped.length>1?'s':''} de acesso</b> aguardando você definir o perfil.`,bt('go','data-v="ajustes"','Ver equipe','soft'));
+    if(pode('juridico')){const jv=jurAlertas();if(jv.length){const venc=jv.filter(d=>d.validade<t);add(venc.length?25:58,venc.length?'bad':'warn','shield',`<b>${jv.length} documento${jv.length>1?'s':''} ou contrato${jv.length>1?'s':''}</b> ${venc.length?'vencido(s) ou vencendo':'vencendo em 30 dias'}: ${jv.slice(0,3).map(d=>esc(d.nome)).join(', ')}${jv.length>3?'…':''}.`,bt('go','data-v="juridico"','Ver','soft'))}}
     if(pol().pend)add(80,'info','shield',`<b>Política da empresa:</b> ${pol().pend} itens dos contratos ainda não foram revisados.`,bt('ctTab','data-t="politica"','Revisar','soft'));}
   if(est.length)add(65,'warn','box',`<b>Estoque baixo:</b> ${est.slice(0,4).map(i=>`${esc(i.nome)} (${i.qtd} ${esc(i.unidade||'')})`).join(', ')}${est.length>4?'…':''}`,bt('go','data-v="estoque"','Ver estoque','soft'));
   const reat=pode('base')?paraReativar():[];
@@ -1127,6 +1132,88 @@ function finServ(){
    return `<button class="item" data-act="editServ" data-id="${s.id}"><div class="grow"><div class="t">${esc(s.nome)}</div><div class="s">${durTxt(s.duracao)} · material ${BRL(custoServ(s))}${(s.consumo||[]).length&&custoFicha(s.consumo)>0?' (ficha técnica)':''} · lucro/hora ${BRL(hora)} · ${ag.filter(a=>a.servicoId===s.id).length} feitos${(s.consumo||[]).length?` · baixa ${s.consumo.length} item(ns) do estoque`:''}</div></div><b class="num">${BRL(s.preco)}</b></button>`}).join('')}</div>`:'<div class="empty">Nenhum serviço cadastrado.</div>'}</section>
   <div class="alert info">${ic('info')}<div><b>Precificação:</b> o lucro por hora mostra quanto cada serviço rende depois do material. Cadastre o consumo de estoque em cada serviço para a baixa automática.</div></div>`;
 }
+
+/* ================= JURÍDICO =================
+   Documentos da empresa com vencimento, contratos com terceiros (aluguel, fornecedores, parceiras), lista da LGPD,
+   versões da política e o registro de quem alterou o quê. Coleção "juridico": proprietária e diretor.
+   Os arquivos ficam no Drive (ou onde preferir): aqui guardamos só o link, para não usar o Storage (plano pago). */
+const JUR_DOCS_SUG=[['CCMEI (Certificado do MEI)','Receita Federal / Portal do Empreendedor'],['Alvará de funcionamento','Prefeitura'],['Licença sanitária','Vigilância Sanitária'],['Inscrição municipal','Prefeitura'],['Certificado de vistoria dos Bombeiros (se exigido)','Corpo de Bombeiros'],['Certificados de cursos','Escola / instrutor(a)']];
+const JUR_CT_TIPOS=['Aluguel do espaço','Fornecedor','Trancista parceira','Prestação de serviço','Outro'];
+const JUR_LGPD=[['privacidade','Política de privacidade e termos aceitos pelas clientes','O contrato de serviço e a política do ateliê já pedem aceite (Contratos › Aceites registrados).'],
+  ['consentSaude','Consentimento específico para os dados de saúde (anamnese)','A ficha de anamnese tem consentimento próprio, e só a proprietária e a trancista parceira veem.'],
+  ['imagem','Autorização de uso de imagem','No cadastro e na anamnese a cliente marca se autoriza fotos.'],
+  ['acesso','Acesso por perfil','Cada perfil só vê o que precisa (regras do servidor).'],
+  ['copia','Cópia de segurança','O GitHub faz uma cópia por dia (Ajustes › Conta e dados).'],
+  ['guarda','Prazo de guarda definido','Quanto tempo os dados de quem não volta ficam guardados (ex.: 5 anos depois do último atendimento).'],
+  ['canal','Canal para a cliente pedir os dados ou a exclusão','Ex.: o WhatsApp do ateliê. Responder em até 15 dias.'],
+  ['incidente','Plano para vazamento','Saber a quem avisar: as clientes afetadas e, se grave, a ANPD.']];
+const jurVence=d=>{if(!d.validade)return {c:'',t:'sem validade'};const n=diffDays(today(),d.validade);return n<0?{c:'bad',t:`venceu ${dataBR(d.validade)}`}:n<=30?{c:'warn',t:`vence em ${n} dia${n===1?'':'s'}`}:{c:'good',t:`válido até ${dataBR(d.validade)}`}};
+const jurLista=tipo=>arr('juridico').filter(d=>d.tipo===tipo).sort((a,b)=>(a.validade||'9999')<(b.validade||'9999')?-1:1);
+function jurAlertas(){return arr('juridico').filter(d=>(d.tipo==='documento'||d.tipo==='contrato')&&d.validade&&diffDays(today(),d.validade)<=30)}
+function vJuridico(){
+  const tabs=[['docs','Documentos'],['contratos','Contratos'],['lgpd','LGPD'],['versoes','Versões da política'],['registro','Quem alterou']];
+  if(!tabs.some(t=>t[0]===UI.jurTab))UI.jurTab='docs';
+  const al=jurAlertas();
+  const bt=UI.jurTab==='docs'?`<button class="btn primary" data-act="novoJur" data-t="documento">${ic('plus')}Documento</button>`:UI.jurTab==='contratos'?`<button class="btn primary" data-act="novoJur" data-t="contrato">${ic('plus')}Contrato</button>`:'';
+  return head('Jurídico','Documentos e <em>contratos</em>',al.length?`${al.length} item(ns) vencido(s) ou vencendo em 30 dias`:'Nada vencendo nos próximos 30 dias',bt)+
+  `<div style="overflow-x:auto">${seg('jurTab',UI.jurTab,tabs)}</div>`+({docs:jurDocs,contratos:jurContratos,lgpd:jurLgpd,versoes:jurVersoes,registro:jurRegistro}[UI.jurTab])();
+}
+function jurItem(d){const v=jurVence(d);
+  return `<button class="item" data-act="editJur" data-id="${d.id}"><div class="avatar" style="--lv:var(--${v.c||'line'})">${ic(d.tipo==='contrato'?'file':'shield')}</div><div class="grow"><div class="t">${esc(d.nome)}</div><div class="s">${esc([d.categoria,d.parte,d.numero].filter(Boolean).join(' · '))}${+d.valor?` · ${BRL(d.valor)}${d.tipo==='contrato'?'/mês':''}`:''}</div></div><span class="badge ${v.c}">${v.t}</span></button>`}
+function jurDocs(){const L=jurLista('documento');
+  return `<section class="card" style="padding:8px 14px">${L.length?`<div class="list">${L.map(jurItem).join('')}</div>`:`<div class="empty">Nenhum documento ainda.<div class="row" style="justify-content:center;margin-top:10px"><button class="btn soft" data-act="jurSug">${ic('spark')}Adicionar a lista básica de um MEI</button></div></div>`}</section>
+  <div class="alert info">${ic('info')}<div>Guarde o arquivo no Drive (ou onde preferir) e cole o link no documento. Quando faltarem 30 dias para vencer, o item fica em destaque aqui e aparece no Início da proprietária.</div></div>`}
+function jurContratos(){const L=jurLista('contrato');
+  return `<section class="card" style="padding:8px 14px">${L.length?`<div class="list">${L.map(jurItem).join('')}</div>`:'<div class="empty">Nenhum contrato cadastrado. Aqui ficam os contratos do ateliê com terceiros: aluguel, fornecedores, trancistas parceiras. Os contratos com as clientes ficam em Contratos.</div>'}</section>`}
+function jurLgpd(){const g=S.juridico.get('lgpd')||{};const it=g.itens||{};const ok=JUR_LGPD.filter(([k])=>it[k]).length;
+  return `<form class="card form" id="fLgpd"><h3>Proteção de dados (LGPD) <small>${ok} de ${JUR_LGPD.length} em dia</small></h3>
+   <div class="stack" style="gap:10px">${JUR_LGPD.map(([k,t,h])=>`<label class="check" style="align-items:flex-start"><input type="checkbox" data-lgpd="${k}" ${it[k]?'checked':''}><span><b>${t}</b><br><span class="small muted">${h}</span></span></label>`).join('')}</div>
+   <div class="f2"><label class="fld">Responsável pelos dados (encarregado)<input id="lgEnc" value="${esc(g.encarregado||'')}" placeholder="Ex.: Eduardo"></label><label class="fld">Canal para as clientes<input id="lgCanal" value="${esc(g.canal||'')}" placeholder="Ex.: WhatsApp do ateliê"></label></div>
+   <label class="fld">Observações<textarea id="lgObs" rows="3">${esc(g.obs||'')}</textarea></label>
+   <div class="form-actions"><button class="btn primary">${ic('check')}Salvar</button></div></form>
+  <div class="alert info">${ic('shield')}<div>Esta lista é um ponto de partida, não substitui a orientação de um(a) advogado(a).</div></div>`}
+function jurVersoes(){const L=jurLista('politica').sort((a,b)=>(b.versao||0)-(a.versao||0));const P=pol();
+  return `<section class="card"><h3>Política em uso <small>${P.versao?`versão ${P.versao}`:'ainda não salva'}</small></h3><button class="btn soft" data-act="ctTab" data-t="politica">${ic('file')}Abrir a política</button></section>
+  <section class="card" style="padding:8px 14px">${L.length?`<div class="list">${L.map(v=>`<button class="item" data-act="verPolVer" data-id="${v.id}"><div class="avatar">v${+v.versao||0}</div><div class="grow"><div class="t">Versão ${+v.versao||0}</div><div class="s">${dataBR(String(v.atualizadoEm||'').slice(0,10))} · ${esc(nomePessoa(v.atualizadoPor))}</div></div></button>`).join('')}</div>`:'<div class="empty">As versões passam a ficar guardadas aqui a cada vez que a política for salva.</div>'}</section>`}
+function verPolVer(id){const v=S.juridico.get(id);if(!v)return;const c=v.campos||{};
+  sheet(`Política · versão ${+v.versao||0}`,`<div class="stack"><p class="small muted" style="margin:0">Salva em ${dataBR(String(v.atualizadoEm||'').slice(0,10))} por ${esc(nomePessoa(v.atualizadoPor))}.</p>${POL_CAMPOS.filter(f=>c[f.k]!=null&&c[f.k]!=='').map(f=>`<div><div class="eyebrow">${esc(f.r||f.k)}</div><div style="white-space:pre-wrap">${esc(String(c[f.k]))}</div></div>`).join('')}</div>`)}
+function formJur(id,tipo){const d=id?S.juridico.get(id):{tipo,categoria:tipo==='contrato'?JUR_CT_TIPOS[0]:''};const ct=d.tipo==='contrato';
+  sheet(id?(ct?'Editar contrato':'Editar documento'):(ct?'Novo contrato':'Novo documento'),`<form class="form" id="fJur"><label class="fld">${ct?'Contrato':'Documento'}<input id="jNome" required value="${esc(d.nome||'')}" placeholder="${ct?'Ex.: Aluguel da sala':'Ex.: Alvará de funcionamento'}"></label>
+   ${ct?`<label class="fld">Tipo<select id="jCat">${JUR_CT_TIPOS.map(x=>`<option ${x===d.categoria?'selected':''}>${x}</option>`).join('')}</select></label>`:''}
+   <div class="f2"><label class="fld">${ct?'Com quem (outra parte)':'Órgão que emite'}<input id="jParte" value="${esc(d.parte||'')}"></label><label class="fld">Número / protocolo<input id="jNum" value="${esc(d.numero||'')}"></label></div>
+   <div class="f2"><label class="fld">${ct?'Início':'Emissão'}<input id="jIni" type="date" value="${esc(d.inicio||'')}"></label><label class="fld">${ct?'Fim / renovação':'Validade'}<input id="jVal" type="date" value="${esc(d.validade||'')}"></label>${ct?`<label class="fld">Valor mensal (R$)<input id="jValor" type="number" step="0.01" min="0" value="${esc(d.valor??'')}"></label>`:''}</div>
+   <label class="fld">Link do arquivo (Drive, e-mail…)<input id="jLink" type="url" inputmode="url" autocapitalize="off" spellcheck="false" value="${esc(d.link||'')}" placeholder="https://drive.google.com/…"></label>
+   ${d.link&&/^https:\/\//.test(d.link)?`<a class="btn sm soft" style="align-self:flex-start" href="${esc(d.link)}" target="_blank" rel="noopener">${ic('right')}Abrir arquivo</a>`:''}
+   <label class="fld">Observações<textarea id="jObs" rows="3" placeholder="${ct?'Ex.: reajuste pelo IGP-M em março; multa de 3 aluguéis':'Ex.: renovar 30 dias antes; levar documento X'}">${esc(d.obs||'')}</textarea></label>
+   <div class="form-actions">${id?`<button type="button" class="btn danger ghost" data-act="delJur" data-id="${id}">${ic('trash')}Excluir</button>`:''}<button class="btn primary">${ic('check')}Salvar</button></div></form>`);
+  $('#fJur').onsubmit=async e=>{e.preventDefault();const lk=$('#jLink').value.trim();
+    await save('juridico',id,{...d,nome:$('#jNome').value.trim(),categoria:ct?$('#jCat').value:'',parte:$('#jParte').value.trim(),numero:$('#jNum').value.trim(),inicio:$('#jIni').value,validade:$('#jVal').value,valor:ct?+$('#jValor').value||0:0,link:/^https:\/\//.test(lk)?lk:'',obs:$('#jObs').value.trim()});closeSheet();toast('Salvo')}}
+async function jurSugeridos(){for(const [nome,parte] of JUR_DOCS_SUG)await save('juridico',null,{tipo:'documento',nome,parte,numero:'',inicio:'',validade:'',link:'',obs:''});toast('Lista básica adicionada. Preencha as validades.')}
+
+/* ---------- registro de alterações ----------
+   Cada mudança feita por alguém da equipe em preços, finanças, contratos, jurídico e equipe vira uma linha na
+   coleção "registro" (quem, quando, o quê). Não dá para alterar nem apagar uma linha. Só a proprietária e o diretor leem.
+   Fica de fora o que é exemplo e o que o próprio sistema grava sozinho. */
+const REG_COLS={servicos:'Serviço',lancamentos:'Lançamento',contas:'Conta a pagar',privado:'Finanças (ajustes)',publico:'Dados do negócio',juridico:'Jurídico',equipe:'Equipe'};
+const REG_IGNORA=new Set(['atualizadoEm','atualizadoPor','id']);
+const REG_NOMES={preco:'preço',valor:'valor',nome:'nome',descricao:'descrição',data:'data',vencimento:'vencimento',validade:'validade',papel:'perfil',ativo:'acesso',categoria:'categoria',forma:'forma de pagamento',campos:'texto',versao:'versão',duracao:'duração',pixChave:'chave Pix',limite:'limite do MEI',das:'valor do DAS',meta:'meta',dasPagos:'DAS pagos',pagas:'pagamentos',repasse:'repasse'};
+function regResumo(col,antes,depois){const r=depois||antes||{};const nome=r.nome||r.descricao||r.apelido||r.email||'';
+  const rot=REG_COLS[col]+(nome?` "${String(nome).slice(0,60)}"`:'');
+  if(!antes||!depois)return rot;
+  const ks=[...new Set([...Object.keys(antes),...Object.keys(depois)])].filter(k=>!REG_IGNORA.has(k)&&JSON.stringify(antes[k]??null)!==JSON.stringify(depois[k]??null));
+  if(!ks.length)return '';
+  const fmt=(k,v)=>['preco','valor','limite','das','meta'].includes(k)?BRL(+v||0):typeof v==='object'?'…':String(v??'—').slice(0,40);
+  return rot+': '+ks.slice(0,4).map(k=>{const n=REG_NOMES[k]||k;return typeof depois[k]!=='object'&&typeof antes[k]!=='object'?`${n} ${fmt(k,antes[k])} → ${fmt(k,depois[k])}`:n}).join('; ')+(ks.length>4?'…':'')}
+function registrar(col,id,antes,depois){
+  if(!FS||!ME||!REG_COLS[col]||!PAPEIS[ROLE]||ROLE==='contador')return;
+  if((depois&&depois.exemplo)||(!depois&&antes&&antes.exemplo))return;
+  const acao=!antes?'criou':!depois?'excluiu':'alterou';const resumo=regResumo(col,antes,depois);if(!resumo)return;
+  const nome=ACESSO&&(ACESSO.donasInfo||{})[ME]?(ACESSO.donasInfo[ME].nome||EMAIL):((S.equipe.get(ME)||{}).apelido||EMAIL);
+  setDoc(doc(collection(FS,'registro')),{quem:ME,nome:String(nome||'').slice(0,80),col,docId:String(id).slice(0,120),acao,resumo:resumo.slice(0,400),em:serverTimestamp()}).catch(e=>console.warn('registro',e))}
+function jurRegistro(){const L=arr('registro').sort((a,b)=>toMs(b.em)-toMs(a.em));const ver=L.slice(0,UI.regLim||40);
+  const quando=x=>{const ms=toMs(x.em);if(!ms)return 'agora';const d=new Date(ms);return `${dataCurta(ymd(d))} ${pad(d.getHours())}:${pad(d.getMinutes())}`};
+  return `<section class="card" style="padding:8px 14px">${L.length?`<div class="list">${ver.map(x=>`<div class="item"><div class="avatar" style="--lv:var(--${x.acao==='excluiu'?'bad':x.acao==='criou'?'good':'line'})">${ic(x.acao==='excluiu'?'trash':x.acao==='criou'?'plus':'check')}</div><div class="grow" style="min-width:0"><div class="t" style="white-space:normal;overflow-wrap:anywhere">${esc(x.resumo)}</div><div class="s">${quando(x)} · ${esc(x.nome||nomePessoa(x.quem))} ${esc(x.acao)}</div></div></div>`).join('')}</div>${L.length>ver.length?`<button class="btn ghost sm" data-act="regMais" style="margin:8px auto;display:flex">Ver mais</button>`:''}`:'<div class="empty">Nenhuma alteração registrada ainda. A partir de agora, mudanças em preços, finanças, contratos, jurídico e equipe aparecem aqui.</div>'}</section>
+  <p class="small muted">Mostra os últimos 6 meses. As linhas não podem ser alteradas nem apagadas.</p>`}
 
 /* ================= CONTRATOS ================= */
 function vContratos(){
@@ -1697,6 +1784,9 @@ async function seed(ex){
     const aluguel={descricao:'Aluguel da sala',valor:450,vencimento:addMonths(ym(t),-4)+'-10',recorrente:'mensal',categoria:'Aluguel / espaço',pagas:{},...X};
     for(let i=4;i>=1;i--){const k=addMonths(ym(t),-i);const lid=uid();aluguel.pagas[k]=lid;ops.push(['lancamentos',lid,{tipo:'despesa',data:k+'-10',valor:450,categoria:'Aluguel / espaço',descricao:'Aluguel da sala',forma:'Pix',contaRef:k,...X}])}
     ops.push(['contas',uid(),aluguel]);
+    ops.push(['juridico',uid(),{tipo:'documento',nome:'Alvará de funcionamento',parte:'Prefeitura',numero:'0000/2026',inicio:addDays(t,-340),validade:addDays(t,25),link:'',obs:'Exemplo: renovar 30 dias antes.',...X}]);
+    ops.push(['juridico',uid(),{tipo:'documento',nome:'Licença sanitária',parte:'Vigilância Sanitária',numero:'',inicio:addDays(t,-200),validade:addDays(t,165),link:'',obs:'',...X}]);
+    ops.push(['juridico',uid(),{tipo:'contrato',nome:'Aluguel da sala',categoria:'Aluguel do espaço',parte:'Imobiliária (exemplo)',numero:'',inicio:addDays(t,-120),validade:addDays(t,245),valor:450,link:'',obs:'Reajuste anual pelo IGP-M.',...X}]);
     ops.push(['contas',uid(),{descricao:'Internet do ateliê',valor:99.9,vencimento:ym(t)+'-15',recorrente:'mensal',categoria:'Outras despesas',pagas:{},...X}]);
     ops.push(['contas',uid(),{descricao:'Curso de tranças nagô avançado',valor:300,vencimento:addDays(t,12),recorrente:'unica',categoria:'Cursos',pagas:{},...X}]);
     ops.push(['ideias',uid(),{titulo:'Sorteio de uma manutenção no Instagram',tipo:'Promoção',data:addDays(t,10),notas:'Regra: seguir, curtir e marcar 2 amigas.',...X}]);
@@ -2226,6 +2316,7 @@ const ACT={
  servSug:async()=>{await servicosSugeridos();const f=$('#fLk')||$('#fAg');if(f){const sel=f.querySelector('#lkServ,#aServ');if(sel){const v=sel.value;sel.innerHTML=(sel.id==='lkServ'?optServCat():optServ(''))+(sel.id==='lkServ'?'<option value="__outro">Outro: digitar o nome</option>':'');sel.value=v==='__outro'?'':v;sel.dispatchEvent(new Event('change'))}const al=f.querySelector('.alert.warn');if(al&&/Nenhum serviço/.test(al.textContent))al.remove()}},
  folgaRem:t=>{const i=+t.dataset.i;const f=[...(pub().folgas||[])];f.splice(i,1);save('publico','config',{...pub(),folgas:f});toast('Data removida')},
  ajTab:t=>{UI.ajTab=t.dataset.t;render()},
+ jurTab:t=>{UI.jurTab=t.dataset.t;render()},novoJur:t=>pode('juridico')&&formJur(null,t.dataset.t),editJur:t=>pode('juridico')&&formJur(t.dataset.id),delJur:t=>confirmar('Excluir este item do Jurídico?',async()=>{await del('juridico',t.dataset.id);closeSheet()}),jurSug:()=>pode('juridico')&&jurSugeridos(),verPolVer:t=>verPolVer(t.dataset.id),regMais:()=>{UI.regLim=(UI.regLim||40)+60;render()},
  relContador:()=>abrirRelatorioContador(),avTodas:()=>{UI.avTodas=!UI.avTodas;render()},reatTodos:()=>{UI.reatTodos=!UI.reatTodos;render()},
  avPub:async t=>{const a=S.avaliacoes.get(t.dataset.id);if(!a)return;const pub2=!a.publicado;S.avaliacoes.set(a.id,{...a,publicado:pub2,visto:true});touch();await updateDoc(doc(FS,'avaliacoes',a.id),{publicado:pub2,visto:true}).catch(dbErr);await publicarDepoimentos();toast(pub2?'Avaliação no catálogo':'Avaliação retirada do catálogo')},
  indVisto:t=>{const c=S.clientes.get(t.dataset.id);if(c)save('clientes',c.id,{...c,indAvisado:true},{quiet:true})},
@@ -2259,7 +2350,7 @@ document.addEventListener('change',e=>{const id=e.target.id;
   const ap=e.target.dataset&&e.target.dataset.avpref;if(ap){setDoc(doc(FS,'avisos',ME),{prefs:{...avPrefs(),[ap]:e.target.checked},atualizadoEm:serverTimestamp()},{merge:true}).then(()=>toast('Preferência salva')).catch(dbErr);return}
   if(id==='ctTipo'){UI.ctTipo=e.target.value;render()}else if(id==='ctCli'){UI.ctCli=e.target.value;UI.ctAg='';render()}else if(id==='ctAg'){UI.ctAg=e.target.value;render()}
   else if(id==='restFile'&&e.target.files[0]){const fr=new FileReader();fr.onload=()=>{let o;try{o=JSON.parse(fr.result)}catch(_){toast('Arquivo inválido');return}
-    confirmar('Restaurar esta cópia? Registros com o mesmo identificador serão substituídos.',async()=>{const ops=[];ALL_COLS.filter(c=>!['equipe','pedidos','contratosLink','solicitacoes','cadastros','anamnesePortal','avaliacoes','erros'].includes(c)).forEach(c=>(o[c]||[]).forEach(r=>{if(r&&r.id)ops.push([c,r.id,r])}));await pool(ops.map(([c,id,r])=>()=>save(c,id,r,{quiet:true})),8);toast(`${ops.length} registros restaurados`)})};fr.readAsText(e.target.files[0])}});
+    confirmar('Restaurar esta cópia? Registros com o mesmo identificador serão substituídos.',async()=>{const ops=[];ALL_COLS.filter(c=>!['equipe','pedidos','contratosLink','solicitacoes','cadastros','anamnesePortal','avaliacoes','erros','registro'].includes(c)).forEach(c=>(o[c]||[]).forEach(r=>{if(r&&r.id)ops.push([c,r.id,r])}));await pool(ops.map(([c,id,r])=>()=>save(c,id,r,{quiet:true})),8);toast(`${ops.length} registros restaurados`)})};fr.readAsText(e.target.files[0])}});
 document.addEventListener('submit',async e=>{
   if(e.target.id==='fLogin'){e.preventDefault();const m=$('#lgMsg');m.style.color='var(--bad)';m.textContent='Entrando…';
     try{await signInWithEmailAndPassword(AUTH,$('#lgEmail').value.trim(),$('#lgSenha').value)}catch(err){const c=err.code||'';m.textContent=/invalid-credential|wrong-password|user-not-found|invalid-email/.test(c)?'E-mail ou senha incorretos.':/too-many-requests/.test(c)?'Muitas tentativas. Aguarde alguns minutos.':/network/.test(c)?'Sem internet. Tente de novo.':'Não foi possível entrar.'}
@@ -2288,9 +2379,12 @@ document.addEventListener('submit',async e=>{
     if(!ini){toast('Escolha a data.','erro');return}if(fim&&fim<ini){toast('A data final precisa ser depois da inicial.','erro');return}
     const reg={ini,fim,motivo,tipo};if(rec){reg.rec=rec;reg.dow=parse(ini).getDay();if(rec==='mensal'){const k=nthDow(ini);reg.nth=k.n>4||(k.ult&&k.n>=4)?-1:k.n}}if(tipo==='horario'){reg.abre=$('#fgAbre').value;reg.fecha=$('#fgFecha').value;if(!reg.abre||!reg.fecha||reg.fecha<=reg.abre){toast('Confira o horário especial.','erro');return}}
     const f=[...(pub().folgas||[]),reg].sort((a,b)=>a.ini<b.ini?-1:1);await save('publico','config',{...pub(),folgas:f});toast(tipo==='horario'?'Horário especial salvo':'Agenda bloqueada')}
+  else if(e.target.id==='fLgpd'){e.preventDefault();if(!pode('juridico'))return;const it={};$$('[data-lgpd]').forEach(c=>it[c.dataset.lgpd]=c.checked);
+    await save('juridico','lgpd',{tipo:'lgpd',nome:'Lista da LGPD',itens:it,encarregado:$('#lgEnc').value.trim(),canal:$('#lgCanal').value.trim(),obs:$('#lgObs').value.trim()});toast('LGPD salva')}
   else if(e.target.id==='fPol'){e.preventDefault();const P=pol();const campos={},rev={};
     POL_CAMPOS.forEach(f=>{const el=$('#pol_'+f.k);campos[f.k]=f.t==='num'?+el.value||0:el.value.trim();const r=$('#rev_'+f.k);if(r&&r.checked)rev[f.k]=true});
-    await save('publico','politica',{campos,revisados:rev,versao:P.versao+1,atualizadaEm:nowIso()});toast(`Política salva (versão ${P.versao+1})`);window.scrollTo({top:0,behavior:'smooth'})}
+    await save('publico','politica',{campos,revisados:rev,versao:P.versao+1,atualizadaEm:nowIso()});
+    if(pode('juridico'))save('juridico','politica-v'+(P.versao+1),{tipo:'politica',versao:P.versao+1,campos},{quiet:true});toast(`Política salva (versão ${P.versao+1})`);window.scrollTo({top:0,behavior:'smooth'})}
 });
 if('serviceWorker' in navigator)navigator.serviceWorker.addEventListener('message',ev=>{const d=ev.data||{};if(d.tipo!=='abrir')return;const v=String(d.url||'').split('#')[1];if(v&&VIEWS.some(x=>x[0]===v))go(v)});
 const hsh=(location.hash||'').slice(1);if(VIEWS.some(v=>v[0]===hsh))UI.view=hsh;
