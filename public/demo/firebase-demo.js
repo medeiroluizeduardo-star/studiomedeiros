@@ -213,7 +213,8 @@ export function writeBatch() {
 
 /* ---------- app, banco e login ---------- */
 const APP = { name: '[demo]', options: {} };
-export const initializeApp = () => APP;
+// Um segundo app com nome (usado para criar contas da equipe sem trocar quem está logado) tem login próprio.
+export const initializeApp = (cfg, nome) => nome ? { name: nome, options: {}, secundario: true } : APP;
 const FS = { type: 'firestore', app: APP, demo: true };
 export const initializeFirestore = () => FS;
 export const getFirestore = () => FS;
@@ -225,7 +226,7 @@ try { saiu = sessionStorage.getItem(SAIU) === '1'; } catch (e) { }
 const AUTH = { app: APP, currentUser: saiu ? null : { ...USUARIO } };
 const OUV_LOGIN = new Set();
 const avisarLogin = () => OUV_LOGIN.forEach(fn => setTimeout(() => fn(AUTH.currentUser), 0));
-export const getAuth = () => AUTH;
+export const getAuth = app => app && app.secundario ? { app, currentUser: null, secundario: true } : AUTH;
 export function onAuthStateChanged(auth, fn) { OUV_LOGIN.add(fn); setTimeout(() => OUV_LOGIN.has(fn) && fn(AUTH.currentUser), 0); return () => OUV_LOGIN.delete(fn); }
 export async function signInWithEmailAndPassword(auth, email, senha) {
   if (!email || !senha) { const e = new Error('Faltou e-mail ou senha'); e.code = 'auth/invalid-credential'; throw e; }
@@ -233,12 +234,24 @@ export async function signInWithEmailAndPassword(auth, email, senha) {
   try { sessionStorage.removeItem(SAIU); } catch (e) { }
   avisarLogin(); return { user: AUTH.currentUser };
 }
-export async function signOut() {
+export async function signOut(auth) {
+  if (auth && auth.secundario) { auth.currentUser = null; return; }
   AUTH.currentUser = null;
   try { sessionStorage.setItem(SAIU, '1'); } catch (e) { }
   avisarLogin();
 }
 export async function sendPasswordResetEmail() { }
+/** Cria uma conta de mentira: só confere se o e-mail já foi usado nesta demonstração. */
+export async function createUserWithEmailAndPassword(auth, email, senha) {
+  const em = String(email || '').trim().toLowerCase();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) { const e = new Error('E-mail inválido'); e.code = 'auth/invalid-email'; throw e; }
+  if (!senha || senha.length < 6) { const e = new Error('Senha fraca'); e.code = 'auth/weak-password'; throw e; }
+  const usado = em === USUARIO.email || Object.entries(BANCO).some(([k, v]) => /^(equipe|pedidos)\//.test(k) && v && String(v.email || '').toLowerCase() === em);
+  if (usado) { const e = new Error('E-mail já usado'); e.code = 'auth/email-already-in-use'; throw e; }
+  const user = { uid: 'demo-' + novoId().slice(0, 12), email: em };
+  if (auth) auth.currentUser = user;
+  return { user };
+}
 
 // Avisos no celular: no modo demonstração não liga de verdade (não há servidor para mandar).
 export const mensagensDemo = {

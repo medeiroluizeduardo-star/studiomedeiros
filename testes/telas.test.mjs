@@ -163,6 +163,29 @@ test('planejamento financeiro e relatório do ano', async () => {
   } finally { await ctx.close(); }
 });
 
+// Novo usuário pelo próprio sistema: cria o acesso com o perfil, quem está logado continua logado, e e-mail repetido é avisado.
+test('novo usuário criado em Equipe e acesso', async () => {
+  const { ctx, pg, problemas } = await abrir({ width: 390, height: 844 });
+  try {
+    await pg.goto(srv.url + '/?demo&perfil=dona');
+    await pg.waitForFunction(() => /Ana Beatriz|Jéssica|Camila/.test(document.body.innerText), null, { timeout: 15000 });
+    const criar = async (nome, email) => {
+      await pg.evaluate(() => document.querySelector('#navSide [data-v="ajustes"]').click());
+      await pg.evaluate(() => document.querySelector('#view [data-act="ajTab"][data-t="equipe"]').click());
+      await pg.evaluate(() => document.querySelector('#view [data-act="novoUsuario"]').click());
+      await pg.waitForSelector('#nuNome');
+      await pg.fill('#nuNome', nome); await pg.fill('#nuEmail', email); await pg.selectOption('#nuPapel', 'recepcao');
+      await pg.evaluate(() => document.querySelector('#fNovoUs').requestSubmit());
+    };
+    await criar('Joana Teste', 'joana@exemplo.com');
+    await pg.waitForFunction(() => /Joana Teste/.test(document.querySelector('#view').innerText), null, { timeout: 5000 });
+    assert.ok(await pg.$eval('.role', e => /Propriet/.test(e.textContent)), 'quem estava logado saiu do sistema');
+    await criar('Outra', 'joana@exemplo.com');
+    await pg.waitForFunction(() => /já tem conta/.test(document.querySelector('#nuMsg')?.textContent || ''), null, { timeout: 5000 });
+    assert.deepEqual(problemas.filter(p => !/email-already-in-use|E-mail já usado/.test(p)), []);
+  } finally { await ctx.close(); }
+});
+
 // A tela se redesenha quando chega novidade de outro aparelho. O que estava sendo digitado (e ainda não foi salvo)
 // não pode sumir, e uma caixa aberta não pode fechar sozinha.
 test('texto digitado não some quando chega novidade', async () => {

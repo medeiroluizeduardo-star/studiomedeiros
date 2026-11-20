@@ -44,7 +44,7 @@ if (DEMO) {
 }
 
 export const { initializeApp } = app;
-export const { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail } = auth;
+export const { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail, createUserWithEmailAndPassword } = auth;
 export const {
   initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager,
   collection, doc, onSnapshot, setDoc, deleteDoc, getDoc, getDocs, updateDoc, query, where,
