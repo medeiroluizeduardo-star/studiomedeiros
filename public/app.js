@@ -1,4 +1,4 @@
-import { DEMO, mensagens, initializeApp, getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, onSnapshot, setDoc, deleteDoc, getDoc, updateDoc, query, where, Timestamp, arrayUnion, arrayRemove, deleteField, serverTimestamp } from './fb.js';
+import { DEMO, mensagens, initializeApp, getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail, createUserWithEmailAndPassword, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, onSnapshot, setDoc, deleteDoc, getDoc, updateDoc, query, where, Timestamp, arrayUnion, arrayRemove, deleteField, serverTimestamp } from './fb.js';
 import { firebaseConfig } from './firebase-config.js';
 import { NEGOCIO } from './negocio.js';
 /* Sistema de gestão do estúdio (Firebase). Nome e abas do negócio vêm de negocio.js. */
@@ -1424,7 +1424,8 @@ function repasseCard(){if(!pode('finEdit'))return '';const rp=priv().repasse||{}
 function ajEquipe(){const ped=arr('pedidos'),eq=arr('equipe');const donas=(ACESSO&&ACESSO.donas)||[];const dinfo=(ACESSO&&ACESSO.donasInfo)||{};
   return `<section class="card"><h3>Proprietárias <small>${donas.length} com acesso total</small></h3><div class="list">${donas.map(u=>{const i=dinfo[u]||{};return `<div class="item"><div class="avatar" style="--lv:var(--lv-perola)">${ic('shield')}</div><div class="grow"><div class="t">${esc(i.nome||i.email||'Proprietária')}${u===ME?' <span class="badge">você</span>':''}</div><div class="s">${esc(i.email||'e-mail aparece no próximo acesso dela')}</div></div>${isOwner()&&u!==ME&&donas.length>1?`<button class="btn sm ghost danger" data-act="removerDona" data-id="${u}">Remover</button>`:''}</div>`}).join('')}</div>${isOwner()?'<p class="small muted" style="margin-bottom:0">Para dar acesso total a alguém da equipe, use "Tornar proprietária" na lista abaixo.</p>':''}</section>
   <section class="card"><h3>Equipe e acessos <small>${eq.filter(e=>e.ativo!==false).length} ativa(s)</small></h3>
-   <ol class="small muted" style="margin-top:0;padding-left:18px"><li>No <a href="https://console.firebase.google.com" target="_blank" rel="noopener">console do Firebase</a>, abra <b>Authentication › Usuários › Adicionar usuário</b> e crie o e-mail da pessoa com uma senha provisória.</li><li>Ela entra no sistema com esse e-mail e aparece aqui como pedido.</li><li>Você escolhe o perfil. As regras do servidor só liberam os dados daquele perfil.</li></ol>
+   <div class="row" style="margin:0 0 10px"><button class="btn primary" data-act="novoUsuario">${ic('plus')}Novo usuário</button></div>
+   <p class="small muted" style="margin-top:0">Você informa o nome, o e-mail e o perfil. O sistema cria a conta e a pessoa recebe um e-mail para criar a própria senha. As regras do servidor só liberam os dados daquele perfil. Para tirar o acesso, toque em <b>Alterar</b> e desmarque "Acesso ativo".</p>
    ${ped.length?`<div class="eyebrow" style="margin:10px 0 4px">Pedidos de acesso</div><div class="list">${ped.map(p=>`<div class="item wrap"><div class="avatar">${iniciais(p.nome||p.email)}</div><div class="grow"><div class="t">${esc(p.nome||p.email)}</div><div class="s">${esc(p.email)} · pediu em ${dataBR((p.pedidoEm||'').slice(0,10))}</div></div><div class="item-acoes"><button class="btn sm primary" data-act="aprovar" data-id="${p.id}">Definir perfil</button>${isOwner()?`<button class="btn sm ghost" data-act="tornarDona" data-id="${p.id}">Tornar proprietária</button>`:''}<button class="btn sm ghost danger" data-act="recusar" data-id="${p.id}">Recusar</button></div></div>`).join('')}</div>`:''}
    ${eq.length?`<div class="eyebrow" style="margin:10px 0 4px">Equipe</div><div class="list">${eq.map(e=>`<div class="item wrap"><div class="avatar">${iniciais(e.apelido||e.email)}</div><div class="grow"><div class="t">${esc(e.apelido||e.email)}</div><div class="s">${PAPEIS[e.papel]||e.papel}${e.ativo===false?' · desativada':''} · ${esc(e.email||'')}</div></div><div class="item-acoes">${isOwner()||(e.papel!=='diretor'&&e.id!==ME)?`<button class="btn sm soft" data-act="aprovar" data-id="${e.id}">Alterar</button>`:''}${isOwner()?`<button class="btn sm ghost" data-act="tornarDona" data-id="${e.id}">${ic('shield')}Tornar proprietária</button>`:''}</div></div>`).join('')}</div>`:''}
    ${!ped.length&&!eq.length?'<div class="empty">Ninguém da equipe ainda.</div>':''}
@@ -1775,6 +1776,31 @@ function formIdeia(id,pre={}){const i=id?S.ideias.get(id):{data:pre.d||'',titulo
   $('#fId').onsubmit=async e=>{e.preventDefault();await save('ideias',id,{...i,titulo:$('#iTit').value.trim(),data:$('#iData').value,tipo:$('#iTipo').value,notas:$('#iNot').value.trim(),feito:!!i.feito});closeSheet();toast('Ideia salva')}}
 
 /* ---------- equipe ---------- */
+/* Novo usuário criado pelo próprio sistema: um segundo "app" do Firebase cria a conta (assim quem está logado
+   continua logado), o perfil já fica gravado em equipe/{uid} e a pessoa recebe o e-mail para criar a senha. */
+const PAPEIS_NOVO=()=>[...(isOwner()?[['diretor','Diretor – finanças, contratos, jurídico e equipe']]:[]),['parceira',PAPEIS.parceira],['recepcao','Recepção'],['contador','Contador(a) – somente leitura das finanças']];
+function formNovoUsuario(){
+  sheet('Novo usuário',`<form class="form" id="fNovoUs"><label class="fld">Nome<input id="nuNome" required maxlength="60" autocomplete="off"></label>
+   <label class="fld">E-mail<input id="nuEmail" type="email" required autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+   <label class="fld">Perfil<select id="nuPapel">${PAPEIS_NOVO().map(([k,n])=>`<option value="${k}">${esc(n)}</option>`).join('')}</select></label>
+   <p class="small muted" style="margin:0">A pessoa recebe um e-mail do Firebase com o link para criar a senha. Peça para olhar também a caixa de spam.</p>
+   <p class="small" id="nuMsg" style="margin:0;color:var(--bad)"></p>
+   <div class="form-actions"><button class="btn primary" id="nuOk">${ic('check')}Criar acesso</button></div></form>`);
+  $('#fNovoUs').onsubmit=async e=>{e.preventDefault();const nome=$('#nuNome').value.trim(),email=$('#nuEmail').value.trim().toLowerCase(),papel=$('#nuPapel').value;
+    if(!PAPEIS_NOVO().some(p=>p[0]===papel))return;const b=$('#nuOk');b.disabled=true;$('#nuMsg').textContent='';
+    try{await criarUsuario(nome,email,papel);closeSheet();toast(`Acesso criado. ${nome||email} vai receber o e-mail para criar a senha.`)}
+    catch(err){b.disabled=false;const c=err&&err.code||'';console.warn(err);
+      $('#nuMsg').textContent=c==='auth/email-already-in-use'?'Este e-mail já tem conta. Peça para a pessoa entrar no sistema com ele: ela aparece aqui em "Pedidos de acesso", e você define o perfil.':c==='auth/invalid-email'?'E-mail inválido.':c==='auth/operation-not-allowed'?'O login por e-mail e senha está desligado no Firebase (Authentication › Método de login).':c==='auth/too-many-requests'?'Muitas tentativas. Espere alguns minutos e tente de novo.':c==='permission-denied'?'Seu perfil não pode criar este tipo de acesso.':'Não foi possível criar o acesso. Verifique a internet e tente de novo.'}}}
+async function criarUsuario(nome,email,papel){
+  const senha=Array.from(crypto.getRandomValues(new Uint8Array(24)),x=>'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#'[x%59]).join('');
+  const app2=initializeApp(firebaseConfig,'novo-usuario-'+Date.now());const a2=getAuth(app2);
+  const cred=await createUserWithEmailAndPassword(a2,email,senha);const uidN=cred.user.uid;
+  try{await signOut(a2)}catch(e){}
+  await setDoc(doc(FS,'equipe',uidN),{papel,apelido:nome,email,ativo:true,desde:today(),criadoPor:ME||'',atualizadoEm:nowIso(),atualizadoPor:ME||''});
+  registrar('equipe',uidN,null,{papel,apelido:nome,email});
+  try{AUTH.languageCode='pt-BR'}catch(e){}
+  await sendPasswordResetEmail(AUTH,email);
+}
 function aprovar(uidp){const e=S.equipe.get(uidp)||{};const p=S.pedidos.get(uidp)||{};const email=e.email||p.email||'';
   sheet('Perfil de acesso',`<form class="form" id="fEq"><p class="small muted" style="margin:0">Conta: <b>${esc(email)}</b></p>
    <label class="fld">Nome para exibir<input id="qNome" value="${esc(e.apelido||p.nome||'')}"></label>
@@ -2383,6 +2409,7 @@ const ACT={
  servSug:async()=>{await servicosSugeridos();const f=$('#fLk')||$('#fAg');if(f){const sel=f.querySelector('#lkServ,#aServ');if(sel){const v=sel.value;sel.innerHTML=(sel.id==='lkServ'?optServCat():optServ(''))+(sel.id==='lkServ'?'<option value="__outro">Outro: digitar o nome</option>':'');sel.value=v==='__outro'?'':v;sel.dispatchEvent(new Event('change'))}const al=f.querySelector('.alert.warn');if(al&&/Nenhum serviço/.test(al.textContent))al.remove()}},
  folgaRem:t=>{const i=+t.dataset.i;const f=[...(pub().folgas||[])];f.splice(i,1);save('publico','config',{...pub(),folgas:f});toast('Data removida')},
  ajTab:t=>{UI.ajTab=t.dataset.t;render()},
+ novoUsuario:()=>pode('equipe')&&formNovoUsuario(),
  proPagar:()=>pode('finEdit')&&confirmar('Registrar agora o pagamento do pró-labore deste mês?',proPagar),relAno:()=>abrirRelatorioAno(),
  jurTab:t=>{UI.jurTab=t.dataset.t;render()},novoJur:t=>pode('juridico')&&formJur(null,t.dataset.t),editJur:t=>pode('juridico')&&formJur(t.dataset.id),delJur:t=>confirmar('Excluir este item do Jurídico?',async()=>{await del('juridico',t.dataset.id);closeSheet()}),jurSug:()=>pode('juridico')&&jurSugeridos(),verPolVer:t=>verPolVer(t.dataset.id),regMais:()=>{UI.regLim=(UI.regLim||40)+60;render()},
  relContador:()=>abrirRelatorioContador(),avTodas:()=>{UI.avTodas=!UI.avTodas;render()},reatTodos:()=>{UI.reatTodos=!UI.reatTodos;render()},
