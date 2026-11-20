@@ -90,7 +90,7 @@ for (const site of SITES) for (const [nome, viewport] of TAMANHOS) {
 // administrativa (finanças, contratos e ajustes), sem agenda, clientes, fichas de saúde, estoque e catálogo.
 const ESPERADO = {
   proprietaria: { menuTem: ['inicio', 'agenda', 'clientes', 'financeiro', 'estoque', 'juridico', 'ajustes'], menuSem: [], fin: ['caixa', 'sinais', 'serv'] },
-  diretor: { menuTem: ['financeiro', 'contratos', 'juridico', 'ajustes'], menuSem: ['inicio', 'agenda', 'clientes', 'estoque', 'catalogo'], fin: ['visao', 'caixa', 'lanc', 'contas', 'sinais', 'mei', 'rel', 'serv'] }
+  diretor: { menuTem: ['financeiro', 'contratos', 'juridico', 'ajustes'], menuSem: ['inicio', 'agenda', 'clientes', 'estoque', 'catalogo'], fin: ['visao', 'caixa', 'lanc', 'contas', 'plan', 'sinais', 'mei', 'rel', 'serv'] }
 };
 for (const [perfil, esp] of Object.entries(ESPERADO)) for (const [nome, viewport] of TAMANHOS) {
   test(`Stéfany · ver como ${perfil} · ${nome}`, async t => {
@@ -143,6 +143,22 @@ test('registro de alterações mostra quem mudou o quê', async () => {
     await pg.evaluate(() => document.querySelector('#navSide [data-v="juridico"]').click());
     await pg.evaluate(() => document.querySelector('#view [data-act="jurTab"][data-t="registro"]').click());
     await pg.waitForFunction(() => /Dados do negócio.*Vitória - ES/.test(document.querySelector('#view').innerText), null, { timeout: 5000 });
+    assert.deepEqual(problemas, []);
+  } finally { await ctx.close(); }
+});
+
+// Planejamento: pró-labore, orçamento, previsão de 90 dias e relatório do ano abrem sem erro.
+test('planejamento financeiro e relatório do ano', async () => {
+  const { ctx, pg, problemas } = await abrir({ width: 390, height: 844 });
+  try {
+    await pg.goto(srv.url + '/?demo&perfil=diretor');
+    await pg.waitForSelector('#navSide [data-act="go"]', { state: 'attached', timeout: 15000 });
+    await pg.evaluate(() => document.querySelector('#navSide [data-v="financeiro"]').click());
+    await pg.evaluate(() => document.querySelector('#view [data-act="finTab"][data-t="plan"]').click());
+    await pg.waitForFunction(() => /Pró-labore/.test(document.querySelector('#view').innerText) && /Previsão de caixa/.test(document.querySelector('#view').innerText), null, { timeout: 5000 });
+    await semRolagemLateral(pg, 'Planejamento');
+    await pg.evaluate(() => document.querySelector('#view [data-act="relAno"]').click());
+    await pg.waitForFunction(() => /Relatório anual/.test(document.body.innerText) && /DASN-SIMEI/.test(document.body.innerText), null, { timeout: 5000 });
     assert.deepEqual(problemas, []);
   } finally { await ctx.close(); }
 });
