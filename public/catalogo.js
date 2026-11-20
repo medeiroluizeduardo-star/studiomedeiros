@@ -1,5 +1,5 @@
 import { doc, getDoc, getDocs, collection, query, where } from './fb.js';
-import { FS, $, $$, esc, BRL, ic, braidMark, marca, waLink, estado, horariosPara, dataLonga, parse } from './publico.js';
+import { FS, $, $$, esc, BRL, ic, braidMark, marca, waLink, estado, horariosPara, dataLonga, parse, NEGOCIO } from './publico.js';
 
 const main = $('#pub');
 const fotos = new Map();
@@ -34,7 +34,7 @@ function render() {
         ${antesDepois(x)}
         <div class="acoes-item"><button class="btn primary" data-quero="${x.id}">${ic('chat')}${esc(x.botao || 'Quero este modelo')}</button>${durDe(x) ? `<button class="btn soft" data-horarios="${x.id}">${ic('clock')}Horários livres</button>` : ''}</div></div></article>`).join('')}</div>`
       : `<div class="card empty">Nenhum modelo publicado ainda.</div>`}
-  <p class="pub-foot">${esc(vitrine.nome || 'Stéfany Medeiros Trancista')}${vitrine.instagram ? ` · Instagram ${esc(vitrine.instagram)}` : ''}${vitrine.municipio ? ` · ${esc(vitrine.municipio)}` : ''}</p>`;
+  <p class="pub-foot">${esc(vitrine.nome || NEGOCIO.nome)}${vitrine.instagram ? ` · Instagram ${esc(vitrine.instagram)}` : ''}${vitrine.municipio ? ` · ${esc(vitrine.municipio)}` : ''}</p>`;
   $$('.pub-item').forEach(el => obs ? obs.observe(el) : carregaFotosDo(el));
   $$('.pub-item .fotos').forEach(f => f.addEventListener('scroll', () => {
     const k = Math.round(f.scrollLeft / f.clientWidth); $$('.pontos i', f.parentElement).forEach((p, j) => p.classList.toggle('on', j === k));

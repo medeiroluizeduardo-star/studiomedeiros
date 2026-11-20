@@ -1,21 +1,32 @@
 // Passa por todas as telas do sistema no modo demonstração, no computador (1366) e no celular (390).
 // Confere: erro de JavaScript, arquivo que não abre (404), tela em branco e rolagem para o lado.
 // As abas vêm do próprio menu do sistema: aba nova entra no teste sozinha.
+// Roda no site da Stéfany (public/) e no site montado de cada outro estúdio (negocios/<estudio>).
 // Para rodar no computador: cd testes && npm install && npx playwright install chromium && npm run telas
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { iniciar } from './servidor.mjs';
+import { montar } from '../integracao/montar.mjs';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 // require (e não import) para achar o Playwright também pelo NODE_PATH, como na CI.
 const { chromium } = createRequire(import.meta.url)('playwright');
 
-let srv, nav;
-before(async () => { srv = await iniciar(); nav = await chromium.launch(); });
-after(async () => { await nav?.close(); await srv?.fechar(); });
+let srv, nav, tmp;
+// Cada site: nome no teste, primeira linha da marca esperada no topo e o servidor que o serve.
+const SITES = [{ nome: 'Stéfany', marca: 'Stéfany' }, { nome: 'Raquel', marca: 'Raquel Zaban', estudio: 'raquel' }];
+before(async () => {
+  tmp = await mkdtemp(join(tmpdir(), 'sites-'));
+  for (const s of SITES) s.srv = s.estudio ? await iniciar(0, (await montar(s.estudio, join(tmp, s.estudio))).saida) : await iniciar();
+  srv = SITES[0].srv; nav = await chromium.launch();
+});
+after(async () => { await nav?.close(); for (const s of SITES) await s.srv?.fechar(); if (tmp) await rm(tmp, { recursive: true, force: true }); });
 
 const TAMANHOS = [['computador', { width: 1366, height: 860 }], ['celular', { width: 390, height: 844 }]];
 
-async function abrir(viewport) {
+async function abrir(viewport, srv = SITES[0].srv) {
   const ctx = await nav.newContext({ viewport, serviceWorkers: 'block', locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' });
   const pg = await ctx.newPage();
   const problemas = [];
@@ -31,15 +42,17 @@ async function semRolagemLateral(pg, onde) {
   assert.ok(sw <= w + 1, `${onde}: a página rola para o lado (${sw}px numa tela de ${w}px)`);
 }
 
-for (const [nome, viewport] of TAMANHOS) {
-  test(`sistema no modo demonstração · ${nome}`, async t => {
-    const { ctx, pg, problemas } = await abrir(viewport);
+for (const site of SITES) for (const [nome, viewport] of TAMANHOS) {
+  test(`${site.nome} · sistema no modo demonstração · ${nome}`, async t => {
+    const srv = site.srv;
+    const { ctx, pg, problemas } = await abrir(viewport, srv);
     try {
       await pg.goto(srv.url + '/?demo');
       await pg.waitForSelector('.demo-faixa', { timeout: 15000 });
       await pg.waitForSelector('#view', { timeout: 15000 });
       // os dados de exemplo entram sozinhos na primeira abertura
       await pg.waitForFunction(() => /Ana Beatriz|Jéssica|Camila/.test(document.body.innerText), null, { timeout: 15000 });
+      assert.ok((await pg.$$eval('.brand-name', es => es.map(e => e.textContent))).includes(site.marca), `o nome ${site.marca} não aparece no topo`);
       const abas = await pg.$$eval('#navSide [data-act="go"]', bs => bs.map(b => [b.dataset.v, b.textContent.trim()]));
       assert.ok(abas.length >= 8, `menu com poucas abas (${abas.length})`);
       for (const [v, rotulo] of abas) {
@@ -58,8 +71,9 @@ for (const [nome, viewport] of TAMANHOS) {
     } finally { await ctx.close(); }
   });
 
-  test(`catálogo público no modo demonstração · ${nome}`, async () => {
-    const { ctx, pg, problemas } = await abrir(viewport);
+  test(`${site.nome} · catálogo público no modo demonstração · ${nome}`, async () => {
+    const srv = site.srv;
+    const { ctx, pg, problemas } = await abrir(viewport, srv);
     try {
       await pg.goto(srv.url + '/catalogo?demo');
       await pg.waitForSelector('main', { timeout: 15000 });

@@ -38,11 +38,27 @@ jobs:
           echo "URL=$URL" >> "$GITHUB_ENV"
           echo "::notice title=Prévia::$URL"
 
+      - name: Publicar a prévia do estúdio da Raquel
+        # Mesmo sistema, montado com negocios/raquel. Também abre só no modo demonstração.
+        continue-on-error: true
+        run: |
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
+          P=$(jq -r .project_id "$RUNNER_TEMP/sa.json")
+          node integracao/montar.mjs raquel site-raquel
+          jq '.hosting.public = "site-raquel" | del(.firestore)' firebase.json > firebase-raquel.json
+          npx --yes firebase-tools@13.29.1 hosting:channel:deploy "pr${{ github.event.pull_request.number }}-raquel" --config firebase-raquel.json --expires 7d --project "$P" --json > "$RUNNER_TEMP/previa-raquel.json"
+          URL2=$(jq -r '.result[]?.url // empty' "$RUNNER_TEMP/previa-raquel.json" | head -1)
+          [ -n "$URL2" ] || { cat "$RUNNER_TEMP/previa-raquel.json"; exit 1; }
+          echo "URL_RAQUEL=$URL2" >> "$GITHUB_ENV"
+          echo "::notice title=Prévia da Raquel::$URL2"
+
       - name: Avisar na proposta
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          corpo="**Prévia desta proposta:** $URL
+          corpo="**Prévia desta proposta:** $URL${URL_RAQUEL:+
+
+          **Prévia do estúdio da Raquel:** $URL_RAQUEL}
 
           Abre sempre no modo demonstração, com clientes fictícias. Vale 7 dias e é atualizada a cada mudança na proposta."
           ja=$(gh api "repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments" --jq '[.[] | select(.body | startswith("**Prévia desta proposta:**"))][0].id // empty')

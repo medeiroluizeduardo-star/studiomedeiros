@@ -1,4 +1,4 @@
-// Servidor simples da pasta public/, igual ao Firebase Hosting com cleanUrls (/catalogo abre catalogo.html).
+// Servidor simples da pasta public/ (ou de outra pasta, como o site montado de outro estúdio), igual ao Firebase Hosting com cleanUrls (/catalogo abre catalogo.html).
 import http from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { join, extname, normalize } from 'node:path';
@@ -9,12 +9,13 @@ const TIPOS = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; ch
 
 async function existe(p) { try { return (await stat(p)).isFile(); } catch { return false; } }
 
-export function iniciar(porta = 0) {
+export function iniciar(porta = 0, raiz = RAIZ) {
+  const RZ = raiz.endsWith('/') ? raiz : raiz + '/';
   const srv = http.createServer(async (req, res) => {
     let p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
     if (p.endsWith('/')) p += 'index.html';
-    let arq = normalize(join(RAIZ, p));
-    if (!arq.startsWith(RAIZ)) { res.writeHead(403).end(); return; }
+    let arq = normalize(join(RZ, p));
+    if (!arq.startsWith(RZ)) { res.writeHead(403).end(); return; }
     if (!(await existe(arq)) && !extname(arq) && await existe(arq + '.html')) arq += '.html';
     if (!(await existe(arq))) { res.writeHead(404, { 'content-type': 'text/plain' }).end('404'); return; }
     res.writeHead(200, { 'content-type': TIPOS[extname(arq)] || 'application/octet-stream', 'cache-control': 'no-cache' });

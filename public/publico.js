@@ -1,6 +1,8 @@
 // Base compartilhada das páginas abertas às clientes (catálogo, contrato e espaço da cliente).
 import { initializeApp, getFirestore } from './fb.js';
 import { firebaseConfig } from './firebase-config.js';
+import { NEGOCIO } from './negocio.js';
+export { NEGOCIO };
 
 export const FS = getFirestore(initializeApp(firebaseConfig));
 export const $ = (s, el = document) => el.querySelector(s);
@@ -38,7 +40,7 @@ export function braidMark(size = 34) {
   return `<svg width="${size * .7}" height="${size}" viewBox="0 0 28 40" aria-hidden="true">${paths}</svg>`;
 }
 export function marca() {
-  return `<header class="pub-top"><img class="marca" src="/img/marca.webp" width="46" height="46" alt="" decoding="async"><div><div class="brand-name">Stéfany</div><div class="brand-sub">Medeiros · Trancista</div></div></header>`;
+  return `<header class="pub-top"><img class="marca" src="/img/marca.webp" width="46" height="46" alt="" decoding="async"><div><div class="brand-name">${esc(NEGOCIO.marca[0])}</div><div class="brand-sub">${esc(NEGOCIO.marca[1])}</div></div></header>`;
 }
 export function toast(m, erro) { const t = document.createElement('div'); t.className = 'toast' + (erro ? ' erro' : ''); t.innerHTML = ic(erro ? 'alert' : 'check'); const sp = document.createElement('span'); sp.textContent = m; t.appendChild(sp); document.body.appendChild(t); setTimeout(() => t.remove(), erro ? 4200 : 2900); }
 export const NIVEL_COR = { perola: 'var(--lv-perola)', ouro: 'var(--lv-ouro)', prata: 'var(--lv-prata)', bronze: 'var(--lv-bronze)', nova: 'var(--lv-nova)' };
