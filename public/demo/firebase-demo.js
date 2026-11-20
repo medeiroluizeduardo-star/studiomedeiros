@@ -33,15 +33,51 @@ function inicial() {
 let BANCO;
 try { BANCO = deTexto(localStorage.getItem(CHAVE) || 'null'); } catch (e) { BANCO = null; }
 if (!BANCO || typeof BANCO !== 'object') BANCO = inicial();
+
+/* ---------- ver como outro perfil ----------
+   ?demo&perfil=diretor (ou parceira, recepcao, contador) mostra o sistema como essa pessoa da equipe, com os mesmos
+   dados de exemplo. ?demo&perfil=proprietaria mostra a proprietária com um Diretor ativo na equipe (finanças reduzidas).
+   ?demo&perfil=dona volta ao normal. Só muda a memória: o que fica guardado continua como antes. */
+export const PERFIS_DEMO = ['proprietaria', 'diretor', 'parceira', 'recepcao', 'contador'];
+export const PERFIL_DEMO = (() => {
+  try {
+    const q = new URLSearchParams(location.search).get('perfil');
+    if (q !== null) { if (PERFIS_DEMO.includes(q)) sessionStorage.setItem('smt-demo-perfil', q); else sessionStorage.removeItem('smt-demo-perfil'); }
+    const p = sessionStorage.getItem('smt-demo-perfil') || '';
+    return PERFIS_DEMO.includes(p) ? p : '';
+  } catch (e) { return ''; }
+})();
+const P_ACESSO = 'sistema/acesso', P_EU = 'equipe/' + USUARIO.uid;
+let GUARDADO = {};
+function aplicarPerfil() {
+  if (!PERFIL_DEMO) return;
+  if (PERFIL_DEMO === 'proprietaria') {
+    const k = 'equipe/demo-diretor'; GUARDADO = { [k]: BANCO[k] };
+    BANCO[k] = { papel: 'diretor', ativo: true, apelido: 'Diretor (exemplo)', email: 'diretor@exemplo.com', desde: new Date().toISOString().slice(0, 10) };
+    return;
+  }
+  GUARDADO = { [P_ACESSO]: BANCO[P_ACESSO], [P_EU]: BANCO[P_EU] };
+  BANCO[P_ACESSO] = { ...(BANCO[P_ACESSO] || {}), donas: ['demo-dona'], donasInfo: { 'demo-dona': { email: 'dona@exemplo.com', nome: 'Proprietária (exemplo)' } } };
+  BANCO[P_EU] = { papel: PERFIL_DEMO, ativo: true, apelido: 'Você (demonstração)', email: USUARIO.email, desde: new Date().toISOString().slice(0, 10) };
+}
+aplicarPerfil();
+function paraGuardar() {
+  if (!PERFIL_DEMO) return BANCO;
+  const o = { ...BANCO };
+  for (const [k, v] of Object.entries(GUARDADO)) { if (v === undefined) delete o[k]; else o[k] = v; }
+  return o;
+}
+
 let salvarT;
 function gravarLocal() {
   clearTimeout(salvarT);
-  salvarT = setTimeout(() => { try { localStorage.setItem(CHAVE, paraTexto(BANCO)); } catch (e) { /* cheio ou bloqueado: segue só na memória */ } }, 150);
+  salvarT = setTimeout(() => { try { localStorage.setItem(CHAVE, paraTexto(paraGuardar())); } catch (e) { /* cheio ou bloqueado: segue só na memória */ } }, 150);
 }
 /** Apaga os dados de demonstração e começa de novo. */
 export function recomecarDemo() {
   try { localStorage.removeItem(CHAVE); sessionStorage.removeItem(SAIU); } catch (e) { }
   BANCO = inicial();
+  aplicarPerfil();
 }
 
 /* ---------- referências ---------- */

@@ -86,6 +86,48 @@ for (const site of SITES) for (const [nome, viewport] of TAMANHOS) {
   });
 }
 
+// Perfis separados: com um Diretor ativo, a proprietária fica só com o dia a dia nas finanças, e o Diretor vê a parte
+// administrativa (finanças, contratos e ajustes), sem agenda, clientes, fichas de saúde, estoque e catálogo.
+const ESPERADO = {
+  proprietaria: { menuTem: ['inicio', 'agenda', 'clientes', 'financeiro', 'estoque', 'ajustes'], menuSem: [], fin: ['caixa', 'sinais', 'serv'] },
+  diretor: { menuTem: ['financeiro', 'contratos', 'ajustes'], menuSem: ['inicio', 'agenda', 'clientes', 'estoque', 'catalogo'], fin: ['visao', 'caixa', 'lanc', 'contas', 'sinais', 'mei', 'rel', 'serv'] }
+};
+for (const [perfil, esp] of Object.entries(ESPERADO)) for (const [nome, viewport] of TAMANHOS) {
+  test(`Stéfany · ver como ${perfil} · ${nome}`, async t => {
+    const { ctx, pg, problemas } = await abrir(viewport);
+    try {
+      await pg.goto(srv.url + '/?demo');
+      await pg.waitForFunction(() => /Ana Beatriz|Jéssica|Camila/.test(document.body.innerText), null, { timeout: 15000 });
+      await pg.waitForTimeout(400);
+      await pg.goto(srv.url + '/?demo&perfil=' + perfil);
+      await pg.waitForSelector('#navSide [data-act="go"]', { state: 'attached', timeout: 15000 });
+      await pg.waitForFunction(() => document.querySelector('#view') && document.querySelector('#view').innerText.trim().length > 20, null, { timeout: 15000 });
+      const abas = await pg.$$eval('#navSide [data-act="go"]', bs => bs.map(b => b.dataset.v));
+      for (const v of esp.menuTem) assert.ok(abas.includes(v), `${perfil}: falta a aba ${v} (tem ${abas.join(', ')})`);
+      for (const v of esp.menuSem) assert.ok(!abas.includes(v), `${perfil}: não devia ver a aba ${v}`);
+      for (const v of abas) {
+        await t.test(v, async () => {
+          const antes = problemas.length;
+          await pg.evaluate(v => document.querySelector(`#navSide [data-act="go"][data-v="${v}"]`).click(), v);
+          await pg.waitForFunction(v => document.querySelector(`#navSide [data-v="${v}"][aria-current="page"]`), v, { timeout: 5000 });
+          await pg.waitForTimeout(200);
+          // passa também pelas abas internas (Finanças, Contratos, Ajustes)
+          const internas = await pg.$$eval('#view [data-act$="Tab"][data-t]', bs => bs.map(b => [b.dataset.act, b.dataset.t]));
+          if (v === 'financeiro') assert.deepEqual(internas.filter(x => x[0] === 'finTab').map(x => x[1]).filter(k => k !== 'repasse'), esp.fin, `${perfil}: abas de Finanças erradas`);
+          for (const [act, k] of internas) {
+            await pg.evaluate(([act, k]) => { const b = document.querySelector(`#view [data-act="${act}"][data-t="${k}"]`); if (b) b.click(); }, [act, k]);
+            await pg.waitForTimeout(150);
+            assert.ok((await pg.$eval('#view', el => el.innerText.trim())).length > 20, `${v} › ${k}: tela em branco`);
+            await semRolagemLateral(pg, `${v} › ${k}`);
+          }
+          assert.deepEqual(problemas.slice(antes), [], `${v}: ${problemas.slice(antes).join(' | ')}`);
+        });
+      }
+      assert.deepEqual(problemas, []);
+    } finally { await ctx.close(); }
+  });
+}
+
 // A tela se redesenha quando chega novidade de outro aparelho. O que estava sendo digitado (e ainda não foi salvo)
 // não pode sumir, e uma caixa aberta não pode fechar sozinha.
 test('texto digitado não some quando chega novidade', async () => {

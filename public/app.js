@@ -84,7 +84,7 @@ const NIVEIS={
  bronze:{n:'Bronze',c:'var(--lv-bronze)',min:0,b:'Cupom de retorno válido por 60 dias para trazer de volta.'},
  nova:{n:'Nova',c:'var(--lv-nova)',min:-1,b:'Boas-vindas: 5% na segunda visita.'}
 };
-const PAPEIS={owner:'Proprietária',parceira:NEGOCIO.parceira,recepcao:'Recepção',contador:'Contador(a)'};
+const PAPEIS={owner:'Proprietária',diretor:'Diretor',parceira:NEGOCIO.parceira,recepcao:'Recepção',contador:'Contador(a)'};
 const DEF_PUB={nome:NEGOCIO.nome,responsavel:NEGOCIO.responsavel,cnpj:'',municipio:NEGOCIO.municipio,endereco:'',whatsapp:'',abre:'08:00',fecha:'20:00',dias:[1,2,3,4,5,6],intervaloIni:'',intervaloFim:'',folgas:[],instagram:'',descAniv:10,started:false};
 const DEF_PRIV={das:86.05,limite:81000,inicioMei:'',meta:4000,dasPagos:{},taxaDebito:1.99,taxaCredito:4.98,taxaParcelado:9.9};
 const ANAM_Q=[
@@ -105,7 +105,9 @@ const COLS_POR_PAPEL={
   owner:ALL_COLS,
   parceira:['clientes','servicos','agenda','estoque','pacotes','vales','espera','anamneses','aceites','ideias','publico','catalogo','contratosLink','solicitacoes','cadastros','anamnesePortal','avaliacoes'],
   recepcao:['clientes','servicos','agenda','pacotes','vales','espera','aceites','ideias','publico','catalogo','contratosLink','solicitacoes','cadastros','avaliacoes'],
-  contador:['servicos','agenda','pacotes','vales','publico','lancamentos','contas','privado']
+  contador:['servicos','agenda','pacotes','vales','publico','lancamentos','contas','privado'],
+  // Diretor: parte administrativa (finanças com edição, contratos, equipe). Sem fichas de saúde, estoque e catálogo.
+  diretor:['clientes','servicos','agenda','pacotes','vales','aceites','publico','equipe','pedidos','lancamentos','contas','privado','contratosLink','erros']
 };
 const S={};ALL_COLS.forEach(c=>S[c]=new Map());
 let MODE='db',ROLE='carregando',ME=null,EMAIL='',APP=null,AUTH=null,FS=null,ACESSO=null;const ctl={acesso:null,equipe:null,avisos:null,avEstado:null};let MEUS_AVISOS=null,AV_ESTADO=null;
@@ -122,12 +124,18 @@ let DATAV=0;const MEMO=new Map();
 const memo=(k,fn)=>{const v=DATAV+'|'+today();const m=MEMO.get(k);if(m&&m.v===v)return m.r;const r=fn();MEMO.set(k,{v,r});return r};
 const arr=c=>[...S[c].values()];
 const isOwner=()=>ROLE==='owner';
-function pode(f){const own=isOwner(),r=ROLE;
+/* Com um Diretor ativo na equipe, a parte administrativa fica com ele: a proprietária deixa de ver as finanças completas
+   e fica com o dia a dia (caixa do dia, sinais e serviços e preços, que ela define). Sem Diretor, tudo segue como antes. */
+const temDiretor=()=>arr('equipe').some(e=>e.papel==='diretor'&&e.ativo!==false);
+function pode(f){const own=isOwner(),r=ROLE,dir=r==='diretor';
   switch(f){
-    case 'fin':return own||r==='contador';
-    case 'finEdit':case 'custos':case 'equipe':case 'politicaEdit':case 'precos':case 'seed':return own;
+    case 'fin':return (own&&!temDiretor())||r==='contador'||dir;
+    case 'caixa':return own||dir;
+    case 'finEdit':case 'equipe':case 'politicaEdit':return own||dir;
+    case 'custos':case 'precos':case 'seed':return own;
     case 'anamnese':case 'estoque':return own||r==='parceira';
-    case 'contratos':case 'base':case 'portal':return own||r==='parceira'||r==='recepcao';
+    case 'contratos':return own||r==='parceira'||r==='recepcao'||dir;
+    case 'base':case 'portal':return own||r==='parceira'||r==='recepcao';
     case 'catalogoEdit':return own;
     default:return own;
   }}
@@ -182,7 +190,7 @@ function depSinc(){if(!FS||!pode('catalogoEdit'))return;clearTimeout(DEP_T);DEP_
 function pararDados(){OUV.forEach(u=>{try{u()}catch(e){}});OUV.clear();loaded.clear();HIST=false;histProm=null;ALL_COLS.forEach(c=>S[c]=new Map());NEED=new Set()}
 function pararTudo(){pararDados();MEUS_AVISOS=null;AV_ESTADO=null;['acesso','equipe','avisos','avEstado'].forEach(k=>{if(ctl[k]){try{ctl[k]()}catch(e){}ctl[k]=null}});ACESSO=null}
 function consulta(c){let q=collection(FS,c);
-  if(c==='aceites'&&ROLE==='recepcao')q=query(q,where('tipo','in',['servico','politica']));
+  if(c==='aceites'&&(ROLE==='recepcao'||ROLE==='diretor'))q=query(q,where('tipo','in',['servico','politica']));
   if(c==='contratosLink')q=query(q,where('criadoEm','>=',addDays(today(),-120)));
   if(c==='cadastros')q=query(q,where('criadoEm','>=',addDays(today(),-90)));
   if(JANELA.has(c)&&!HIST)q=query(q,where('data','>=',corte()));
@@ -223,7 +231,7 @@ function vigiarEquipe(user){
 /* ================= avisos no celular =================
    Cada pessoa liga no próprio aparelho (Ajustes). O token do aparelho fica em avisos/{uid}; a rotina "Avisos no celular"
    do GitHub decide e envia (integracao/admin/avisos.mjs). A chave Web Push (pública) fica em publico/avisos. */
-const AV_TIPOS={novidades:['Novidades das clientes pelo link',['owner','parceira','recepcao']],concluir:['Atendimentos de hoje sem concluir (20h)',['owner','parceira','recepcao']],amanha:['Agenda de amanhã (19h)',['owner','parceira','recepcao']],contas:['Contas e DAS a pagar (8h)',['owner','contador']],semana:['Resumo da semana (segunda, 8h)',['owner']]};
+const AV_TIPOS={novidades:['Novidades das clientes pelo link',['owner','parceira','recepcao']],concluir:['Atendimentos de hoje sem concluir (20h)',['owner','parceira','recepcao']],amanha:['Agenda de amanhã (19h)',['owner','parceira','recepcao']],contas:['Contas e DAS a pagar (8h)',['owner','contador','diretor']],semana:['Resumo da semana (segunda, 8h)',['owner','diretor']]};
 const AV_LS='smt-aviso-token';
 function vigiarAvisos(){['avisos','avEstado'].forEach(k=>{if(ctl[k]){try{ctl[k]()}catch(e){}ctl[k]=null}});MEUS_AVISOS=null;AV_ESTADO=null;
   if(!FS||!ME||!PAPEIS[ROLE])return;
@@ -604,7 +612,7 @@ async function hashTexto(t){try{const b=await crypto.subtle.digest('SHA-256',new
 
 /* ================= interface: casca ================= */
 const UI={view:'inicio',caixaDia:today(),agDia:today(),calMes:ym(today()),calDia:today(),finTab:'visao',finMes:ym(today()),lanTipo:'todos',cliBusca:'',cliLim:60,cliNivel:'todos',cliOrd:'score',ctTab:'links',agVis:'dia',reatTodos:false,ajTab:'horarios',cliTab:'lista',ctTipo:'servico',ctCli:'',ctAg:'',acFiltro:'todos',pkTab:'pacotes',relPer:6,lastView:null};
-const VIEWS=[['inicio','Início','home',()=>pode('base')],['agenda','Agenda','cal',()=>pode('base')],['clientes','Clientes','users',()=>pode('base')],['catalogo','Catálogo','image',()=>pode('base')],['financeiro','Finanças','wallet',()=>pode('fin')],['contratos','Contratos','file',()=>pode('contratos')],['pacotes','Pacotes e vales','ticket',()=>pode('base')],['estoque','Estoque','box',()=>pode('estoque')],['calendario','Datas e ideias','spark',()=>pode('base')],['ajustes','Ajustes','gear',()=>true]];
+const VIEWS=[['inicio','Início','home',()=>pode('base')],['agenda','Agenda','cal',()=>pode('base')],['clientes','Clientes','users',()=>pode('base')],['catalogo','Catálogo','image',()=>pode('base')],['financeiro','Finanças','wallet',()=>pode('fin')||pode('caixa')],['contratos','Contratos','file',()=>pode('contratos')],['pacotes','Pacotes e vales','ticket',()=>pode('base')],['estoque','Estoque','box',()=>pode('estoque')],['calendario','Datas e ideias','spark',()=>pode('base')],['ajustes','Ajustes','gear',()=>true]];
 const visiveis=()=>VIEWS.filter(v=>!NEGOCIO.abasDesligadas.includes(v[0])&&v[3]());
 let rq=0;function schedule(){if(rq)return;rq=requestAnimationFrame(()=>{rq=0;render()})}
 function go(v){if(!visiveis().some(x=>x[0]===v))v=visiveis()[0][0];UI.view=v;try{history.replaceState(null,'','#'+v)}catch(e){}window.scrollTo({top:0,behavior:'smooth'});closeSheet(true);render()}
@@ -627,7 +635,7 @@ function render(){VEZ++;
   main.dataset.gate='';
   if(ROLE==='carregando'||[...NEED].some(c=>!loaded.has(c))){if(!$('#loadMark')){main.innerHTML=`<div class="sk-wrap" aria-busy="true" aria-label="Carregando"><div id="loadMark" class="row" style="gap:12px">${marcaImg(40)}<div class="sk" style="width:180px;height:28px"></div></div><div class="sk" style="height:96px"></div><div class="kpis">${'<div class="sk" style="height:84px"></div>'.repeat(4)}</div><div class="grid g2"><div class="sk" style="height:220px"></div><div class="sk" style="height:220px"></div></div></div>`}return}
   if(!visiveis().some(v=>v[0]===UI.view))UI.view=visiveis()[0][0];
-  if(DEMO&&!DEMO_SEMEADO&&isOwner()&&!pub().started&&S.clientes.size===0){DEMO_SEMEADO=true;setTimeout(()=>seed(true),0)}
+  if(DEMO&&!DEMO_SEMEADO&&(isOwner()||ROLE==='diretor')&&!pub().started&&S.clientes.size===0){DEMO_SEMEADO=true;setTimeout(()=>seed(true),0)}
   histPelaTela();
   const top=shell();
   const fn={inicio:vInicio,agenda:vAgenda,clientes:vClientes,catalogo:vCatalogo,financeiro:vFinanceiro,contratos:vContratos,pacotes:vPacotes,estoque:vEstoque,calendario:vCalendario,ajustes:vAjustes}[UI.view]||vInicio;
@@ -657,7 +665,8 @@ function devolverTela({campos,caixas}){
 /* modo demonstração (?demo e prévias): faixa no topo para ninguém confundir com o sistema real */
 let DEMO_SEMEADO=false;
 const DEMO_PREVIA=/--[a-z0-9-]+\.(web\.app|firebaseapp\.com)$/i.test(location.hostname);
-function demoFaixa(){if(!DEMO)return '';return `<div class="demo-faixa" role="note">${ic('info')}<span class="grow"><b>Modo demonstração.</b> Clientes e valores fictícios, guardados só neste aparelho. Nada vai para o sistema real.${ROLE==='login'?' Entre com qualquer e-mail e senha.':''}</span><button class="btn ghost sm" data-act="demoRecomecar">Recomeçar</button>${DEMO_PREVIA?'':'<a class="btn ghost sm" href="/?demo=0">Sair</a>'}</div>`}
+function demoFaixa(){if(!DEMO)return '';return `<div class="demo-faixa" role="note">${ic('info')}<span class="grow"><b>Modo demonstração.</b> Clientes e valores fictícios, guardados só neste aparelho. Nada vai para o sistema real.${ROLE==='login'?' Entre com qualquer e-mail e senha.':''}</span>${ROLE!=='login'?`<label class="demo-perfil small">Ver como <select id="demoPerfil" aria-label="Ver a demonstração como">${[['dona','Proprietária (sem Diretor)'],['proprietaria','Proprietária com Diretor'],['diretor','Diretor'],['parceira',PAPEIS.parceira],['recepcao','Recepção'],['contador','Contador(a)']].map(([k,n])=>`<option value="${k}" ${(DEMO_PERFIL||'dona')===k?'selected':''}>${esc(n)}</option>`).join('')}</select></label>`:''}<button class="btn ghost sm" data-act="demoRecomecar">Recomeçar</button>${DEMO_PREVIA?'':'<a class="btn ghost sm" href="/?demo=0">Sair</a>'}</div>`}
+const DEMO_PERFIL=(()=>{try{return DEMO?sessionStorage.getItem('smt-demo-perfil')||'':''}catch(e){return ''}})();
 function afterRender(){const c=$('#sigPad');if(c&&!c.dataset.on)sigInit(c);carregaFotos()}
 function gate(){
   const card=(t,body)=>`<div class="gate"><div class="stack" style="align-items:stretch;max-width:420px;width:100%"><img class="gate-logo" src="/img/logo.webp" width="420" height="280" alt="Stéfany Medeiros"><div class="card stack" style="align-items:center;width:100%"><h2 class="page-title" style="font-size:1.6rem">${t}</h2>${body}</div></div></div>`;
@@ -676,7 +685,7 @@ const bars=(rows,max,color)=>rows.map(([k,v,txt])=>`<div style="margin-bottom:10
 
 /* ================= INÍCIO ================= */
 function vInicio(){
-  const pb=pub();const t=today();const h=new Date().getHours();const own=isOwner();
+  const pb=pub();const t=today();const h=new Date().getHours();const own=isOwner();const fin=own&&pode('fin');
   const saud=h<12?'Bom dia':h<18?'Boa tarde':'Boa noite';
   const nomeMe=own?primeiro(pb.responsavel)||'Stéfany':primeiro(nomePessoa(ME))||'';
   const vazio=own&&!pb.started&&S.clientes.size===0&&S.agenda.size===0;
@@ -688,14 +697,14 @@ function vInicio(){
   const est=pode('estoque')?arr('estoque').filter(baixo):[];
   let out=`<section class="hero"><div style="flex:1;min-width:220px"><div class="eyebrow">${esc(dataLonga(t))}</div><h1 class="hello">${saud}${nomeMe?`, <em>${esc(nomeMe)}</em>`:''}</h1>
     <p class="lede">${hoje.length?`${hoje.length} atendimento${hoje.length>1?'s':''} hoje.`:'Nenhum atendimento marcado para hoje.'}</p></div>`;
-  if(own){const c=priv();const mes=ym(t);const rec=soma(receitas(l=>ym(l.data)===mes));const pm=+c.meta?Math.min(1,rec/c.meta):0;const C=2*Math.PI*40;
+  if(fin){const c=priv();const mes=ym(t);const rec=soma(receitas(l=>ym(l.data)===mes));const pm=+c.meta?Math.min(1,rec/c.meta):0;const C=2*Math.PI*40;
     out+=`<svg class="ring" viewBox="0 0 96 96" role="img" aria-label="Meta do mês: ${pct(pm)}"><circle class="bg" cx="48" cy="48" r="40"/><circle class="fg" cx="48" cy="48" r="40" stroke-dasharray="${C}" stroke-dashoffset="${C*(1-pm)}"/><text x="48" y="54" text-anchor="middle">${Math.round(pm*100)}%</text></svg>`}
   out+=`</section>`;
   if(vazio)out+=`<section class="card"><h3>Bem-vinda ao seu sistema</h3><p class="muted small" style="margin-top:0">Comece com serviços e estoque sugeridos. Para ver tudo funcionando antes, carregue dados de exemplo: eles ficam marcados e podem ser apagados em Ajustes.</p>
     <div class="row"><button class="btn primary" data-act="seed" data-ex="1">${ic('spark')}Ver com dados de exemplo</button><button class="btn soft" data-act="seed" data-ex="0">Começar do zero</button></div></section>`;
   out+=`<section class="quick"><button data-act="novoAg">${ic('cal')}Agendar</button><button data-act="novaCli">${ic('users')}Nova cliente</button>${own?`<button data-act="novoLan">${ic('wallet')}Lançar valor</button>`:`<button data-act="novaEspera">${ic('list')}Lista de espera</button>`}</section>`;
   out+=agoraCard(t,own,est);
-  if(own){const c=priv();const mes=ym(t);const rec=soma(receitas(l=>ym(l.data)===mes));const des=soma(despesas(l=>ym(l.data)===mes));const ano=t.slice(0,4);const recAno=soma(receitas(l=>l.data.slice(0,4)===ano));const lim=limiteAno(ano);
+  if(fin){const c=priv();const mes=ym(t);const rec=soma(receitas(l=>ym(l.data)===mes));const des=soma(despesas(l=>ym(l.data)===mes));const ano=t.slice(0,4);const recAno=soma(receitas(l=>l.data.slice(0,4)===ano));const lim=limiteAno(ano);
     out+=`<section class="kpis"><div class="kpi"><div class="l">Receita em ${MESES[+mes.slice(5)-1]}</div><div class="v">${cnt(rec)}</div><div class="d">Meta ${BRL(c.meta)}</div></div>
     <div class="kpi"><div class="l">Lucro do mês</div><div class="v" style="color:${rec-des>=0?'var(--good)':'var(--bad)'}">${cnt(rec-des)}</div><div class="d">Despesas ${BRL(des)}</div></div>
     <div class="kpi"><div class="l">Limite MEI ${ano}</div><div class="v">${pct(recAno/lim)}</div><div class="bar thin" style="margin-top:6px"><span style="width:${Math.min(100,recAno/lim*100)}%;background:${recAno/lim>.9?'var(--bad)':recAno/lim>.75?'var(--warn)':'var(--accent)'}"></span></div></div>
@@ -730,10 +739,10 @@ function agoraItens(t,own,est){const it=[];const agora=new Date();const minAgora
   const amanha=arr('agenda').filter(a=>a.data===addDays(t,1)&&a.status==='agendado').length;
   if(amanha)add(45,'info','cal',`<b>${amanha} horário${amanha>1?'s':''} de amanhã</b> sem confirmação.`,bt('rolar','data-alvo="#confAmanha"','Confirmar','soft'));
   if(avisosPortal())add(50,'info','users','<b>Novidades das clientes</b> pelo link (contratos aceitos, cancelamentos, fichas, cadastros).',bt('rolar','data-alvo=".aviso-portal"','Ver','soft'));
-  if(own){const c=priv();const dasMes=ym(addDays(t.slice(0,8)+'01',-1));const diasDas=diffDays(t,t.slice(0,8)+'20');
-    if(!(c.dasPagos||{})[dasMes]&&(S.agenda.size||S.lancamentos.size)&&diasDas<=10)add(diasDas<0?15:diasDas<=3?35:60,diasDas<0?'bad':'warn','alert',`<b>DAS de ${MESES[+dasMes.slice(5)-1]}</b> ${diasDas<0?'venceu dia 20 e não está marcado como pago.':diasDas===0?'vence hoje.':`vence em ${diasDas} dia${diasDas>1?'s':''} (dia 20).`}`,bt('finTab','data-t="mei"','Ver obrigações','soft'));
+  if(own){const c=priv();const fin=pode('fin');const dasMes=ym(addDays(t.slice(0,8)+'01',-1));const diasDas=diffDays(t,t.slice(0,8)+'20');
+    if(fin&&!(c.dasPagos||{})[dasMes]&&(S.agenda.size||S.lancamentos.size)&&diasDas<=10)add(diasDas<0?15:diasDas<=3?35:60,diasDas<0?'bad':'warn','alert',`<b>DAS de ${MESES[+dasMes.slice(5)-1]}</b> ${diasDas<0?'venceu dia 20 e não está marcado como pago.':diasDas===0?'vence hoje.':`vence em ${diasDas} dia${diasDas>1?'s':''} (dia 20).`}`,bt('finTab','data-t="mei"','Ver obrigações','soft'));
     const venc=ocorrencias(addDays(t,7)).filter(o=>!o.paga&&o.venc<=addDays(t,7));const atras=venc.filter(o=>o.venc<t);
-    if(venc.length)add(atras.length?20:55,atras.length?'bad':'warn','clock',`<b>${venc.length} conta${venc.length>1?'s':''} a pagar</b>${atras.length?` (${atras.length} vencida${atras.length>1?'s':''})`:''}: ${venc.slice(0,3).map(o=>`${esc(o.conta.descricao)} (${dataCurta(o.venc)})`).join(', ')}.`,bt('finTab','data-t="contas"','Abrir contas','soft'));
+    if(fin&&venc.length)add(atras.length?20:55,atras.length?'bad':'warn','clock',`<b>${venc.length} conta${venc.length>1?'s':''} a pagar</b>${atras.length?` (${atras.length} vencida${atras.length>1?'s':''})`:''}: ${venc.slice(0,3).map(o=>`${esc(o.conta.descricao)} (${dataCurta(o.venc)})`).join(', ')}.`,bt('finTab','data-t="contas"','Abrir contas','soft'));
     const ped=arr('pedidos');if(ped.length)add(40,'info','lock',`<b>${ped.length} pedido${ped.length>1?'s':''} de acesso</b> aguardando você definir o perfil.`,bt('go','data-v="ajustes"','Ver equipe','soft'));
     if(pol().pend)add(80,'info','shield',`<b>Política da empresa:</b> ${pol().pend} itens dos contratos ainda não foram revisados.`,bt('ctTab','data-t="politica"','Revisar','soft'));}
   if(est.length)add(65,'warn','box',`<b>Estoque baixo:</b> ${est.slice(0,4).map(i=>`${esc(i.nome)} (${i.qtd} ${esc(i.unidade||'')})`).join(', ')}${est.length>4?'…':''}`,bt('go','data-v="estoque"','Ver estoque','soft'));
@@ -869,6 +878,7 @@ function reativarBloco(){if(!pode('base'))return '';const L=paraReativar();if(!L
    ${L.length>5?`<button class="btn sm ghost" data-act="reatTodos">${UI.reatTodos?'Mostrar menos':`Ver todas (${L.length})`}</button>`:''}</section>`}
 /* sinais */
 function inicioMs(a){const [h,m]=String(a.hora||'00:00').split(':').map(Number);const d=parse(a.data);d.setHours(h||0,m||0,0,0);return d.getTime()}
+const podeSinal=()=>pode('finEdit')&&pode('base'); // registrar sinal altera o atendimento na agenda
 function finSinais(){const P=pol();const pct=+P.campos.sinalPct||0;const prazoH=+P.campos.prazoCancel||48;const t=today();const m=UI.finMes;
   const sinalDe=a=>soma((a.pagamentos||[]).filter(p=>p.tipo==='sinal'));
   const fut=arr('agenda').filter(a=>a.data>=t&&a.data<=addDays(t,45)&&(a.status==='agendado'||a.status==='confirmado')&&!a.pacoteId).sort((a,b)=>(a.data+a.hora)<(b.data+b.hora)?-1:1);
@@ -879,13 +889,13 @@ function finSinais(){const P=pol();const pct=+P.campos.sinalPct||0;const prazoH=
     else if(a.canceladoEm){sit=inicioMs(a)-Date.parse(a.canceladoEm)>=prazoH*3600e3?'verificar':'retido'}else sit='verificar';return {a,sit,v:sinalDe(a)}});
   const retMes=perdidos.filter(x=>x.sit==='retido'&&ym(x.a.data)===m),verif=perdidos.filter(x=>x.sit==='verificar');
   const row=(a,extra='')=>{const cli=S.clientes.get(a.clienteId);return `<div class="item wrap"><span class="time">${dataCurta(a.data)}</span><div class="grow"><div class="t">${esc(nomeCli(a.clienteId))}</div><div class="s">${esc(a.hora)} · ${esc(nomeAg(a))} · serviço ${BRL(a.valor)} · sinal ${BRL(sinalDe(a))} de ${BRL(esp(a))}</div></div>${extra}</div>`};
-  const cobrar=a=>{const cli=S.clientes.get(a.clienteId);const falta=Math.max(0,esp(a)-sinalDe(a));const cod=pixCodigo(falta,'SINAL'+String(a.id||'').slice(0,18));const w=cli&&pode('finEdit')?waLink(cli.telefone,cod?msgPixSinal(a,cli,falta,cod):`Oi, ${primeiro(cli.nome)}! 💕 Para garantir seu horário de ${nomeAg(a)} ${dataLonga(a.data)} às ${a.hora}, falta o sinal de ${BRL(falta)}. Te mando o link de pagamento?`):null;
-    return `${w?`<a class="btn sm soft" href="${w}" target="_blank" rel="noopener">${ic('chat')}Cobrar</a>`:''}${pode('finEdit')?`<button class="btn sm ghost" data-act="editAg" data-id="${a.id}">Registrar</button>`:''}`};
+  const cobrar=a=>{const cli=S.clientes.get(a.clienteId);const falta=Math.max(0,esp(a)-sinalDe(a));const cod=pixCodigo(falta,'SINAL'+String(a.id||'').slice(0,18));const w=cli&&podeSinal()?waLink(cli.telefone,cod?msgPixSinal(a,cli,falta,cod):`Oi, ${primeiro(cli.nome)}! 💕 Para garantir seu horário de ${nomeAg(a)} ${dataLonga(a.data)} às ${a.hora}, falta o sinal de ${BRL(falta)}. Te mando o link de pagamento?`):null;
+    return `${w?`<a class="btn sm soft" href="${w}" target="_blank" rel="noopener">${ic('chat')}Cobrar</a>`:''}${podeSinal()?`<button class="btn sm ghost" data-act="editAg" data-id="${a.id}">Registrar</button>`:''}`};
   return `<section class="kpis"><div class="kpi"><div class="l">Sinais recebidos no mês</div><div class="v">${cnt(rec)}</div><div class="d">${esc(cap(mesNome(m)))}</div></div>
    <div class="kpi"><div class="l">Sem sinal (próx. 45 dias)</div><div class="v" style="color:${sem.length?'var(--warn)':'inherit'}">${sem.length}</div><div class="d">${BRL(soma(sem.map(a=>({valor:esp(a)}))))} a receber</div></div>
    <div class="kpi"><div class="l">Retidos no mês</div><div class="v">${cnt(soma(retMes.map(x=>({valor:x.v}))))}</div><div class="d">faltas e cancelamentos fora do prazo</div></div>
    <div class="kpi"><div class="l">Para verificar</div><div class="v" style="color:${verif.length?'var(--warn)':'inherit'}">${verif.length}</div><div class="d">cancelados no prazo ou sem data</div></div></section>
-  ${verif.length?`<section class="card"><h3>Sinais para decidir <small>a política diz: no prazo, o sinal ${esc(String(P.campos.sinalCancel||'segue a política'))}</small></h3><div class="list">${verif.map(x=>row(x.a,pode('finEdit')?`<button class="btn sm soft" data-act="sinalDev" data-id="${x.a.id}">Devolvi</button><button class="btn sm ghost" data-act="sinalRet" data-id="${x.a.id}">Ficou retido</button>`:'')).join('')}</div></section>`:''}
+  ${verif.length?`<section class="card"><h3>Sinais para decidir <small>a política diz: no prazo, o sinal ${esc(String(P.campos.sinalCancel||'segue a política'))}</small></h3><div class="list">${verif.map(x=>row(x.a,podeSinal()?`<button class="btn sm soft" data-act="sinalDev" data-id="${x.a.id}">Devolvi</button><button class="btn sm ghost" data-act="sinalRet" data-id="${x.a.id}">Ficou retido</button>`:'')).join('')}</div></section>`:''}
   <section class="card"><h3>Sem sinal <small>${sem.length} atendimento${sem.length===1?'':'s'} · sinal de ${pct}%</small></h3>${sem.length?`<div class="list">${sem.map(a=>row(a,cobrar(a))).join('')}</div>`:'<div class="empty">Todos os próximos atendimentos têm sinal.</div>'}</section>
   ${parc.length?`<section class="card"><h3>Sinal parcial <small>${parc.length}</small></h3><div class="list">${parc.map(a=>row(a,cobrar(a))).join('')}</div></section>`:''}
   <section class="card"><h3>Com sinal pago <small>${ok.length} · ${BRL(soma(ok.map(a=>({valor:sinalDe(a)}))))}</small></h3>${ok.length?`<div class="list">${ok.slice(0,12).map(a=>row(a,'<span class="badge good">ok</span>')).join('')}</div>`:'<div class="empty">Nenhum ainda.</div>'}</section>
@@ -950,11 +960,11 @@ function vClientes(){
 
 /* ================= FINANÇAS ================= */
 function vFinanceiro(){
-  const tabs=[['visao','Visão geral'],['caixa','Caixa do dia'],['lanc','Lançamentos'],['contas','Contas'],['sinais','Sinais'],...(profs().length?[['repasse','Repasse']]:[]),['mei','MEI e impostos'],['rel','Relatórios'],['serv','Serviços e preços']];
-  if(UI.finTab==='repasse'&&!profs().length)UI.finTab='visao';
+  const tabs=!pode('fin')?[['caixa','Caixa do dia'],['sinais','Sinais'],['serv','Serviços e preços']]:[['visao','Visão geral'],['caixa','Caixa do dia'],['lanc','Lançamentos'],['contas','Contas'],['sinais','Sinais'],...(profs().length?[['repasse','Repasse']]:[]),['mei','MEI e impostos'],['rel','Relatórios'],['serv','Serviços e preços']];
+  if(!tabs.some(t=>t[0]===UI.finTab))UI.finTab=tabs[0][0];
   const comMes=['visao','lanc','mei','sinais','repasse'].includes(UI.finTab);
   return head('Finanças','Controle <em>financeiro</em>',comMes?esc(cap(mesNome(UI.finMes))):'',
-    `${comMes?`<button class="icon-btn" data-act="finMes" data-n="-1" aria-label="Mês anterior">${ic('left')}</button><button class="icon-btn" data-act="finMes" data-n="1" aria-label="Próximo mês">${ic('right')}</button>`:''}${['visao','mei'].includes(UI.finTab)?`<button class="btn soft" data-act="relContador">${ic('file')}Relatório do mês</button>`:''}${!pode('finEdit')?'<span class="badge">somente leitura</span>':UI.finTab==='serv'?`<button class="btn primary" data-act="novoServ">${ic('plus')}Serviço</button>`:UI.finTab==='contas'?`<button class="btn primary" data-act="novaConta">${ic('plus')}Conta a pagar</button>`:`<button class="btn primary" data-act="novoLan">${ic('plus')}Lançar</button>`}`)+
+    `${comMes?`<button class="icon-btn" data-act="finMes" data-n="-1" aria-label="Mês anterior">${ic('left')}</button><button class="icon-btn" data-act="finMes" data-n="1" aria-label="Próximo mês">${ic('right')}</button>`:''}${['visao','mei'].includes(UI.finTab)?`<button class="btn soft" data-act="relContador">${ic('file')}Relatório do mês</button>`:''}${UI.finTab==='serv'&&pode('precos')?`<button class="btn primary" data-act="novoServ">${ic('plus')}Serviço</button>`:UI.finTab==='serv'&&pode('finEdit')?'<span class="badge">preços definidos pela proprietária</span>':!pode('finEdit')?'<span class="badge">somente leitura</span>':UI.finTab==='serv'?'':UI.finTab==='contas'?`<button class="btn primary" data-act="novaConta">${ic('plus')}Conta a pagar</button>`:`<button class="btn primary" data-act="novoLan">${ic('plus')}Lançar</button>`}`)+
   `<div style="overflow-x:auto">${seg('finTab',UI.finTab,tabs)}</div>`+({visao:finVisao,caixa:finCaixa,lanc:finLanc,contas:finContas,sinais:finSinais,repasse:finRepasse,mei:finMei,rel:finRel,serv:finServ}[UI.finTab]||finVisao)();
 }
 function finVisao(){
@@ -1112,7 +1122,7 @@ function finRel(){
 }
 function finServ(){
   const sv=arr('servicos').sort((a,b)=>a.nome.localeCompare(b.nome));const ag=arr('agenda').filter(a=>a.status==='concluido');
-  if(!sv.length)return `<section class="card empty">Nenhum serviço cadastrado. Os serviços aparecem na agenda, nos contratos e no catálogo.<div class="row" style="justify-content:center;margin-top:10px"><button class="btn primary" data-act="servSug">${ic('spark')}Adicionar serviços sugeridos</button><button class="btn soft" data-act="novoServ">${ic('plus')}Cadastrar um serviço</button></div></section>`;
+  if(!sv.length)return `<section class="card empty">Nenhum serviço cadastrado. Os serviços aparecem na agenda, nos contratos e no catálogo.${pode('precos')?`<div class="row" style="justify-content:center;margin-top:10px"><button class="btn primary" data-act="servSug">${ic('spark')}Adicionar serviços sugeridos</button><button class="btn soft" data-act="novoServ">${ic('plus')}Cadastrar um serviço</button></div>`:''}</section>`;
   return `<section class="card" style="padding:8px 14px">${sv.length?`<div class="list">${sv.map(s=>{const lucro=(+s.preco||0)-custoServ(s);const hora=s.duracao?lucro/(s.duracao/60):0;
    return `<button class="item" data-act="editServ" data-id="${s.id}"><div class="grow"><div class="t">${esc(s.nome)}</div><div class="s">${durTxt(s.duracao)} · material ${BRL(custoServ(s))}${(s.consumo||[]).length&&custoFicha(s.consumo)>0?' (ficha técnica)':''} · lucro/hora ${BRL(hora)} · ${ag.filter(a=>a.servicoId===s.id).length} feitos${(s.consumo||[]).length?` · baixa ${s.consumo.length} item(ns) do estoque`:''}</div></div><b class="num">${BRL(s.preco)}</b></button>`}).join('')}</div>`:'<div class="empty">Nenhum serviço cadastrado.</div>'}</section>
   <div class="alert info">${ic('info')}<div><b>Precificação:</b> o lucro por hora mostra quanto cada serviço rende depois do material. Cadastre o consumo de estoque em cada serviço para a baixa automática.</div></div>`;
@@ -1214,11 +1224,11 @@ function ideiaCard(i){return `<div class="event" style="${i.feito?'opacity:.6':'
 /* ================= AJUSTES ================= */
 function contaCard(){return `<section class="card"><h3>Sua conta</h3><p style="margin:0">${esc(EMAIL)} · <b>${esc(PAPEIS[ROLE]||'')}</b></p><div class="row" style="margin-top:10px"><button class="btn soft" data-act="trocarSenha">${ic('lock')}Trocar senha</button><button class="btn ghost" data-act="sair">Sair</button></div><div class="row" style="margin-top:12px"><span class="small muted">Aparência</span>${seg('temaSet',temaAtual(),[['sistema','Automática'],['claro','Clara'],['escuro','Escura']])}</div></section>`}
 function vAjustes(){
-  const own=isOwner();
-  if(!own)return head('Ajustes','Sua <em>conta</em>')+contaCard()+cardAvisos()+`<section class="card"><h3>O que você acessa</h3><p class="small muted" style="margin:0">${ROLE==='parceira'?'Agenda, clientes, fichas de anamnese, estoque, pacotes, contratos e datas. Finanças e a política da empresa ficam só com a proprietária.':ROLE==='recepcao'?'Agenda, cadastro de clientes, pacotes, contratos de serviço e datas. Fichas de saúde, estoque e finanças ficam restritos.':'Finanças, contas, relatórios e obrigações do MEI, somente leitura. Clientes e fichas de saúde não ficam visíveis.'}</p></section>`+
+  const own=isOwner(),dir=ROLE==='diretor';
+  if(!own&&!dir)return head('Ajustes','Sua <em>conta</em>')+contaCard()+cardAvisos()+`<section class="card"><h3>O que você acessa</h3><p class="small muted" style="margin:0">${ROLE==='parceira'?'Agenda, clientes, fichas de anamnese, estoque, pacotes, contratos e datas. Finanças e a política da empresa ficam só com a proprietária.':ROLE==='recepcao'?'Agenda, cadastro de clientes, pacotes, contratos de serviço e datas. Fichas de saúde, estoque e finanças ficam restritos.':'Finanças, contas, relatórios e obrigações do MEI, somente leitura. Clientes e fichas de saúde não ficam visíveis.'}</p></section>`+
    (pode('contratos')?`<section class="card"><h3>Política do ateliê</h3><button class="btn soft" data-act="ctTab" data-t="politica">${ic('file')}Abrir política</button></section>`:'');
-  const tabs=[['horarios','Horários'],['negocio','Negócio e MEI'],['equipe','Equipe e acesso'],['dados','Conta e dados']];
-  if(!tabs.some(t=>t[0]===UI.ajTab))UI.ajTab='horarios';
+  const tabs=[...(own?[['horarios','Horários']]:[]),['negocio','Negócio e MEI'],['equipe','Equipe e acesso'],['dados','Conta e dados']];
+  if(!tabs.some(t=>t[0]===UI.ajTab))UI.ajTab=tabs[0][0];
   return head('Ajustes','Seu <em>negócio</em>')+`<div class="tabs-scroll">${seg('ajTab',UI.ajTab,tabs)}</div>`+({horarios:ajHorarios,negocio:ajNegocio,equipe:ajEquipe,dados:ajDados}[UI.ajTab])();
 }
 function ajHorarios(){const sm=semana();const ord=[1,2,3,4,5,6,0];
@@ -1246,33 +1256,35 @@ function ajNegocio(){const pb=pub(),c=priv();
    <p class="small muted" style="margin:-4px 0 0">Antes de usar com clientes, faça um Pix de teste de R$ 1,00 com o código para conferir se cai na conta certa.${pb.pixChave?` <button type="button" class="btn sm ghost" data-act="pixTeste">${ic('copy')}Copiar código de teste</button>`:''}</p>
    <h3 style="margin-top:8px">Horários livres para as clientes</h3>
    <label class="check"><input type="checkbox" id="gHorOn" ${pb.horariosOnline!==false?'checked':''}>Mostrar os horários livres no catálogo e no espaço da cliente (só os horários, nunca quem está marcado)</label>
-   <h3 style="margin-top:8px">Finanças e MEI <small>visível só para proprietárias e contabilidade</small></h3>
+   ${pode('fin')?`   <h3 style="margin-top:8px">Finanças e MEI <small>visível só para quem cuida das finanças e para a contabilidade</small></h3>
    <div class="f2"><label class="fld">Abertura do MEI<input id="gIni" type="month" value="${esc(c.inicioMei)}"></label><label class="fld">Limite anual (R$)<input id="gLim" type="number" step="0.01" value="${c.limite}"></label><label class="fld">Valor do DAS (R$)<input id="gDas" type="number" step="0.01" value="${c.das}"></label><label class="fld">Meta mensal (R$)<input id="gMeta" type="number" step="50" value="${c.meta}"></label></div>
    <div class="f2"><label class="fld">Taxa débito (%)<input id="gTd" type="number" step="0.01" value="${c.taxaDebito}"></label><label class="fld">Taxa crédito à vista (%)<input id="gTc" type="number" step="0.01" value="${c.taxaCredito}"></label><label class="fld">Taxa crédito parcelado (%)<input id="gTp" type="number" step="0.01" value="${c.taxaParcelado}"></label></div>
+`:''}
    <div class="form-actions"><button class="btn primary">${ic('check')}Salvar</button></div></form>`}
 function repLinha(p,r){return `<div class="f2 rep-linha" data-id="${esc(p.id)}"><label class="fld">Nome<input data-k="nome" value="${esc(p.nome)}" placeholder="Ex.: Ana"></label><label class="fld">Como calcula<select data-k="tipo"><option value="pct" ${r.tipo!=='fixo'?'selected':''}>% do valor do serviço</option><option value="fixo" ${r.tipo==='fixo'?'selected':''}>Valor fixo por atendimento</option></select></label><label class="fld">Valor (% ou R$)<input data-k="valor" type="number" step="0.01" min="0" value="${esc(r.valor??'')}"></label><button type="button" class="btn sm ghost danger" data-act="repRm" style="align-self:end">Remover</button></div>`}
-function repasseCard(){if(!isOwner())return '';const rp=priv().repasse||{};
+function repasseCard(){if(!pode('finEdit'))return '';const rp=priv().repasse||{};
   return `<form class="card form" id="fRep"><h3>Trancistas parceiras e repasse <small>quanto cada uma recebe por atendimento</small></h3>
    <p class="small muted" style="margin-top:0">Quem estiver aqui aparece em "Quem atende" no atendimento, e o valor do mês sai em Finanças › Repasse. O nome aparece para a equipe; a regra de valor só para você e a contabilidade.</p>
    <div id="repLista" class="stack" style="gap:8px">${profs().map(p=>repLinha(p,rp[p.id]||{tipo:'pct',valor:''})).join('')}</div>
    <div class="form-actions" style="justify-content:space-between"><button type="button" class="btn ghost" data-act="repAdd">${ic('plus')}Adicionar parceira</button><button class="btn primary">${ic('check')}Salvar</button></div></form>`}
 function ajEquipe(){const ped=arr('pedidos'),eq=arr('equipe');const donas=(ACESSO&&ACESSO.donas)||[];const dinfo=(ACESSO&&ACESSO.donasInfo)||{};
-  return `<section class="card"><h3>Proprietárias <small>${donas.length} com acesso total</small></h3><div class="list">${donas.map(u=>{const i=dinfo[u]||{};return `<div class="item"><div class="avatar" style="--lv:var(--lv-perola)">${ic('shield')}</div><div class="grow"><div class="t">${esc(i.nome||i.email||'Proprietária')}${u===ME?' <span class="badge">você</span>':''}</div><div class="s">${esc(i.email||'e-mail aparece no próximo acesso dela')}</div></div>${u!==ME&&donas.length>1?`<button class="btn sm ghost danger" data-act="removerDona" data-id="${u}">Remover</button>`:''}</div>`}).join('')}</div><p class="small muted" style="margin-bottom:0">Para dar acesso total a alguém da equipe, use "Tornar proprietária" na lista abaixo.</p></section>
+  return `<section class="card"><h3>Proprietárias <small>${donas.length} com acesso total</small></h3><div class="list">${donas.map(u=>{const i=dinfo[u]||{};return `<div class="item"><div class="avatar" style="--lv:var(--lv-perola)">${ic('shield')}</div><div class="grow"><div class="t">${esc(i.nome||i.email||'Proprietária')}${u===ME?' <span class="badge">você</span>':''}</div><div class="s">${esc(i.email||'e-mail aparece no próximo acesso dela')}</div></div>${isOwner()&&u!==ME&&donas.length>1?`<button class="btn sm ghost danger" data-act="removerDona" data-id="${u}">Remover</button>`:''}</div>`}).join('')}</div>${isOwner()?'<p class="small muted" style="margin-bottom:0">Para dar acesso total a alguém da equipe, use "Tornar proprietária" na lista abaixo.</p>':''}</section>
   <section class="card"><h3>Equipe e acessos <small>${eq.filter(e=>e.ativo!==false).length} ativa(s)</small></h3>
    <ol class="small muted" style="margin-top:0;padding-left:18px"><li>No <a href="https://console.firebase.google.com" target="_blank" rel="noopener">console do Firebase</a>, abra <b>Authentication › Usuários › Adicionar usuário</b> e crie o e-mail da pessoa com uma senha provisória.</li><li>Ela entra no sistema com esse e-mail e aparece aqui como pedido.</li><li>Você escolhe o perfil. As regras do servidor só liberam os dados daquele perfil.</li></ol>
-   ${ped.length?`<div class="eyebrow" style="margin:10px 0 4px">Pedidos de acesso</div><div class="list">${ped.map(p=>`<div class="item wrap"><div class="avatar">${iniciais(p.nome||p.email)}</div><div class="grow"><div class="t">${esc(p.nome||p.email)}</div><div class="s">${esc(p.email)} · pediu em ${dataBR((p.pedidoEm||'').slice(0,10))}</div></div><div class="item-acoes"><button class="btn sm primary" data-act="aprovar" data-id="${p.id}">Definir perfil</button><button class="btn sm ghost" data-act="tornarDona" data-id="${p.id}">Tornar proprietária</button><button class="btn sm ghost danger" data-act="recusar" data-id="${p.id}">Recusar</button></div></div>`).join('')}</div>`:''}
-   ${eq.length?`<div class="eyebrow" style="margin:10px 0 4px">Equipe</div><div class="list">${eq.map(e=>`<div class="item wrap"><div class="avatar">${iniciais(e.apelido||e.email)}</div><div class="grow"><div class="t">${esc(e.apelido||e.email)}</div><div class="s">${PAPEIS[e.papel]||e.papel}${e.ativo===false?' · desativada':''} · ${esc(e.email||'')}</div></div><div class="item-acoes"><button class="btn sm soft" data-act="aprovar" data-id="${e.id}">Alterar</button><button class="btn sm ghost" data-act="tornarDona" data-id="${e.id}">${ic('shield')}Tornar proprietária</button></div></div>`).join('')}</div>`:''}
+   ${ped.length?`<div class="eyebrow" style="margin:10px 0 4px">Pedidos de acesso</div><div class="list">${ped.map(p=>`<div class="item wrap"><div class="avatar">${iniciais(p.nome||p.email)}</div><div class="grow"><div class="t">${esc(p.nome||p.email)}</div><div class="s">${esc(p.email)} · pediu em ${dataBR((p.pedidoEm||'').slice(0,10))}</div></div><div class="item-acoes"><button class="btn sm primary" data-act="aprovar" data-id="${p.id}">Definir perfil</button>${isOwner()?`<button class="btn sm ghost" data-act="tornarDona" data-id="${p.id}">Tornar proprietária</button>`:''}<button class="btn sm ghost danger" data-act="recusar" data-id="${p.id}">Recusar</button></div></div>`).join('')}</div>`:''}
+   ${eq.length?`<div class="eyebrow" style="margin:10px 0 4px">Equipe</div><div class="list">${eq.map(e=>`<div class="item wrap"><div class="avatar">${iniciais(e.apelido||e.email)}</div><div class="grow"><div class="t">${esc(e.apelido||e.email)}</div><div class="s">${PAPEIS[e.papel]||e.papel}${e.ativo===false?' · desativada':''} · ${esc(e.email||'')}</div></div><div class="item-acoes">${isOwner()||(e.papel!=='diretor'&&e.id!==ME)?`<button class="btn sm soft" data-act="aprovar" data-id="${e.id}">Alterar</button>`:''}${isOwner()?`<button class="btn sm ghost" data-act="tornarDona" data-id="${e.id}">${ic('shield')}Tornar proprietária</button>`:''}</div></div>`).join('')}</div>`:''}
    ${!ped.length&&!eq.length?'<div class="empty">Ninguém da equipe ainda.</div>':''}
    <details class="how" style="margin-top:10px"><summary>O que cada perfil acessa</summary><table>
-    <tr><td><b>Proprietária</b></td><td>Tudo, incluindo finanças, contas, relatórios, política da empresa e equipe.</td></tr>
+    <tr><td><b>Proprietária</b></td><td>Tudo: atendimento, clientes, fichas de saúde, estoque, catálogo, preços e equipe. Se houver um Diretor ativo, nas finanças ela fica só com o caixa do dia, os sinais e os serviços e preços.</td></tr>
+    <tr><td><b>Diretor</b></td><td>Parte administrativa: finanças completas (lançamentos, contas, MEI, repasse e relatórios), contratos e política, dados do negócio, equipe e cópia de segurança. Vê os preços mas não altera. Sem fichas de saúde, estoque e catálogo.</td></tr>
     <tr><td><b>${esc(PAPEIS.parceira)}</b></td><td>Agenda, clientes, fichas de anamnese, estoque (sem custos), pacotes, vales, contratos e datas.</td></tr>
     <tr><td><b>Recepção</b></td><td>Agenda, cadastro de clientes, pacotes, vales, contrato de serviço e datas. Sem fichas de saúde e sem estoque.</td></tr>
     <tr><td><b>Contador(a)</b></td><td>Finanças, contas, relatórios e MEI, somente leitura. Sem clientes nem fichas.</td></tr></table>
     <p>Todas essas separações são aplicadas pelas regras de segurança do Firestore, no servidor. Para bloquear alguém de vez, desative o acesso aqui e também desative o usuário em Authentication no console.</p></details></section>${repasseCard()}`}
 function ajDados(){const nEx=ALL_COLS.reduce((s,k)=>s+arr(k).filter(r=>r.exemplo).length,0);
   return contaCard()+cardAvisos()+`<section class="card"><h3>Cópia de segurança</h3><p class="small muted" style="margin-top:0">Os dados ficam no Firestore e aparecem no PC e no celular. Além disso, o GitHub faz uma cópia automática todo dia de madrugada (guardada 30 dias; a de domingo, 90 dias), que pode ser restaurada pela rotina <b>Restaurar cópia de segurança</b> (veja o LEIA-ME). Se quiser uma cópia sua, baixe aqui.</p>
-   <div class="row"><button class="btn soft" data-act="backup">${ic('down')}Baixar cópia (JSON)</button><label class="btn ghost">${ic('up')}Restaurar cópia<input type="file" id="restFile" accept=".json,application/json" hidden></label></div></section>
-  ${nEx?`<section class="card"><h3>Dados de exemplo</h3><p class="small muted" style="margin-top:0">Há ${nEx} registros de exemplo. Apague antes de começar a usar de verdade. Os serviços cadastrados são mantidos.</p><button class="btn danger soft" data-act="limparEx">${ic('trash')}Apagar dados de exemplo</button></section>`:''}`+cardErros()}
+   <div class="row"><button class="btn soft" data-act="backup">${ic('down')}Baixar cópia (JSON)</button>${isOwner()?`<label class="btn ghost">${ic('up')}Restaurar cópia<input type="file" id="restFile" accept=".json,application/json" hidden></label>`:''}</div></section>
+  ${nEx&&isOwner()?`<section class="card"><h3>Dados de exemplo</h3><p class="small muted" style="margin-top:0">Há ${nEx} registros de exemplo. Apague antes de começar a usar de verdade. Os serviços cadastrados são mantidos.</p><button class="btn danger soft" data-act="limparEx">${ic('trash')}Apagar dados de exemplo</button></section>`:''}`+cardErros()}
 
 /* ================= folhas (sheets), avisos e arquivos ================= */
 function sheet(title,html){
@@ -1612,7 +1624,7 @@ function formIdeia(id,pre={}){const i=id?S.ideias.get(id):{data:pre.d||'',titulo
 function aprovar(uidp){const e=S.equipe.get(uidp)||{};const p=S.pedidos.get(uidp)||{};const email=e.email||p.email||'';
   sheet('Perfil de acesso',`<form class="form" id="fEq"><p class="small muted" style="margin:0">Conta: <b>${esc(email)}</b></p>
    <label class="fld">Nome para exibir<input id="qNome" value="${esc(e.apelido||p.nome||'')}"></label>
-   <label class="fld">Perfil<select id="qPapel">${[['parceira',PAPEIS.parceira],['recepcao','Recepção'],['contador','Contador(a) – somente leitura das finanças']].map(([k,n])=>`<option value="${k}" ${e.papel===k?'selected':''}>${n}</option>`).join('')}</select></label>
+   <label class="fld">Perfil<select id="qPapel">${[...(isOwner()?[['diretor','Diretor – finanças, contratos e equipe (sem fichas de saúde)']]:[]),['parceira',PAPEIS.parceira],['recepcao','Recepção'],['contador','Contador(a) – somente leitura das finanças']].map(([k,n])=>`<option value="${k}" ${e.papel===k?'selected':''}>${n}</option>`).join('')}</select></label>
    ${S.equipe.has(uidp)?`<label class="check"><input type="checkbox" id="qAtivo" ${e.ativo!==false?'checked':''}>Acesso ativo</label>`:''}
    <div class="form-actions"><button class="btn primary">${ic('check')}Salvar perfil</button></div></form>`);
   $('#fEq').onsubmit=async ev=>{ev.preventDefault();await save('equipe',uidp,{papel:$('#qPapel').value,apelido:$('#qNome').value.trim(),email,ativo:$('#qAtivo')?$('#qAtivo').checked:true,desde:e.desde||today()});if(S.pedidos.has(uidp))await del('pedidos',uidp);closeSheet();toast('Perfil salvo')}}
@@ -1651,7 +1663,7 @@ function catalogoBase(ex){
   return {ops,E,SV};
 }
 async function seed(ex){
-  if(!pode('seed'))return;toast(ex?'Carregando exemplos…':'Preparando…');
+  if(!pode('seed')&&!DEMO)return;toast(ex?'Carregando exemplos…':'Preparando…');
   const t=today();const {ops,SV}=catalogoBase(ex);const X={exemplo:true};
   const P={box:280,nago:120,ful:260,twi:300,gyp:350,inf:90,man:100,ret:70},D={box:300,nago:120,ful:270,twi:300,gyp:360,inf:120,man:120,ret:120};
   const pagos={};
@@ -2175,7 +2187,7 @@ const ACT={
  pagarConta:async t=>{if(!pode('finEdit'))return;const c=S.contas.get(t.dataset.id);const k=t.dataset.k;const pg={...(c.pagas||{})};
    if(pg[k]){if(S.lancamentos.has(pg[k]))await del('lancamentos',pg[k]);delete pg[k];await save('contas',c.id,{...c,pagas:pg});toast('Pagamento desfeito');return}
    const lid=await save('lancamentos',null,{tipo:'despesa',data:today(),valor:+c.valor,categoria:c.categoria,descricao:c.descricao,forma:'Pix',contaRef:k});pg[k]=lid;await save('contas',c.id,{...c,pagas:pg});toast('Conta paga e despesa lançada')},
- novoServ:()=>pode('finEdit')&&formServ(),editServ:t=>pode('finEdit')?formServ(t.dataset.id):toast('Perfil somente leitura'),delServ:t=>confirmar('Excluir este serviço do catálogo?',()=>del('servicos',t.dataset.id)),
+ novoServ:()=>pode('precos')&&formServ(),editServ:t=>pode('precos')?formServ(t.dataset.id):toast(pode('finEdit')?'Os preços são definidos pela proprietária':'Perfil somente leitura'),delServ:t=>confirmar('Excluir este serviço do catálogo?',()=>del('servicos',t.dataset.id)),
  relPer:t=>{UI.relPer=+t.dataset.n;render()},
  caixaDia:t=>{const n=+t.dataset.n;const d=n?addDays(UI.caixaDia,n):today();UI.caixaDia=d>today()?today():d;if(UI.caixaDia<corte())carregarHistorico();render()},
  caixaIr:t=>{UI.caixaDia=t.dataset.d;UI.finTab='caixa';render();scrollTo({top:0,behavior:'smooth'})},
@@ -2243,6 +2255,7 @@ document.addEventListener('click',e=>{const h=e.target.closest('[data-hdia]');if
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeSheet();const tag=(e.target.tagName||'').toLowerCase();const digitando=tag==='input'||tag==='textarea'||tag==='select'||e.target.isContentEditable;if(!digitando&&pode('base')&&!$('.sheet-back')&&(e.key==='/'||((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'))){e.preventDefault();busca()}});
 let buscaT;document.addEventListener('input',e=>{if(e.target.id==='cliBusca'){UI.cliBusca=e.target.value;UI.cliLim=60;clearTimeout(buscaT);buscaT=setTimeout(()=>{const pos=e.target.selectionStart;render();const i=$('#cliBusca');if(i){i.focus();try{i.setSelectionRange(pos,pos)}catch(_){}}},200)}});
 document.addEventListener('change',e=>{const id=e.target.id;
+  if(id==='demoPerfil'){location.replace(location.pathname+'?demo&perfil='+encodeURIComponent(e.target.value));return}
   const ap=e.target.dataset&&e.target.dataset.avpref;if(ap){setDoc(doc(FS,'avisos',ME),{prefs:{...avPrefs(),[ap]:e.target.checked},atualizadoEm:serverTimestamp()},{merge:true}).then(()=>toast('Preferência salva')).catch(dbErr);return}
   if(id==='ctTipo'){UI.ctTipo=e.target.value;render()}else if(id==='ctCli'){UI.ctCli=e.target.value;UI.ctAg='';render()}else if(id==='ctAg'){UI.ctAg=e.target.value;render()}
   else if(id==='restFile'&&e.target.files[0]){const fr=new FileReader();fr.onload=()=>{let o;try{o=JSON.parse(fr.result)}catch(_){toast('Arquivo inválido');return}
@@ -2260,7 +2273,7 @@ document.addEventListener('submit',async e=>{
   if(e.target.id==='fCfg'){e.preventDefault();const v=i=>$('#'+i).value.trim();
     await save('publico','config',{...pub(),nome:v('gNome')||DEF_PUB.nome,responsavel:v('gResp'),cnpj:v('gCnpj'),endereco:v('gEnd'),municipio:v('gMun'),whatsapp:v('gWa'),instagram:v('gIg'),descAniv:+v('gAniv')||0,indBenef:v('gIndB'),indBenefNova:v('gIndN'),googleAval:linkGoogle(v('gGoo')),pixTipo:v('gPixT'),pixChave:v('gPix'),pixNome:v('gPixN'),pixCidade:v('gPixC'),horariosOnline:$('#gHorOn').checked,started:true});
     salvarVitrine();
-    await save('privado','config',{...priv(),inicioMei:v('gIni'),limite:+v('gLim')||81000,das:+v('gDas')||DEF_PRIV.das,meta:+v('gMeta')||0,taxaDebito:+v('gTd')||0,taxaCredito:+v('gTc')||0,taxaParcelado:+v('gTp')||0});toast('Ajustes salvos')}
+    if($('#gIni'))await save('privado','config',{...priv(),inicioMei:v('gIni'),limite:+v('gLim')||81000,das:+v('gDas')||DEF_PRIV.das,meta:+v('gMeta')||0,taxaDebito:+v('gTd')||0,taxaCredito:+v('gTc')||0,taxaParcelado:+v('gTp')||0});toast('Ajustes salvos')}
   else if(e.target.id==='fRep'){e.preventDefault();const L=$$('#repLista .rep-linha').map(el=>({id:el.dataset.id,nome:$('[data-k=nome]',el).value.trim(),tipo:$('[data-k=tipo]',el).value,valor:+$('[data-k=valor]',el).value||0})).filter(x=>x.nome);
     await save('publico','config',{...pub(),profissionais:L.map(x=>({id:x.id,nome:x.nome}))});const rp={};L.forEach(x=>rp[x.id]={tipo:x.tipo,valor:x.valor});await save('privado','config',{...priv(),repasse:rp});toast('Parceiras salvas')}
   else if(e.target.id==='fHor'){e.preventDefault();const sm=[];let erro='';

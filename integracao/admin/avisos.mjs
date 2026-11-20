@@ -38,7 +38,7 @@ const novidades = [];
 (await db.collection('anamnesePortal').where('em', '>=', tsDesde).get()).forEach(x => novidades.push({ id: 'ana:' + x.id + ':' + ms(x.data().em), tipo: 'anamnese' }));
 (await db.collection('avaliacoes').where('em', '>=', tsDesde).get()).forEach(x => novidades.push({ id: 'ava:' + x.id, tipo: 'avaliacao' }));
 // Contas e DAS só se alguém com finanças ligou
-const comFin = pessoas.some(p => p.papel === 'owner' || p.papel === 'contador');
+const comFin = pessoas.some(p => ['owner', 'contador', 'diretor'].includes(p.papel));
 const contas = comFin ? (await db.collection('contas').get()).docs.map(x => x.data()) : [];
 const privado = comFin ? ((await db.doc('privado/config').get()).data() || {}) : {};
 
