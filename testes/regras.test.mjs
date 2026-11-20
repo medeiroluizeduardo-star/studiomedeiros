@@ -134,6 +134,20 @@ test('avaliação: só de atendimento liberado no espaço e com nota de 1 a 5', 
   await assertFails(getDoc(doc(a, 'avaliacoes/p1_a1')));
 });
 
+test('avaliação: a cliente edita a dela, volta para revisão e não mexe no resto', async () => {
+  const a = db(null);
+  await assertSucceeds(setDoc(doc(a, 'avaliacoes/p1_a1'), { token: 'p1', agendaId: 'a1', nota: 5, texto: 'Amei', autorizaPublicar: true, nomeExibicao: 'C.', servico: 'Box', em: serverTimestamp() }));
+  await assertSucceeds(updateDoc(doc(db(DONA), 'avaliacoes/p1_a1'), { publicado: true, visto: true }));
+  const ed = { nota: 4, texto: 'Gostei muito', autorizaPublicar: false, nomeExibicao: '', editadoEm: serverTimestamp(), visto: false, publicado: false };
+  await assertFails(updateDoc(doc(a, 'avaliacoes/p1_a1'), { ...ed, nota: 7 }));
+  await assertFails(updateDoc(doc(a, 'avaliacoes/p1_a1'), { ...ed, publicado: true }));
+  await assertFails(updateDoc(doc(a, 'avaliacoes/p1_a1'), { ...ed, visto: true }));
+  await assertFails(updateDoc(doc(a, 'avaliacoes/p1_a1'), { ...ed, servico: 'Outro' }));
+  await assertFails(updateDoc(doc(a, 'avaliacoes/p1_a1'), { ...ed, agendaId: 'zz' }));
+  await assertSucceeds(updateDoc(doc(a, 'avaliacoes/p1_a1'), ed));
+  await assertFails(deleteDoc(doc(a, 'avaliacoes/p1_a1')));
+});
+
 test('qualquer coleção fora da lista fica fechada', async () => {
   await assertFails(setDoc(doc(db(DONA), 'qualquer/x'), { a: 1 }));
   await assertFails(getDoc(doc(db(DONA), 'qualquer/x')));
