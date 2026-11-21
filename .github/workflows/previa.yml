@@ -52,13 +52,29 @@ jobs:
           echo "URL_RAQUEL=$URL2" >> "$GITHUB_ENV"
           echo "::notice title=Prévia da Raquel::$URL2"
 
+      - name: Publicar a prévia da barbearia Mederin do Corte
+        # Mesmo sistema, montado com negocios/mederin. Também abre só no modo demonstração.
+        continue-on-error: true
+        run: |
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
+          P=$(jq -r .project_id "$RUNNER_TEMP/sa.json")
+          node integracao/montar.mjs mederin site-mederin
+          jq '.hosting.public = "site-mederin" | del(.firestore)' firebase.json > firebase-mederin.json
+          npx --yes firebase-tools@13.29.1 hosting:channel:deploy "pr${{ github.event.pull_request.number }}-mederin" --config firebase-mederin.json --expires 7d --project "$P" --json > "$RUNNER_TEMP/previa-mederin.json"
+          URL3=$(jq -r '.result[]?.url // empty' "$RUNNER_TEMP/previa-mederin.json" | head -1)
+          [ -n "$URL3" ] || { cat "$RUNNER_TEMP/previa-mederin.json"; exit 1; }
+          echo "URL_MEDERIN=$URL3" >> "$GITHUB_ENV"
+          echo "::notice title=Prévia da Mederin do Corte::$URL3"
+
       - name: Avisar na proposta
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           corpo="**Prévia desta proposta:** $URL${URL_RAQUEL:+
 
-          **Prévia do estúdio da Raquel:** $URL_RAQUEL}
+          **Prévia do estúdio da Raquel:** $URL_RAQUEL}${URL_MEDERIN:+
+
+          **Prévia da barbearia Mederin do Corte:** $URL_MEDERIN}
 
           Abre sempre no modo demonstração, com clientes fictícias. Vale 7 dias e é atualizada a cada mudança na proposta."
           ja=$(gh api "repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments" --jq '[.[] | select(.body | startswith("**Prévia desta proposta:**"))][0].id // empty')

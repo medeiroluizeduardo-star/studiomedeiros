@@ -9,5 +9,7 @@ export const NEGOCIO = {
   municipio: '',
   arquivo: 'raquel-zaban-retratista',
   parceira: 'Fotógrafa parceira',
-  abasDesligadas: ['estoque']
+  abasDesligadas: ['estoque'],
+  trocas: [],
+  proibidas: []
 };

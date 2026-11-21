@@ -1,5 +1,5 @@
 import { doc, getDoc, getDocs, setDoc, updateDoc, collection, writeBatch, serverTimestamp } from './fb.js';
-import { FS, $, $$, esc, BRL, ic, marca, waLink, estado, dataBR, dataLonga, parse, primeiro, toMs, tokenDaUrl, toast, NIVEL_COR, horariosPara } from './publico.js';
+import { FS, $, $$, esc, BRL, ic, marca, waLink, estado, dataBR, dataLonga, parse, primeiro, toMs, tokenDaUrl, toast, NIVEL_COR, horariosPara, NEGOCIO } from './publico.js';
 
 const main = $('#pub');
 const token = tokenDaUrl();
@@ -231,7 +231,7 @@ function cuidadosCard() {
 function indicacaoCard() {
   const i = P.indicacao; if (!i || !i.codigo) return '';
   const link = `${location.origin}/catalogo?ind=${encodeURIComponent(i.codigo)}`;
-  const txt = `Amiga, conheça o ateliê da ${(P.atelie && primeiro(P.atelie.responsavel)) || 'Stéfany'} 💕 Usando o meu código ${i.codigo} você ganha ${i.beneficioNova}. Veja os modelos: ${link}`;
+  const txt = `Amiga, conheça o ateliê da ${(P.atelie && primeiro(P.atelie.responsavel)) || primeiro(NEGOCIO.responsavel)} 💕 Usando o meu código ${i.codigo} você ganha ${i.beneficioNova}. Veja os modelos: ${link}`;
   return `<section class="card ind-card"><h3>${ic('gift')} Indique e ganhe</h3>
    <p class="small" style="margin:4px 0 10px">Cada amiga que vier pelo seu código e fizer o atendimento vale <b>${esc(i.beneficio)}</b>. Ela ganha <b>${esc(i.beneficioNova)}</b>.</p>
    <div class="ind-cod"><span class="small muted">Seu código</span><b>${esc(i.codigo)}</b></div>

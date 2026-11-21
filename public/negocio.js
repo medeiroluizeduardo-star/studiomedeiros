@@ -10,5 +10,8 @@ export const NEGOCIO = {
   municipio: 'Serra - ES',                     // valor inicial em Ajustes › Negócio
   arquivo: 'stefany-trancista',                // começo do nome do arquivo da cópia de segurança
   parceira: 'Trancista parceira',              // nome do perfil "parceira" da equipe
-  abasDesligadas: []                           // abas que este negócio não usa, ex.: ['estoque']
+  abasDesligadas: [],                         // abas que este negócio não usa, ex.: ['estoque']
+  // Só para outro estúdio: trocas de texto feitas ao montar o site dele ([de, para]) e palavras que não podem sobrar.
+  trocas: [],
+  proibidas: []
 };
