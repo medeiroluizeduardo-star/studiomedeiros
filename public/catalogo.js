@@ -20,7 +20,7 @@ const obs = 'IntersectionObserver' in window ? new IntersectionObserver(es => es
 function render() {
   const cats = [...new Set(itens.map(i => i.categoria).filter(Boolean))];
   const lista = itens.filter(i => filtro === 'todos' || i.categoria === filtro);
-  main.innerHTML = `<img class="cat-capa" src="/img/faixa.webp" width="1200" height="552" alt="Stéfany Medeiros" fetchpriority="high">
+  main.innerHTML = `<img class="cat-capa" src="/img/faixa.webp" width="1200" height="552" alt="${esc(NEGOCIO.nome)}" fetchpriority="high">
   <section><div class="eyebrow">Catálogo</div><h1 class="page-title">Escolha seu <em>modelo</em></h1><p class="lede">Veja o tempo médio de cada trança e toque no botão para agendar.</p></section>
   ${IND ? `<div class="ind-banner">${ic('gift')}<div class="small">Você veio por indicação de uma cliente 💕 ${vitrine.indBenefNova ? `Ganhe <b>${esc(vitrine.indBenefNova)}</b>.` : ''} Seu código <b>${esc(IND)}</b> já vai junto na mensagem.</div></div>` : ''}
   ${depo && (depo.lista || []).length ? `<section><div class="eyebrow">Quem fez, amou${depo.media ? ` · ${String(depo.media).replace('.', ',')} ★ em ${depo.total} avaliaç${depo.total === 1 ? 'ão' : 'ões'}` : ''}</div><div class="depo" style="margin-top:8px">${depo.lista.slice(0, 6).map(d => `<article><span class="estrelas">${'★'.repeat(d.nota)}${'☆'.repeat(5 - d.nota)}</span><p>"${esc(d.texto)}"</p><span class="small muted">${esc(d.nome)}${d.servico ? ` · ${esc(d.servico)}` : ''}</span></article>`).join('')}</div></section>` : ''}

@@ -1,6 +1,8 @@
 import { DEMO, mensagens, initializeApp, getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail, createUserWithEmailAndPassword, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, onSnapshot, setDoc, deleteDoc, getDoc, updateDoc, query, where, Timestamp, arrayUnion, arrayRemove, deleteField, serverTimestamp } from './fb.js';
 import { firebaseConfig } from './firebase-config.js';
 import { NEGOCIO } from './negocio.js';
+import * as RAMO from './ramo.js';
+const {CAT_REC,CAT_DES,CAT_EST,ANAM_Q,POL_SERVICO,CUIDADOS_PADRAO,datasRamo}=RAMO;
 /* Sistema de gestão do estúdio (Firebase). Nome e abas do negócio vêm de negocio.js. */
 /* ================= utilidades ================= */
 const $=(s,el=document)=>el.querySelector(s);
@@ -71,10 +73,7 @@ function braidMark(size=34,spin=false){
 }
 
 /* ================= constantes ================= */
-const CAT_REC=['Serviço de trança','Manutenção','Retirada','Sinal','Pacotes','Vale-presente','Venda de produto','Outras receitas'];
-const CAT_DES=['Cabelo / fibra','Materiais (pomada, linha, elástico)','DAS-MEI','Aluguel / espaço','Transporte','Marketing e redes','Equipamentos','Cursos','Taxas de maquininha','Retirada pró-labore','Repasse a parceira','Outras despesas'];
 const FORMAS=['Pix','Dinheiro','Cartão de débito','Cartão de crédito','Transferência'];
-const CAT_EST=['Cabelo / fibra','Pomadas e finalizadores','Linhas e elásticos','Miçangas e acessórios','Higiene e descartáveis','Outros'];
 const ORIGENS=['Instagram','Indicação','TikTok','WhatsApp','Google','Passou no ateliê','Outro'];
 const STATUS={agendado:{n:'Agendado',c:'var(--accent)'},confirmado:{n:'Confirmado',c:'var(--good)'},concluido:{n:'Concluído',c:'var(--accent-ink)'},cancelado:{n:'Cancelado',c:'var(--muted)'},faltou:{n:'Faltou',c:'var(--bad)'}};
 const NIVEIS={
@@ -87,17 +86,6 @@ const NIVEIS={
 const PAPEIS={owner:'Proprietária',diretor:'Diretor',parceira:NEGOCIO.parceira,recepcao:'Recepção',contador:'Contador(a)'};
 const DEF_PUB={nome:NEGOCIO.nome,responsavel:NEGOCIO.responsavel,cnpj:'',municipio:NEGOCIO.municipio,endereco:'',whatsapp:'',abre:'08:00',fecha:'20:00',dias:[1,2,3,4,5,6],intervaloIni:'',intervaloFim:'',folgas:[],instagram:'',descAniv:10,started:false};
 const DEF_PRIV={das:86.05,limite:81000,inicioMei:'',meta:4000,dasPagos:{},taxaDebito:1.99,taxaCredito:4.98,taxaParcelado:9.9};
-const ANAM_Q=[
- ['couro','Sente sensibilidade ou dor no couro cabeludo?'],
- ['dermatite','Tem dermatite, psoríase, caspa intensa ou feridas no couro cabeludo?'],
- ['queda','Tem queda acentuada, falhas ou alopecia (inclusive por tração)?'],
- ['quimica','Fez química nos últimos 30 dias (alisamento, relaxamento, coloração, descoloração)?'],
- ['alergia','Tem alergia a produtos, fibras sintéticas, pomadas ou fragrâncias?'],
- ['gestante','Está gestante ou amamentando?'],
- ['medic','Usa medicamento contínuo ou faz tratamento dermatológico?'],
- ['cirurgia','Fez cirurgia, procedimento ou tem pontos recentes na cabeça?'],
- ['cefaleia','Tem enxaqueca ou dor de cabeça frequente?']
-];
 
 /* ================= armazenamento (Firestore) e perfis ================= */
 const ALL_COLS=['clientes','servicos','agenda','estoque','pacotes','vales','espera','anamneses','aceites','ideias','publico','equipe','pedidos','lancamentos','contas','privado','catalogo','contratosLink','solicitacoes','cadastros','anamnesePortal','avaliacoes','erros','juridico','registro'];
@@ -218,7 +206,7 @@ const histAte=()=>HIST?'':corte();
 /* telas que mostram um período antes do corte pedem o histórico sozinhas */
 function histPelaTela(){if(HIST)return;const cm=corte().slice(0,7);
   if((UI.view==='financeiro'&&(UI.finMes<cm||UI.finTab==='caixa'&&UI.caixaDia<corte()))||(UI.view==='calendario'&&UI.calMes<cm)||(UI.view==='agenda'&&UI.agDia<corte()))carregarHistorico()}
-const configPendente=()=>!DEMO&&!firebaseConfig||!firebaseConfig.apiKey||/COLE|SUA_/i.test(firebaseConfig.apiKey);
+const configPendente=()=>!DEMO&&(!firebaseConfig||!firebaseConfig.apiKey||/COLE|SUA_/i.test(firebaseConfig.apiKey));
 
 function virarPapel(papel){if(ROLE===papel)return;pararDados();ROLE=papel;errEnviar();vigiarAvisos();if(COLS_POR_PAPEL[papel]){if(!visiveis().some(v=>v[0]===UI.view))UI.view=visiveis()[0][0];subscribe(COLS_POR_PAPEL[papel])}render()}
 function vigiarEquipe(user){
@@ -347,7 +335,7 @@ const nomeCli=id=>S.clientes.get(id)?.nome||'Cliente avulsa';
 const nomeServ=id=>S.servicos.get(id)?.nome||'Serviço';
 const servsAg=a=>[a.servicoId,...(Array.isArray(a.extras)?a.extras:[])].filter(Boolean);
 const nomeAg=a=>a.servicoNome&&!a.servicoId?a.servicoNome:servsAg(a).map(nomeServ).join(' + ')||'Serviço';
-function catServ(sid){const n=nomeServ(sid);return /manuten/i.test(n)?'Manutenção':/retirada/i.test(n)?'Retirada':'Serviço de trança'}
+function catServ(sid){return RAMO.catServ(nomeServ(sid))}
 const ehComercio=l=>l.categoria==='Venda de produto';
 
 const agPorCli=()=>memo('agCli',()=>{const m=new Map();arr('agenda').forEach(a=>{if(!m.has(a.clienteId))m.set(a.clienteId,[]);m.get(a.clienteId).push(a)});return m});
@@ -449,32 +437,7 @@ function datasAno(y){
   const L=[];const add=(d,nome,ideia,tipo='com')=>L.push({data:typeof d==='string'?d:ymd(d),nome,ideia,tipo});
   const p=pascoa(y);const carn=new Date(p);carn.setDate(p.getDate()-47);const preCarn=new Date(carn);preCarn.setDate(carn.getDate()-14);
   const bf=nth(y,10,4,4);bf.setDate(bf.getDate()+1);
-  add(`${y}-01-01`,'Ano Novo','Abra a agenda de janeiro com pacote "Tranças para o verão": modelos leves para praia e piscina.');
-  add(`${y}-01-20`,'Férias de verão','Promoção de tranças infantis nas férias. Leve duas crianças da mesma família com desconto.');
-  add(`${y}-02-01`,'Volta às aulas','Pacote escola: tranças práticas que duram semanas. Divulgue fotos de antes e depois das pequenas.');
-  add(preCarn,'Agenda de Carnaval','Duas semanas antes: abra horários extras e ofereça tranças coloridas, fios com brilho e acessórios.');
-  add(carn,'Carnaval','Stories com looks de tranças para bloquinho. Venda de anéis e cordões para tranças.');
-  add(`${y}-03-08`,'Dia Internacional da Mulher','Homenageie suas clientes nas redes (com autorização) e ofereça mimo para quem agendar na semana.');
-  add(`${y}-03-15`,'Dia do Consumidor','Condição especial de 1 dia: manutenção com valor reduzido para clientes da casa.');
-  add(`${y}-03-21`,'Dia Internacional contra a Discriminação Racial','Conteúdo educativo sobre a história das tranças e seu valor cultural.');
-  add(p,'Páscoa','Sorteio entre clientes que agendarem na semana; brinde de chocolate no atendimento.');
-  add(`${y}-05-13`,'Abolição da escravatura','Post de reflexão sobre ancestralidade e resistência ligada às tranças.');
-  add(nth(y,4,0,2),'Dia das Mães','Vale-presente de tranças: filhas presenteiam as mães. Pacote mãe e filha com desconto.');
-  add(`${y}-05-25`,'Dia da África','Série de posts sobre a origem dos estilos (nagô, fulani, box braids) e seus significados.');
-  add(`${y}-06-12`,'Dia dos Namorados','Penteado especial para encontro e sorteio de um atendimento entre quem marcar a pessoa amada.');
-  add(`${y}-06-24`,'São João','Tranças com laços e flores para festas juninas; parceria com escolas e quadrilhas.');
-  add(`${y}-07-15`,'Férias de julho','Agenda infantil reforçada e pacote de tranças duradouras para viagem.');
-  add(`${y}-07-25`,'Dia da Mulher Negra Latino-Americana e Caribenha','Data de Tereza de Benguela. Destaque histórias de clientes e mulheres negras inspiradoras.');
-  add(`${y}-07-26`,'Dia do Orgulho Crespo','Campanha de valorização do cabelo crespo com ensaio de fotos das clientes.');
-  add(nth(y,7,0,2),'Dia dos Pais','Tranças masculinas e infantis: pacote pai e filho(a).');
-  add(`${y}-09-15`,'Dia da Cliente','Agradeça às clientes Pérola e Ouro Rosé com um mimo ou desconto exclusivo.');
-  add(`${y}-10-12`,'Dia das Crianças','Tranças infantis com miçangas coloridas e um pequeno presente para cada criança.');
-  add(`${y}-11-01`,'Mês da Consciência Negra','Programação do mês: conteúdos diários, parceria com outras empreendedoras negras.');
-  add(`${y}-11-20`,'Dia da Consciência Negra','Feriado nacional. Ação especial com fotos e depoimentos das clientes.');
-  add(bf,'Black Friday','Venda antecipada de horários e vales-presente de dezembro com desconto no Pix.');
-  add(`${y}-12-01`,'Temporada de fim de ano','Abra a agenda de dezembro cedo, cobre sinal para garantir horário e use a lista de espera.');
-  add(`${y}-12-25`,'Natal','Vale-presente de tranças para quem quer presentear alguém.');
-  add(`${y}-12-31`,'Réveillon','Tranças com fios dourados ou brancos para a virada.');
+  datasRamo(y,add,{p,carn,preCarn,bf,nth});
   for(let m=0;m<12;m++)add(`${y}-${pad(m+1)}-20`,'Vencimento do DAS-MEI',`Pague o DAS de ${MESES[(m+11)%12]} e preencha o relatório mensal de receitas.`,'fiscal');
   add(`${y}-05-31`,'Prazo da DASN-SIMEI','Declaração anual do MEI referente ao ano anterior.','fiscal');
   L.sort((a,b)=>a.data<b.data?-1:1);return DATAS_CACHE[y]=L;
@@ -492,12 +455,7 @@ const POL_CAMPOS=[
  {k:'tolerancia',g:'Atrasos e faltas',r:'Tolerância de atraso',t:'num',p:20,suf:'minutos'},
  {k:'atrasoRegra',g:'Atrasos e faltas',r:'Atraso acima da tolerância',t:'sel',o:['o serviço poderá ser adaptado ao tempo restante, sem redução de valor, ou remarcado uma única vez, a critério da CONTRATADA, mantendo-se o sinal','o atendimento será remarcado e o sinal mantido como crédito para a nova data','o atendimento será considerado não comparecimento, aplicando-se a regra de falta']},
  {k:'falta',g:'Atrasos e faltas',r:'Falta sem aviso ou cancelamento fora do prazo',t:'sel',o:['o sinal será retido a título de arras, como compensação pelo horário reservado, sem nenhuma outra multa','o sinal será retido a título de arras e um novo agendamento exigirá pagamento antecipado de 50% (cinquenta por cento) do valor']},
- {k:'cabelo',g:'Serviço',r:'Cabelo sintético e materiais',t:'sel',o:['não estão incluídos no preço; a CONTRATADA informará previamente quantidade, tipo e cor e poderá fornecê-los mediante acréscimo informado no orçamento','estão incluídos no preço do serviço','serão fornecidos pela CONTRATANTE, conforme orientação prévia da CONTRATADA quanto a quantidade, tipo e cor']},
- {k:'preparo',g:'Serviço',r:'Como a cliente deve chegar',t:'txt',p:'com o cabelo lavado, seco e desembaraçado, sem óleos ou cremes pesados'},
- {k:'semanasMax',g:'Serviço',r:'Tempo máximo recomendado com as tranças',t:'num',p:8,suf:'semanas'},
- {k:'garantiaDias',g:'Garantia',r:'Prazo para retoque gratuito',t:'num',p:7,suf:'dias'},
- {k:'garantiaCobre',g:'Garantia',r:'O que a garantia cobre',t:'txt',p:'tranças que se soltarem ou se desfizerem por falha na execução'},
- {k:'garantiaExclui',g:'Garantia',r:'O que a garantia não cobre',t:'txt',p:'desgaste natural, crescimento do cabelo, aplicação de química, falta dos cuidados orientados, manipulação ou retirada parcial por terceiros'},
+ ...POL_SERVICO,
  {k:'parcelas',g:'Pagamento',r:'Parcelamento máximo no cartão de crédito',t:'num',p:3,suf:'vezes'},
  {k:'parcelaMin',g:'Pagamento',r:'Valor mínimo do serviço para parcelar',t:'num',p:200,suf:'reais'},
  {k:'jurosParc',g:'Pagamento',r:'Taxa do parcelamento',t:'sel',o:['sem acréscimo para a CONTRATANTE','com repasse da taxa da operadora, informada antes do pagamento']},
@@ -673,11 +631,11 @@ function demoFaixa(){if(!DEMO)return '';return `<div class="demo-faixa" role="no
 const DEMO_PERFIL=(()=>{try{return DEMO?sessionStorage.getItem('smt-demo-perfil')||'':''}catch(e){return ''}})();
 function afterRender(){const c=$('#sigPad');if(c&&!c.dataset.on)sigInit(c);carregaFotos()}
 function gate(){
-  const card=(t,body)=>`<div class="gate"><div class="stack" style="align-items:stretch;max-width:420px;width:100%"><img class="gate-logo" src="/img/logo.webp" width="420" height="280" alt="Stéfany Medeiros"><div class="card stack" style="align-items:center;width:100%"><h2 class="page-title" style="font-size:1.6rem">${t}</h2>${body}</div></div></div>`;
+  const card=(t,body)=>`<div class="gate"><div class="stack" style="align-items:stretch;max-width:420px;width:100%"><img class="gate-logo" src="/img/logo.webp" width="420" height="280" alt="${esc(NEGOCIO.nome)}"><div class="card stack" style="align-items:center;width:100%"><h2 class="page-title" style="font-size:1.6rem">${t}</h2>${body}</div></div></div>`;
   if(ROLE==='config')return card('Falta configurar o Firebase',`<p class="muted" style="margin:0">Abra o arquivo <b>public/firebase-config.js</b> e cole os dados do seu projeto, como explicado no guia (LEIA-ME.md). Depois publique de novo.</p>`);
   if(ROLE==='erro')return card('Não foi possível conectar',`<p class="muted" style="margin:0">Confira se o Firestore foi criado no console do Firebase e se as regras foram publicadas. Depois recarregue a página.</p><button class="btn soft" data-act="sair">Sair</button>`);
   if(ROLE==='login')return card('Entrar',`<form class="form" id="fLogin" style="width:100%;text-align:left"><label class="fld">E-mail<input id="lgEmail" type="email" autocomplete="username" required></label><label class="fld">Senha<input id="lgSenha" type="password" autocomplete="current-password" required></label><div id="lgMsg" class="small" style="color:var(--bad)"></div><button class="btn primary" style="justify-content:center">Entrar</button><button type="button" class="btn ghost" data-act="esqueci" style="justify-content:center">Esqueci minha senha</button></form><p class="small muted" style="margin:0">Não tem acesso? Peça para a proprietária criar seu usuário.</p>`);
-  if(ROLE==='primeiro')return card('Primeiro acesso',`<p class="muted" style="margin:0">Nenhuma proprietária foi definida ainda. Se esta é a conta da <b>Stéfany</b> (${esc(EMAIL)}), confirme para torná-la a dona do sistema. Isso só pode ser feito uma vez.</p><button class="btn primary" data-act="virarDona">${ic('shield')}Esta é a conta da proprietária</button><button class="btn ghost" data-act="sair">Sair</button>`);
+  if(ROLE==='primeiro')return card('Primeiro acesso',`<p class="muted" style="margin:0">Nenhuma proprietária foi definida ainda. Se esta é a conta de <b>${esc(primeiro(NEGOCIO.responsavel))}</b> (${esc(EMAIL)}), confirme para torná-la a dona do sistema. Isso só pode ser feito uma vez.</p><button class="btn primary" data-act="virarDona">${ic('shield')}Esta é a conta da proprietária</button><button class="btn ghost" data-act="sair">Sair</button>`);
   return card('Acesso aguardando liberação',`<p class="muted" style="margin:0">Você entrou como ${esc(EMAIL)}. A proprietária precisa definir seu perfil; assim que ela fizer isso, o sistema abre aqui automaticamente.</p><button class="btn ghost" data-act="sair">Sair</button>`);
 }
 function countUps(){if(matchMedia('(prefers-reduced-motion: reduce)').matches)return;$$('[data-count]').forEach(el=>{const to=+el.dataset.count;const f=el.dataset.fmt;const t0=performance.now();
@@ -691,7 +649,7 @@ const bars=(rows,max,color)=>rows.map(([k,v,txt])=>`<div style="margin-bottom:10
 function vInicio(){
   const pb=pub();const t=today();const h=new Date().getHours();const own=isOwner();const fin=own&&pode('fin');
   const saud=h<12?'Bom dia':h<18?'Boa tarde':'Boa noite';
-  const nomeMe=own?primeiro(pb.responsavel)||'Stéfany':primeiro(nomePessoa(ME))||'';
+  const nomeMe=own?primeiro(pb.responsavel)||primeiro(NEGOCIO.responsavel):primeiro(nomePessoa(ME))||'';
   const vazio=own&&!pb.started&&S.clientes.size===0&&S.agenda.size===0;
   const hoje=arr('agenda').filter(a=>a.data===t&&a.status!=='cancelado').sort((a,b)=>a.hora<b.hora?-1:1);
   const prox=datasEntre(t,addDays(t,30)).filter(d=>d.tipo==='com').slice(0,3);
@@ -838,7 +796,6 @@ function vAgendaMes(){const d=UI.agDia;const m=ym(d);const [Y,M]=m.split('-').ma
   return out}
 
 /* ---------- v8: cuidados, avaliações, indicação, sinais, reativar, relatório ---------- */
-const CUIDADOS_PADRAO='Lave o couro cabeludo a cada 7 a 10 dias com xampu diluído, secando bem as tranças. Durma com touca ou fronha de cetim. Hidrate o couro com tônico leve, sem óleos pesados. Evite prender com muita tensão nos primeiros dias.';
 /* Avaliação no Google: só aceita endereço https do Google (g.page, goo.gl, google.com/…, maps.app.goo.gl). */
 function linkGoogle(u){u=String(u||'').trim();if(!u)return '';try{const x=new URL(u);return x.protocol==='https:'&&/(^|\.)(google\.[a-z.]+|g\.page|goo\.gl)$/i.test(x.hostname)?x.href:''}catch(e){return ''}}
 const IND_PADRAO=['10% de desconto no próximo atendimento para cada amiga atendida','5% de desconto no primeiro atendimento'];
@@ -1398,7 +1355,7 @@ function ajNegocio(){const pb=pub(),c=priv();
   return `<form class="card form" id="fCfg"><h3>Dados do negócio</h3>
    <div class="f2"><label class="fld">Nome empresarial<input id="gNome" value="${esc(pb.nome)}"></label><label class="fld">Responsável<input id="gResp" value="${esc(pb.responsavel)}"></label><label class="fld">CNPJ<input id="gCnpj" inputmode="numeric" value="${esc(pb.cnpj)}" placeholder="00.000.000/0001-00"></label></div>
    <div class="f2"><label class="fld">Endereço do ateliê<input id="gEnd" value="${esc(pb.endereco)}"></label><label class="fld">Município<input id="gMun" value="${esc(pb.municipio)}"></label></div>
-   <div class="f2"><label class="fld">WhatsApp do ateliê<input id="gWa" inputmode="tel" value="${esc(pb.whatsapp)}" placeholder="(27) 99999-9999"></label><label class="fld">Instagram do ateliê<input id="gIg" placeholder="@stefanytrancista" value="${esc(pb.instagram)}"></label><label class="fld">Desconto de aniversário (%)<input id="gAniv" type="number" min="0" max="50" value="${pb.descAniv}"></label></div>
+   <div class="f2"><label class="fld">WhatsApp do ateliê<input id="gWa" inputmode="tel" value="${esc(pb.whatsapp)}" placeholder="(27) 99999-9999"></label><label class="fld">Instagram do ateliê<input id="gIg" placeholder="@seuperfil" value="${esc(pb.instagram)}"></label><label class="fld">Desconto de aniversário (%)<input id="gAniv" type="number" min="0" max="50" value="${pb.descAniv}"></label></div>
    <h3 style="margin-top:8px">Avaliação no Google <small>depois de uma nota 4 ou 5, a cliente vê um botão para avaliar também no Google</small></h3>
    <label class="fld">Link para avaliar o ateliê no Google<input id="gGoo" type="url" inputmode="url" autocapitalize="off" spellcheck="false" value="${esc(pb.googleAval||'')}" placeholder="https://g.page/r/…/review"></label>
    <p class="small muted" style="margin:-4px 0 0">Para pegar o link: no Perfil da Empresa no Google, toque em "Pedir avaliações" e copie. Em branco, o botão não aparece.</p>
@@ -1737,7 +1694,7 @@ function movItem(id){const it=S.estoque.get(id);const own=pode('custos');
   $('#fMv').onsubmit=async e=>{e.preventDefault();const q=+$('#mvQ').value||0;const obs=$('#mvO').value.trim();
     const nova=t==='compra'?(+it.qtd||0)+q:t==='saida'?(+it.qtd||0)-q:q;const delta=Math.round((nova-(+it.qtd||0))*100)/100;
     const upd={...it,qtd:Math.round(nova*100)/100,mov:[{em:today(),qtd:delta,motivo:t==='compra'?'compra':t==='saida'?(obs||'saída'):'contagem'},...(it.mov||[])].slice(0,40)};
-    if(own&&t==='compra'){const v=+$('#mvV').value||0;if(v>0){await save('lancamentos',null,{tipo:'despesa',data:today(),valor:v,categoria:it.categoria==='Cabelo / fibra'?'Cabelo / fibra':'Materiais (pomada, linha, elástico)',descricao:`Compra: ${it.nome} (${q} ${it.unidade})${obs?' · '+obs:''}`,forma:$('#mvF').value});if(q>0)upd.custo=Math.round(v/q*100)/100}}
+    if(own&&t==='compra'){const v=+$('#mvV').value||0;if(v>0){await save('lancamentos',null,{tipo:'despesa',data:today(),valor:v,categoria:it.categoria===CAT_EST[0]?CAT_DES[0]:CAT_DES[1],descricao:`Compra: ${it.nome} (${q} ${it.unidade})${obs?' · '+obs:''}`,forma:$('#mvF').value});if(q>0)upd.custo=Math.round(v/q*100)/100}}
     await save('estoque',id,upd);closeSheet();toast('Estoque atualizado')}}
 
 /* ---------- pacotes e vales ---------- */
@@ -1831,66 +1788,16 @@ async function servicosSugeridos(){if(!pode('precos')){toast('Peça à propriet�
   const {ops}=catalogoBase(false);const temEst=S.estoque.size>0;const sel=ops.filter(([c])=>c==='servicos'||(c==='estoque'&&!temEst));
   if(temEst)sel.forEach(o=>{if(o[0]==='servicos')o[2]={...o[2],consumo:[]}});
   for(const [c,id,d] of sel)await save(c,id,d,{quiet:true});toast('Serviços sugeridos adicionados. Ajuste os preços em Finanças › Serviços.')}
-function catalogoBase(ex){
-  const X=ex?{exemplo:true}:{};const ops=[];const E={};
-  [['j1b','Jumbo 1B (preto natural)','Cabelo / fibra','pacote',14,6,18],['j2','Jumbo 2 (castanho escuro)','Cabelo / fibra','pacote',6,4,18],['j27','Jumbo 27 (mel)','Cabelo / fibra','pacote',3,4,19],['org','Cabelo orgânico cacheado','Cabelo / fibra','pacote',4,2,45],
-   ['pom','Pomada modeladora','Pomadas e finalizadores','pote',1.5,2,22],['mou','Mousse finalizador','Pomadas e finalizadores','frasco',3,1,28],['lin','Linha para tranças','Linhas e elásticos','rolo',5,2,6],['ela','Elásticos de silicone','Linhas e elásticos','pacote',4,2,5],['mic','Miçangas e anéis','Miçangas e acessórios','kit',6,3,12]]
-   .forEach(([k,nome,categoria,unidade,qtd,minimo,custo])=>{E[k]=uid();ops.push(['estoque',E[k],{nome,categoria,unidade,qtd:ex?qtd:0,minimo,custo,mov:[],...X}])});
-  const SV={};
-  [['box','Box braids (médias)',280,300,60,[['j1b',5],['pom',.5]]],['nago','Nagô (até 10 tranças)',120,120,15,[['pom',.5],['ela',1]]],['ful','Fulani braids',260,270,55,[['j1b',4],['mic',1],['pom',.5]]],['twi','Twist / Senegalese',300,300,65,[['j1b',5],['mou',.5]]],
-   ['gyp','Gypsy braids',350,360,90,[['j1b',4],['org',2],['mou',.5]]],['inf','Tranças infantis',90,120,15,[['ela',1],['mic',1]]],['man','Manutenção',100,120,10,[['pom',.5]]],['ret','Retirada de tranças',70,120,0,[]]]
-   .forEach(([k,nome,preco,duracao,custo,cons])=>{SV[k]=uid();ops.push(['servicos',SV[k],{nome,preco,duracao,custo,consumo:cons.map(([i,q])=>({itemId:E[i],qtd:q}))}])});
-  return {ops,E,SV};
-}
+function catalogoBase(ex){return RAMO.catalogoBase(ex,{uid})}
 async function seed(ex){
   if(!pode('seed')&&!DEMO)return;toast(ex?'Carregando exemplos…':'Preparando…');
   const t=today();const {ops,SV}=catalogoBase(ex);const X={exemplo:true};
-  const P={box:280,nago:120,ful:260,twi:300,gyp:350,inf:90,man:100,ret:70},D={box:300,nago:120,ful:270,twi:300,gyp:360,inf:120,man:120,ret:120};
   const pagos={};
-  if(ex){
-    let r=7;const rnd=()=>(r=(r*9301+49297)%233280)/233280;const formas=['Pix','Pix','Dinheiro','Cartão de crédito','Cartão de débito'];
-    const CL=[['ana','Ana Beatriz Souza','(27) 99812-4410','Crespo 4C, ombro',6,20,50,'box',0,null,'1994-'+addDays(t,6).slice(5),'Instagram','123.456.789-00'],['jes','Jéssica Santos','(27) 99745-1023','Crespo 4B, busto',4,40,60,'ful',0,'ana','1997-03-28','Indicação',''],['cam','Camila Rocha','(27) 99630-7781','Cacheado 3C, longo',3,130,70,'twi',0,null,'1992-08-14','TikTok',''],
-      ['lar','Larissa Oliveira','(27) 99521-3399','Crespo 4A, curto',2,60,90,'nago',1,'ana','2001-12-02','Indicação',''],['tha','Thaís Nascimento','(27) 99410-8866','Crespo 4C, médio',1,15,0,'gyp',0,null,'1999-05-19','Instagram',''],['pri','Priscila Lima','(27) 99387-2251','Transição capilar',0,0,0,'nago',0,'jes','','WhatsApp','']];
-    const C={};
-    for(const [k,nome,tel,cab,nv,last,intv,serv,faltas,ind,aniv,origem,cpf] of CL){C[k]=uid();
-      ops.push(['clientes',C[k],{nome,telefone:tel,cabelo:cab,aniversario:aniv,indicadaPor:ind?C[ind]:'',origem,cpf,criadoEm:addDays(t,-400),...X}]);
-      for(let i=0;i<nv;i++){const d=addDays(t,-(last+i*intv));const sk=i%3===2?'man':serv;const f=formas[Math.floor(rnd()*5)];
-        ops.push(['agenda',uid(),{clienteId:C[k],servicoId:SV[sk],data:d,hora:['09:00','13:30','08:30'][i%3],duracao:D[sk],valor:P[sk],status:'concluido',prof:DEMO&&i%2===0?'demo-ana':'',pagamentos:[{id:uid(),tipo:'servico',data:d,valor:P[sk],forma:f,parcelas:f==='Cartão de crédito'&&P[sk]>=200?2:1,nf:false}],...X}])}
-      for(let i=0;i<faltas;i++)ops.push(['agenda',uid(),{clienteId:C[k],servicoId:SV[serv],data:addDays(t,-25),hora:'14:00',duracao:120,valor:P[serv],status:'faltou',pagamentos:[{id:uid(),tipo:'sinal',data:addDays(t,-30),valor:36,forma:'Pix',parcelas:1,nf:false}],...X}]);
-    }
-    const pkId=uid();ops.push(['pacotes',pkId,{clienteId:C.ana,nome:'Box braids + 2 manutenções',sessoes:3,valor:450,validade:addDays(t,100),criadoEm:addDays(t,-20),status:'ativo',pagamentos:[{id:uid(),tipo:'pacote',data:addDays(t,-20),valor:450,forma:'Pix',parcelas:1,nf:false}],...X}]);
-    [[ 'jes',0,'09:00','box','confirmado',84,''],['pri',0,'15:30','nago','agendado',0,''],['ana',1,'10:00','man','agendado',0,pkId],['lar',3,'09:00','ful','agendado',78,''],['cam',6,'08:30','twi','agendado',90,'']]
-     .forEach(([ck,dd,h,sk,st,sinal,pk])=>ops.push(['agenda',uid(),{clienteId:C[ck],servicoId:SV[sk],pacoteId:pk,data:addDays(t,dd),hora:h,duracao:D[sk],valor:pk?0:P[sk],status:st,pagamentos:sinal?[{id:uid(),tipo:'sinal',data:addDays(t,-2),valor:sinal,forma:'Pix',parcelas:1,nf:false}]:[],...X}]));
-    ops.push(['vales',uid(),{codigo:'SM-MAE26',compradora:'Jéssica Santos',telCompradora:'(27) 99745-1023',presenteada:'Dona Célia',valor:150,validade:addDays(t,170),criadoEm:addDays(t,-10),usos:[],pagamentos:[{id:uid(),tipo:'vale',data:addDays(t,-10),valor:150,forma:'Pix',parcelas:1,nf:false}],...X}]);
-    ops.push(['espera',uid(),{clienteId:C.tha,servicoId:SV.ful,preferencia:'sábados de manhã',desde:addDays(t,-3),status:'aguardando',...X}]);
-    ops.push(['espera',uid(),{clienteId:'',nome:'Bruna Alves',telefone:'(27) 99222-0145',servicoId:SV.box,preferencia:'dias de semana, depois das 13h',desde:addDays(t,-1),status:'aguardando',...X}]);
-    const R0=Object.fromEntries(ANAM_Q.map(([k])=>[k,{sim:false,det:''}]));
-    ops.push(['anamneses',C.ana,{clienteId:C.ana,respostas:R0,obs:'Couro tranquilo. Prefere tranças com pouca tensão na nuca.',menor:false,responsavel:{},imagem:true,atualizadaEm:addDays(t,-120)+'T12:00:00.000Z',historico:[],...X}]);
-    ops.push(['anamneses',C.jes,{clienteId:C.jes,respostas:{...R0,alergia:{sim:true,det:'pomadas com fragrância forte'},quimica:{sim:true,det:'coloração há 20 dias'}},obs:'Usar pomada sem fragrância.',menor:false,responsavel:{},imagem:false,atualizadaEm:addDays(t,-40)+'T12:00:00.000Z',historico:[],...X}]);
-    for(let i=0;i<6;i++){const b=addMonths(ym(t),-i)+'-05';
-      [['Cabelo / fibra',180+Math.round(rnd()*140),'Jumbo e fibra orgânica','Pix'],['Materiais (pomada, linha, elástico)',60+Math.round(rnd()*30),'Pomada, mousse e elásticos','Cartão de débito'],['Transporte',80,'Uber para atendimentos em domicílio','Pix'],['Marketing e redes',i%2?0:40,'Impulsionamento no Instagram','Cartão de crédito'],['Retirada pró-labore',900,'Retirada mensal','Transferência']]
-       .forEach(([cat,v,desc,f])=>{if(v){const d=addDays(b,Math.floor(rnd()*20));if(d<=t)ops.push(['lancamentos',uid(),{tipo:'despesa',data:d,valor:v,categoria:cat,descricao:desc,forma:f,...X}])}});
-      for(let k=0;k<5+Math.floor(rnd()*5);k++){const sk=['box','nago','ful','twi','gyp','inf'][Math.floor(rnd()*6)];const d=addDays(b,Math.floor(rnd()*24));if(d>t)continue;const f=formas[Math.floor(rnd()*5)];
-        ops.push(['lancamentos',uid(),{tipo:'receita',data:d,valor:P[sk],categoria:'Serviço de trança',descricao:'Atendimento avulso (sem cadastro)',forma:f,parcelas:1,nf:k===0&&i===1,...X}])}
-      if(addDays(b,10)<=t)ops.push(['lancamentos',uid(),{tipo:'receita',data:addDays(b,10),valor:35,categoria:'Venda de produto',descricao:'Kit de anéis para tranças',forma:'Pix',nf:false,...X}]);
-      if(i>0){const mesDas=addMonths(ym(b),-1);pagos[mesDas]=true;ops.push(['lancamentos',uid(),{tipo:'despesa',data:ym(b)+'-18',valor:DEF_PRIV.das,categoria:'DAS-MEI',descricao:`DAS ${mesNome(mesDas)}`,forma:'Pix',dasRef:mesDas,...X}])}}
-    const aluguel={descricao:'Aluguel da sala',valor:450,vencimento:addMonths(ym(t),-4)+'-10',recorrente:'mensal',categoria:'Aluguel / espaço',pagas:{},...X};
-    for(let i=4;i>=1;i--){const k=addMonths(ym(t),-i);const lid=uid();aluguel.pagas[k]=lid;ops.push(['lancamentos',lid,{tipo:'despesa',data:k+'-10',valor:450,categoria:'Aluguel / espaço',descricao:'Aluguel da sala',forma:'Pix',contaRef:k,...X}])}
-    ops.push(['contas',uid(),aluguel]);
-    ops.push(['juridico',uid(),{tipo:'documento',nome:'Alvará de funcionamento',parte:'Prefeitura',numero:'0000/2026',inicio:addDays(t,-340),validade:addDays(t,25),link:'',obs:'Exemplo: renovar 30 dias antes.',...X}]);
-    ops.push(['juridico',uid(),{tipo:'documento',nome:'Licença sanitária',parte:'Vigilância Sanitária',numero:'',inicio:addDays(t,-200),validade:addDays(t,165),link:'',obs:'',...X}]);
-    ops.push(['juridico',uid(),{tipo:'contrato',nome:'Aluguel da sala',categoria:'Aluguel do espaço',parte:'Imobiliária (exemplo)',numero:'',inicio:addDays(t,-120),validade:addDays(t,245),valor:450,link:'',obs:'Reajuste anual pelo IGP-M.',...X}]);
-    ops.push(['contas',uid(),{descricao:'Internet do ateliê',valor:99.9,vencimento:ym(t)+'-15',recorrente:'mensal',categoria:'Outras despesas',pagas:{},...X}]);
-    ops.push(['contas',uid(),{descricao:'Curso de tranças nagô avançado',valor:300,vencimento:addDays(t,12),recorrente:'unica',categoria:'Cursos',pagas:{},...X}]);
-    ops.push(['ideias',uid(),{titulo:'Sorteio de uma manutenção no Instagram',tipo:'Promoção',data:addDays(t,10),notas:'Regra: seguir, curtir e marcar 2 amigas.',...X}]);
-    ops.push(['ideias',uid(),{titulo:'Parceria com loja de acessórios para tranças',tipo:'Parceria',data:'',notas:'Cupom cruzado: minhas clientes ganham 10% na loja.',...X}]);
-  }
-  if(ex){[['Box braids','4 a 6 horas','Tranças soltas e versáteis, do comprimento que você escolher. Duram de 6 a 8 semanas com os cuidados certos.','Tranças soltas',280],['Nagô','1 a 2 horas','Tranças rentes ao couro cabeludo, em desenhos retos ou criativos. Ótimas para o dia a dia e para o calor.','Nagô',120],['Fulani braids','4 a 5 horas','Combinação de nagô na frente com tranças soltas atrás, com miçangas e anéis.','Tranças soltas',260]]
-      .forEach(([nome,tempo,descricao,categoria,preco],i)=>ops.push(['catalogo',uid(),{nome,tempo,descricao,categoria,preco,mostrarPreco:true,link:'',botao:'Quero este modelo',ativo:true,ordem:i,fotos:[],exemplo:true}]))}
+  if(ex)RAMO.exemplos({ops,SV,t,pagos,uid,addDays,addMonths,ym,mesNome,DEMO,DEF_PRIV,ANAM_Q});
   // Só na demonstração: chave Pix fictícia e uma parceira de exemplo (no sistema real a chave é sempre a da Stéfany).
   const demoPub=DEMO?{pixTipo:'aleatoria',pixChave:'00000000-0000-4000-8000-000000000000',pixNome:'Atelie Exemplo',profissionais:[{id:'demo-ana',nome:'Ana (exemplo)'}],googleAval:'https://g.page/r/exemplo/review'}:{};
   ops.push(['publico','config',{...pub(),...demoPub,started:true}]);
-  ops.push(['privado','config',{...priv(),dasPagos:pagos,...(DEMO?{repasse:{'demo-ana':{tipo:'pct',valor:40}},prolabore:{valor:1200,dia:5},orcamento:{'Cabelo / fibra':350,'Materiais (pomada, linha, elástico)':120,'Transporte':80,'Marketing e redes':50}}:{})}]);
+  ops.push(['privado','config',{...priv(),dasPagos:pagos,...(DEMO?{repasse:{'demo-ana':{tipo:'pct',valor:40}},prolabore:{valor:1200,dia:5},orcamento:RAMO.ORC_DEMO}:{})}]);
   ops.forEach(([c,id,d])=>{S[c].set(id,{id,...d})});touch();
   await pool(ops.map(([c,id,d])=>()=>save(c,id,d,{quiet:true})),8);
   toast(ex?'Dados de exemplo carregados':'Pronto! Ajuste preços em Finanças › Serviços e o estoque inicial');

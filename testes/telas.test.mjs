@@ -16,7 +16,7 @@ const { chromium } = createRequire(import.meta.url)('playwright');
 
 let srv, nav, tmp;
 // Cada site: nome no teste, primeira linha da marca esperada no topo e o servidor que o serve.
-const SITES = [{ nome: 'Stéfany', marca: 'Stéfany' }, { nome: 'Raquel', marca: 'Raquel Zaban', estudio: 'raquel' }];
+const SITES = [{ nome: 'Stéfany', marca: 'Stéfany' }, { nome: 'Raquel', marca: 'Raquel Zaban', estudio: 'raquel' }, { nome: 'Mederin', marca: 'Mederin', estudio: 'mederin' }];
 before(async () => {
   tmp = await mkdtemp(join(tmpdir(), 'sites-'));
   for (const s of SITES) s.srv = s.estudio ? await iniciar(0, (await montar(s.estudio, join(tmp, s.estudio))).saida) : await iniciar();
@@ -51,7 +51,7 @@ for (const site of SITES) for (const [nome, viewport] of TAMANHOS) {
       await pg.waitForSelector('.demo-faixa', { timeout: 15000 });
       await pg.waitForSelector('#view', { timeout: 15000 });
       // os dados de exemplo entram sozinhos na primeira abertura
-      await pg.waitForFunction(() => /Ana Beatriz|Jéssica|Camila/.test(document.body.innerText), null, { timeout: 15000 });
+      await pg.waitForFunction(() => /Ana Beatriz|Jéssica|Camila|Rafael Souza|Tiago Santos/.test(document.body.innerText), null, { timeout: 15000 });
       assert.ok((await pg.$$eval('.brand-name', es => es.map(e => e.textContent))).includes(site.marca), `o nome ${site.marca} não aparece no topo`);
       const abas = await pg.$$eval('#navSide [data-act="go"]', bs => bs.map(b => [b.dataset.v, b.textContent.trim()]));
       assert.ok(abas.length >= 8, `menu com poucas abas (${abas.length})`);
@@ -97,7 +97,7 @@ for (const [perfil, esp] of Object.entries(ESPERADO)) for (const [nome, viewport
     const { ctx, pg, problemas } = await abrir(viewport);
     try {
       await pg.goto(srv.url + '/?demo');
-      await pg.waitForFunction(() => /Ana Beatriz|Jéssica|Camila/.test(document.body.innerText), null, { timeout: 15000 });
+      await pg.waitForFunction(() => /Ana Beatriz|Jéssica|Camila|Rafael Souza|Tiago Santos/.test(document.body.innerText), null, { timeout: 15000 });
       await pg.waitForTimeout(400);
       await pg.goto(srv.url + '/?demo&perfil=' + perfil);
       await pg.waitForSelector('#navSide [data-act="go"]', { state: 'attached', timeout: 15000 });
@@ -133,7 +133,7 @@ test('registro de alterações mostra quem mudou o quê', async () => {
   const { ctx, pg, problemas } = await abrir({ width: 1366, height: 860 });
   try {
     await pg.goto(srv.url + '/?demo&perfil=dona');
-    await pg.waitForFunction(() => /Ana Beatriz|Jéssica|Camila/.test(document.body.innerText), null, { timeout: 15000 });
+    await pg.waitForFunction(() => /Ana Beatriz|Jéssica|Camila|Rafael Souza|Tiago Santos/.test(document.body.innerText), null, { timeout: 15000 });
     await pg.evaluate(() => document.querySelector('#navSide [data-v="ajustes"]').click());
     await pg.evaluate(() => document.querySelector('#view [data-act="ajTab"][data-t="negocio"]').click());
     await pg.waitForSelector('#gMun');
@@ -168,7 +168,7 @@ test('novo usuário criado em Equipe e acesso', async () => {
   const { ctx, pg, problemas } = await abrir({ width: 390, height: 844 });
   try {
     await pg.goto(srv.url + '/?demo&perfil=dona');
-    await pg.waitForFunction(() => /Ana Beatriz|Jéssica|Camila/.test(document.body.innerText), null, { timeout: 15000 });
+    await pg.waitForFunction(() => /Ana Beatriz|Jéssica|Camila|Rafael Souza|Tiago Santos/.test(document.body.innerText), null, { timeout: 15000 });
     const criar = async (nome, email) => {
       await pg.evaluate(() => document.querySelector('#navSide [data-v="ajustes"]').click());
       await pg.evaluate(() => document.querySelector('#view [data-act="ajTab"][data-t="equipe"]').click());
@@ -192,7 +192,7 @@ test('texto digitado não some quando chega novidade', async () => {
   const { ctx, pg, problemas } = await abrir({ width: 390, height: 844 });
   try {
     await pg.goto(srv.url + '/?demo');
-    await pg.waitForFunction(() => /Ana Beatriz|Jéssica|Camila/.test(document.body.innerText), null, { timeout: 15000 });
+    await pg.waitForFunction(() => /Ana Beatriz|Jéssica|Camila|Rafael Souza|Tiago Santos/.test(document.body.innerText), null, { timeout: 15000 });
     const novidade = () => pg.evaluate(async () => {
       const m = await import('/demo/firebase-demo.js');
       await m.setDoc(m.doc(null, 'agenda/teste-' + Math.random().toString(36).slice(2)), { clienteId: '', data: '2030-01-02', hora: '10:00', status: 'agendado', valor: 0 });
